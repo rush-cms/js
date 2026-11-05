@@ -1,6 +1,7 @@
 import { RushError, isRecord, isRushError } from '@rushcms/client'
 import type { FormSubmitData, FormSubmitOptions } from '@rushcms/client'
 import type { APIContext } from 'astro'
+import { seeOther } from './http'
 import { runtimeOf } from './runtime'
 import { sameOriginUrl } from './same-origin'
 
@@ -118,10 +119,7 @@ function redirectTarget(context: FormContext, key: string, status: FormStatus): 
 }
 
 function redirect(context: FormContext, key: string, status: FormStatus): Response {
-	return new Response(null, {
-		status: 303,
-		headers: { Location: redirectTarget(context, key, status) }
-	})
+	return seeOther(redirectTarget(context, key, status))
 }
 
 export async function submitForm(context: FormContext): Promise<Response> {

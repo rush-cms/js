@@ -1,15 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { alternates, createUrls, toBcp47 } from '../src/index'
 import type { Entry, NavigationItem, RushLocalePaths, UrlConfig } from '../src/index'
-import { responseExample } from './fixtures/contract'
+import { entryExample } from './fixtures/contract'
 
 type EntrySummary = NonNullable<NonNullable<NavigationItem['target']>['entry']>
 
 const LOCALE_PATHS: RushLocalePaths = { en: 'en', pt_BR: 'pt', es: 'es' }
-
-function exampleEntry(): Entry {
-	return (responseExample('EntryOk') as { data: Entry }).data
-}
 
 function urlsFor(config: Partial<UrlConfig> = {}) {
 	return createUrls({ localePaths: LOCALE_PATHS, ...config })
@@ -29,7 +25,7 @@ describe('toBcp47', () => {
 describe('entry urls', () => {
 	it('uses the default pattern with each translation own collection slug', () => {
 		const urls = urlsFor()
-		const entry = exampleEntry()
+		const entry = entryExample()
 		expect(urls.entry(entry)).toBe('/pt/artigos/ola-mundo')
 		expect(urls.translation(entry, 'en')).toBe('/en/blog/hello-world')
 		expect(urls.translation(entry, 'es')).toBe('/es/articulos/hola-mundo')
@@ -37,7 +33,7 @@ describe('entry urls', () => {
 
 	it('matches a route by the collection slug of any locale', () => {
 		const urls = urlsFor({ routes: { blog: '/{locale}/posts/{slug}' } })
-		const entry = exampleEntry()
+		const entry = entryExample()
 		expect(urls.entry(entry)).toBe('/pt/posts/ola-mundo')
 		expect(urls.translation(entry, 'en')).toBe('/en/posts/hello-world')
 	})
@@ -47,24 +43,24 @@ describe('entry urls', () => {
 			localePaths: { en: '', pt_BR: 'pt', es: 'es' },
 			routes: { blog: '/{locale}/{collection}/{slug}/' }
 		})
-		const entry = exampleEntry()
+		const entry = entryExample()
 		expect(urls.translation(entry, 'en')).toBe('/blog/hello-world')
 		expect(urls.translation(entry, 'es')).toBe('/es/articulos/hola-mundo')
 	})
 
 	it('supports a pattern without a locale placeholder', () => {
 		const urls = urlsFor({ routes: { artigos: '/{slug}' } })
-		expect(urls.entry(exampleEntry())).toBe('/ola-mundo')
+		expect(urls.entry(entryExample())).toBe('/ola-mundo')
 	})
 
 	it('throws a plain error naming a locale missing from localePaths', () => {
 		const urls = createUrls({ localePaths: { en: 'en' } })
-		expect(() => urls.entry(exampleEntry())).toThrow(/pt_BR/)
+		expect(() => urls.entry(entryExample())).toThrow(/pt_BR/)
 		expect(() => urls.homepage('fr')).toThrow(/"fr"/)
 	})
 
 	it('throws when the entry has no such translation', () => {
-		expect(() => urlsFor().translation(exampleEntry(), 'fr')).toThrow(/"fr"/)
+		expect(() => urlsFor().translation(entryExample(), 'fr')).toThrow(/"fr"/)
 	})
 
 	it('throws for two empty prefixes', () => {
@@ -107,7 +103,7 @@ describe('navigationItem', () => {
 describe('alternates', () => {
 	it('lists every translation in localePaths order with BCP 47 hreflang', () => {
 		const urls = createUrls({ localePaths: { es: 'es', pt_BR: 'pt', en: 'en' } })
-		expect(alternates(exampleEntry(), urls)).toEqual([
+		expect(alternates(entryExample(), urls)).toEqual([
 			{ locale: 'es', hreflang: 'es', url: '/es/articulos/hola-mundo' },
 			{ locale: 'pt_BR', hreflang: 'pt-BR', url: '/pt/artigos/ola-mundo' },
 			{ locale: 'en', hreflang: 'en', url: '/en/blog/hello-world' }
@@ -117,7 +113,7 @@ describe('alternates', () => {
 
 describe('collection pages and id route keys', () => {
 	const routes = { blog: '/{locale}/posts/{slug}', docs: '/{locale}/{collection}/{slug}' }
-	const idKeyed = urlsFor({ routes, routeKeysById: { [exampleEntry().collection.id]: 'blog' } })
+	const idKeyed = urlsFor({ routes, routeKeysById: { [entryExample().collection.id]: 'blog' } })
 
 	it('drops the slug segment for collection pages', () => {
 		const urls = urlsFor({ routes })
@@ -133,12 +129,12 @@ describe('collection pages and id route keys', () => {
 	})
 
 	it('matches by collection id for entry and translations', () => {
-		expect(idKeyed.entry(exampleEntry())).toBe('/pt/posts/ola-mundo')
-		expect(idKeyed.translation(exampleEntry(), 'es')).toBe('/es/posts/hola-mundo')
+		expect(idKeyed.entry(entryExample())).toBe('/pt/posts/ola-mundo')
+		expect(idKeyed.translation(entryExample(), 'es')).toBe('/es/posts/hola-mundo')
 	})
 
 	it('matches by collection id for nav entry targets and collection pages', () => {
-		const id = exampleEntry().collection.id
+		const id = entryExample().collection.id
 		const summary: EntrySummary = {
 			id: 'e',
 			locale: 'es',
@@ -153,7 +149,7 @@ describe('collection pages and id route keys', () => {
 	})
 
 	it('prefers the id key over a slug match', () => {
-		const id = exampleEntry().collection.id
+		const id = entryExample().collection.id
 		const urls = urlsFor({ routes, routeKeysById: { [id]: 'docs' } })
 		expect(urls.collection({ id, slug: 'blog' }, 'en')).toBe('/en/blog')
 	})
@@ -161,7 +157,7 @@ describe('collection pages and id route keys', () => {
 
 describe('hardening', () => {
 	it('falls through when the id key has no route', () => {
-		const entry = exampleEntry()
+		const entry = entryExample()
 		const urls = urlsFor({
 			routes: { blog: '/{locale}/posts/{slug}' },
 			routeKeysById: { [entry.collection.id]: 'missing' }
@@ -184,7 +180,7 @@ describe('hardening', () => {
 	})
 
 	it('never alters slug content', () => {
-		const entry = exampleEntry()
+		const entry = entryExample()
 		const edited: Entry = {
 			...entry,
 			translations: {

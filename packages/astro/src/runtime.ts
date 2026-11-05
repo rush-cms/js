@@ -1,7 +1,9 @@
 import { createClient, createUrls, toBcp47 } from '@rushcms/client'
-import type { LocaleCode, Perspective, RushClient, RushUrls } from '@rushcms/client'
+import type { LocaleCode, Perspective, RushClient, RushFetch, RushUrls } from '@rushcms/client'
 import type { APIContext } from 'astro'
 import type { RushSiteConfig } from './config'
+import { fallbackFetch } from './preview-session'
+import type { PreviewSession } from './preview-session'
 import type { RushApiSettings } from './settings'
 
 export type RushContext = Pick<APIContext, 'locals' | 'currentLocale' | 'isPrerendered' | 'params'>
@@ -10,6 +12,7 @@ export type RushRuntimeSettings = {
 	api: RushApiSettings
 	config: RushSiteConfig
 	perspective?: Perspective
+	fetch?: RushFetch
 }
 
 export type RushRuntime = {
@@ -17,7 +20,7 @@ export type RushRuntime = {
 	readonly urls: RushUrls
 	client(context: RushContext): RushClient
 	onDemandClient(): RushClient
-	preview(token: string): RushRuntime
+	preview(token: string, fallback?: PreviewSession): RushRuntime
 }
 
 const RUNTIME_KEY = Symbol.for('@rushcms/astro:runtime')
@@ -41,7 +44,7 @@ export function resolveLocale(config: RushSiteConfig, requested: string | undefi
 }
 
 export function createRushRuntime(settings: RushRuntimeSettings): RushRuntime {
-	const { api, config, perspective } = settings
+	const { api, config, perspective, fetch } = settings
 	const shareable = config.memo && !config.preview
 	const shared = new Map<LocaleCode, RushClient>()
 
@@ -52,7 +55,8 @@ export function createRushRuntime(settings: RushRuntimeSettings): RushRuntime {
 			memo,
 			routes: config.routes,
 			localePaths: config.localePaths,
-			...(perspective === undefined ? {} : { perspective })
+			...(perspective === undefined ? {} : { perspective }),
+			...(fetch === undefined ? {} : { fetch })
 		})
 	}
 
@@ -74,8 +78,13 @@ export function createRushRuntime(settings: RushRuntimeSettings): RushRuntime {
 			return shareable && context.isPrerendered ? sharedClient(locale) : create(locale, false)
 		},
 		onDemandClient: () => create(resolveLocale(config, undefined), false),
-		preview: (token) =>
-			createRushRuntime({ api: { ...api, token }, config, perspective: 'draft' })
+		preview: (token, fallback) =>
+			createRushRuntime({
+				api: { ...api, token },
+				config,
+				perspective: 'draft',
+				...(fallback === undefined ? {} : { fetch: fallbackFetch(api.token, fallback) })
+			})
 	}
 }
 

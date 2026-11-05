@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import type { Entry, PaginationMeta, components } from '../src/index'
-import { responseExample } from './fixtures/contract'
+import type { Entry, PaginationMeta } from '../src/index'
+import { entryExample, responseExample } from './fixtures/contract'
 import { jsonResponse, testClient } from './fixtures/fetch'
 import type { FetchCall, FetchHandler } from './fixtures/fetch'
 
@@ -9,7 +9,7 @@ type PageScript = {
 	meta: PaginationMeta
 }
 
-const template = (responseExample('EntryOk') as components['schemas']['EntryEnvelope']).data
+const template = entryExample()
 
 function entriesOf(page: number, count: number): Entry[] {
 	return Array.from({ length: count }, (_, index) => ({ ...template, id: `${page}-${index}` }))

@@ -101,10 +101,16 @@ https://preview.example.com/_rush/preview?token={token}&locale={locale}
   `routes` (the homepage without `collection`/`slug`), stores the token in the `rush_preview` cookie (`HttpOnly`,
   `SameSite=Lax`, `Path=/`, `Secure` except on `localhost`, `127.0.0.1` and `[::1]`, expiring with the link) and
   answers `303` to that page. Bad parameters answer `400`, a rejected or expired link `401`, a missing entry `404`.
-- With the cookie, `getRush` reads the draft perspective with the link's token; without it, published content.
+- With the cookie, `getRush` reads the draft perspective with the link's token; without it, published content. When
+  the API refuses the token (`401`, e.g. `token_expired` after clock skew), that request falls back to published
+  content with the delivery token and the response clears the cookie.
 - `GET /_rush/preview/exit` clears the cookie and answers `303` to `/`, or to a same-origin `return` path.
 - Outside preview mode both routes do not exist and the cookie is never read. Set `security.allowedDomains` here too:
-  the redirect and the `Secure` flag follow the request origin Astro trusts.
+  the redirect and the `Secure` flag follow the request origin Astro trusts. When Astro falls back to `localhost`
+  while the `Host` or `X-Forwarded-Host` header names another host, both routes answer `500` (no cookie).
+- The token travels in the `/_rush/preview` query string, so it can appear in access logs and browser history; it
+  expires one hour after the link is issued. Every hit with a well-formed token costs one `GET /site` (plus the entry
+  lookup).
 - The preview link token is a draft-reading credential for one hour; it never reaches the browser's JavaScript.
   Form posts from a preview session use it and are refused by the API (`preview_cannot_submit`).
 

@@ -1,5 +1,9 @@
 import { readFileSync } from 'node:fs'
+import type { components } from '../../src/generated/api'
 import { isRecord } from '../../src/json'
+import type { Entry } from '../../src/types'
+
+type EntryEnvelope = components['schemas']['EntryEnvelope']
 
 type MediaExample = {
 	example?: unknown
@@ -74,6 +78,18 @@ function jsonExample(media: ContractContent | undefined, what: string): unknown 
 
 export function responseExample(name: string): unknown {
 	return jsonExample(contract.components.responses[name], `response ${name}`)
+}
+
+function isEntryEnvelope(value: unknown): value is EntryEnvelope {
+	return isRecord(value) && isRecord(value.data) && typeof value.data.id === 'string'
+}
+
+export function entryExample(): Entry {
+	const example = responseExample('EntryOk')
+	if (!isEntryEnvelope(example)) {
+		throw new Error('EntryOk example is not an entry envelope')
+	}
+	return example.data
 }
 
 export function requestExample(path: string, method: string): unknown {

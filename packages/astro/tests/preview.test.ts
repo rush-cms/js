@@ -1,6 +1,6 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Entry } from '@rushcms/client'
-import { responseExample } from '../../client/tests/fixtures/contract'
+import { entryExample } from '../../client/tests/fixtures/contract'
 import { getRush } from '../src/index'
 import { PREVIEW_COOKIE, createRushMiddleware, exitPreview, startPreview } from '../src/preview'
 import type { PreviewContext, RushMiddlewareContext } from '../src/preview'
@@ -43,10 +43,6 @@ function expiringToken(exp: number): string {
 
 const TOKEN = expiringToken(NOW + 3600)
 
-function entryExample(): Entry {
-	return (responseExample('EntryOk') as { data: Entry }).data
-}
-
 function previewConfig(overrides: Partial<RushSiteConfig> = {}): RushSiteConfig {
 	return siteConfig({
 		localePaths: { pt_BR: '', en: 'en', es: 'es' },
@@ -58,16 +54,21 @@ function previewConfig(overrides: Partial<RushSiteConfig> = {}): RushSiteConfig 
 	})
 }
 
+function hostRequest(url: URL, headers: Record<string, string>): Request {
+	return new Request(url, { headers: { host: url.host, ...headers } })
+}
+
 function previewContext(
 	query: Record<string, string>,
 	config: RushSiteConfig = previewConfig(),
-	origin: string = ORIGIN
+	origin: string = ORIGIN,
+	headers: Record<string, string> = {}
 ): PreviewContext {
 	const url = new URL('/_rush/preview', origin)
 	for (const [name, value] of Object.entries(query)) {
 		url.searchParams.set(name, value)
 	}
-	return { url, locals: rushLocals(stub.api, config) }
+	return { url, request: hostRequest(url, headers), locals: rushLocals(stub.api, config) }
 }
 
 function entryQuery(token: string = TOKEN): Record<string, string> {
@@ -264,73 +265,135 @@ describe('GET /_rush/preview/exit', () => {
 	})
 })
 
+describe('untrusted preview hosts', () => {
+	const LOCAL = 'http://localhost:4321'
+
+	it.each([
+		['a public Host', { host: 'preview.example' }],
+		['a public X-Forwarded-Host', { 'x-forwarded-host': 'localhost:4321, preview.example' }],
+		['a Host hiding a public name', { host: 'localhost@preview.example' }]
+	])('fails closed with %s behind a localhost url', async (_, headers) => {
+		const start = await startPreview(
+			previewContext(entryQuery(), previewConfig(), LOCAL, headers)
+		)
+		const exit = exitPreview(previewContext({}, previewConfig(), LOCAL, headers))
+		for (const response of [start, exit]) {
+			expect(response.status).toBe(500)
+			expect(response.headers.get('set-cookie')).toBeNull()
+			expect(await response.text()).toBe('Preview host not trusted')
+		}
+		expect(stub.requests).toEqual([])
+	})
+
+	it('accepts loopback Host and X-Forwarded-Host values without Secure', async () => {
+		const headers = { 'x-forwarded-host': '127.0.0.1:4321, [::1]' }
+		const query = { token: TOKEN, locale: 'pt_BR' }
+		const response = await startPreview(previewContext(query, previewConfig(), LOCAL, headers))
+		expect(response.status).toBe(303)
+		expect(response.headers.get('set-cookie')).not.toContain('Secure')
+	})
+})
+
 describe('middleware', () => {
 	type Pass = {
 		context: RushMiddlewareContext
 		response: Response
+		lines: string[]
+		cookieReads: number
+	}
+
+	type PassOptions = {
+		page?: Response
+		reads?: number
 	}
 
 	async function pass(
 		config: RushSiteConfig,
 		cookie: string | undefined,
-		page: Response = new Response('page')
+		options: PassOptions = {}
 	): Promise<Pass> {
+		const url = new URL('/en', ORIGIN)
+		const get = vi.fn((name: string) =>
+			name === PREVIEW_COOKIE && cookie !== undefined ? { value: cookie } : undefined
+		)
 		const context: RushMiddlewareContext = {
+			url,
+			request: hostRequest(url, {}),
 			locals: {},
-			cookies: {
-				get: (name) =>
-					name === PREVIEW_COOKIE && cookie !== undefined ? { value: cookie } : undefined
-			}
+			cookies: { get }
 		}
-		const middleware = createRushMiddleware(createRushRuntime({ api: stub.api, config }))
-		const response = await middleware(context, () => Promise.resolve(page))
-		return { context, response }
-	}
-
-	async function siteRequest(context: RushMiddlewareContext): Promise<string> {
-		await getRush({
+		const page = {
 			locals: context.locals,
 			currentLocale: 'en',
 			isPrerendered: false,
 			params: {}
-		}).site.get()
-		const request = stub.requests.at(-1)
-		if (request === undefined) {
-			throw new Error('no API request')
 		}
-		return requestLine(request)
+		const middleware = createRushMiddleware(createRushRuntime({ api: stub.api, config }))
+		const response = await middleware(context, async () => {
+			for (let read = 0; read < (options.reads ?? 1); read++) {
+				await getRush(page).site.get()
+			}
+			return options.page ?? new Response('page')
+		})
+		return {
+			context,
+			response,
+			lines: stub.requests.map(requestLine),
+			cookieReads: get.mock.calls.length
+		}
+	}
+
+	const DRAFT = `${SITE_PREFIX}/site?perspective=draft Bearer ${TOKEN}`
+
+	function published(): string {
+		return `${SITE_PREFIX}/site? Bearer ${stub.api.token}`
 	}
 
 	it('reads drafts with the cookie token in preview mode', async () => {
-		const { context, response } = await pass(previewConfig(), TOKEN)
-		expect(await siteRequest(context)).toBe(
-			`${SITE_PREFIX}/site?perspective=draft Bearer ${TOKEN}`
-		)
+		const { lines, response } = await pass(previewConfig(), TOKEN)
+		expect(lines).toEqual([DRAFT])
 		expect(response.headers.get('x-robots-tag')).toBe('noindex')
 		expect(response.headers.get('cache-control')).toBe('no-store')
+		expect(response.headers.get('set-cookie')).toBeNull()
 	})
 
 	it.each([undefined, '', 'rush_live_secret', `${TOKEN}\r\nX-Evil: 1`])(
 		'reads published content with the delivery token for cookie %j in preview mode',
 		async (cookie) => {
-			const { context, response } = await pass(previewConfig(), cookie)
-			expect(await siteRequest(context)).toBe(`${SITE_PREFIX}/site? Bearer ${stub.api.token}`)
+			const { lines, response } = await pass(previewConfig(), cookie)
+			expect(lines).toEqual([published()])
 			expect(response.headers.get('x-robots-tag')).toBe('noindex')
 		}
 	)
 
 	it('never reads the cookie in production mode', async () => {
-		const { context, response } = await pass(previewConfig({ preview: false }), TOKEN)
-		expect(await siteRequest(context)).toBe(`${SITE_PREFIX}/site? Bearer ${stub.api.token}`)
+		const { lines, response, cookieReads } = await pass(
+			previewConfig({ preview: false }),
+			TOKEN
+		)
+		expect(cookieReads).toBe(0)
+		expect(lines).toEqual([published()])
 		expect(response.headers.get('x-robots-tag')).toBeNull()
 	})
 
-	it('copies a response with immutable headers to mark it noindex', async () => {
-		const { response } = await pass(
-			previewConfig(),
-			undefined,
-			Response.redirect(`${ORIGIN}/en`, 302)
+	it('falls back to published content and clears the cookie when the token is refused', async () => {
+		stub.handle((request) =>
+			request.headers.get('authorization') === `Bearer ${TOKEN}`
+				? apiError(401, { error: 'expired', code: 'token_expired' })
+				: envelope(siteExample())
 		)
+		const { lines, response } = await pass(previewConfig(), TOKEN, { reads: 2 })
+		expect(lines).toEqual([DRAFT, published(), published()])
+		expect(response.status).toBe(200)
+		expect(response.headers.get('set-cookie')).toBe(
+			`${PREVIEW_COOKIE}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax; Secure`
+		)
+	})
+
+	it('copies a response with immutable headers to mark it noindex', async () => {
+		const { response } = await pass(previewConfig(), undefined, {
+			page: Response.redirect(`${ORIGIN}/en`, 302)
+		})
 		expect(response.status).toBe(302)
 		expect(response.headers.get('location')).toBe(`${ORIGIN}/en`)
 		expect(response.headers.get('x-robots-tag')).toBe('noindex')

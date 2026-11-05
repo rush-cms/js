@@ -1,6 +1,8 @@
 import { isRecord, isRushError } from '@rushcms/client'
 import type { LocaleCode, RushClient, RushUrls } from '@rushcms/client'
 import type { APIContext } from 'astro'
+import { seeOther } from './http'
+import type { PreviewSession } from './preview-session'
 import { attachRuntime, runtimeOf } from './runtime'
 import type { RushRuntime } from './runtime'
 import { sameOriginUrl } from './same-origin'
@@ -13,22 +15,30 @@ export type CookieReader = {
 	get(name: string): CookieValue | undefined
 }
 
-export type RushMiddlewareContext = {
-	locals: object
+export type CookieContext = {
 	cookies: CookieReader
 }
+
+export type PreviewContext = Pick<APIContext, 'url' | 'locals' | 'request'>
+
+export type RushMiddlewareContext = PreviewContext & CookieContext
 
 export type RushMiddleware = (
 	context: RushMiddlewareContext,
 	next: () => Promise<Response>
 ) => Promise<Response>
 
-export type PreviewContext = Pick<APIContext, 'url' | 'locals'>
-
 type PreviewTarget = {
 	locale: LocaleCode
 	collection: string
 	slug: string
+}
+
+type HostTrust = 'public' | 'loopback' | 'untrusted'
+
+type PreviewScope = {
+	runtime: RushRuntime
+	secure: boolean
 }
 
 type PreviewRequest = {
@@ -78,11 +88,37 @@ export function createRushMiddleware(runtime: RushRuntime): RushMiddleware {
 	}
 	return async (context, next) => {
 		const token = context.cookies.get(PREVIEW_COOKIE)?.value
+		const session: PreviewSession = { expired: false }
 		const scoped =
-			token !== undefined && isPreviewToken(token) ? runtime.preview(token) : runtime
+			token !== undefined && isPreviewToken(token) ? runtime.preview(token, session) : runtime
 		attachRuntime(context.locals, scoped)
-		return withPreviewHeaders(await next())
+		const response = withPreviewHeaders(await next())
+		if (session.expired) {
+			response.headers.append(
+				'Set-Cookie',
+				previewCookie(hostTrust(context) !== 'loopback', '', 0)
+			)
+		}
+		return response
 	}
+}
+
+function isLoopback(host: string): boolean {
+	const candidate = `http://${host.trim()}`
+	return URL.canParse(candidate) && LOOPBACK_HOSTS.includes(new URL(candidate).hostname)
+}
+
+function claimedHosts(request: Request): string[] {
+	const forwarded = request.headers.get('x-forwarded-host')?.split(',') ?? []
+	const host = request.headers.get('host')
+	return host === null ? forwarded : [host, ...forwarded]
+}
+
+function hostTrust(context: PreviewContext): HostTrust {
+	if (!LOOPBACK_HOSTS.includes(context.url.hostname)) {
+		return 'public'
+	}
+	return claimedHosts(context.request).every(isLoopback) ? 'loopback' : 'untrusted'
 }
 
 function decodeBase64Url(value: string): string {
@@ -159,19 +195,16 @@ function failure(status: number): Response {
 		: plain(502, 'Preview unavailable')
 }
 
-function previewCookie(url: URL, value: string, maxAge: number): string {
-	const secure = LOOPBACK_HOSTS.includes(url.hostname) ? '' : '; Secure'
-	return `${PREVIEW_COOKIE}=${value}; Path=/; Max-Age=${maxAge}; HttpOnly; SameSite=Lax${secure}`
+function previewCookie(secure: boolean, value: string, maxAge: number): string {
+	const flag = secure ? '; Secure' : ''
+	return `${PREVIEW_COOKIE}=${value}; Path=/; Max-Age=${maxAge}; HttpOnly; SameSite=Lax${flag}`
 }
 
-function seeOther(location: string, cookie: string): Response {
-	return new Response(null, {
-		status: 303,
-		headers: { Location: location, 'Set-Cookie': cookie, ...PREVIEW_HEADERS }
-	})
+function redirectWithCookie(location: string, cookie: string): Response {
+	return seeOther(location, { 'Set-Cookie': cookie, ...PREVIEW_HEADERS })
 }
 
-function enterPreview(url: URL, request: PreviewRequest, path: string): Response {
+function enterPreview(url: URL, secure: boolean, request: PreviewRequest, path: string): Response {
 	const maxAge = request.expiresAt - Math.floor(Date.now() / 1000)
 	if (maxAge < 1) {
 		return failure(401)
@@ -180,23 +213,27 @@ function enterPreview(url: URL, request: PreviewRequest, path: string): Response
 	if (target === undefined) {
 		return invalidLink()
 	}
-	return seeOther(target.href, previewCookie(url, request.token, maxAge))
+	return redirectWithCookie(target.href, previewCookie(secure, request.token, maxAge))
 }
 
-function previewRuntime(context: PreviewContext): RushRuntime | undefined {
+function previewScope(context: PreviewContext): PreviewScope | Response {
 	const runtime = runtimeOf(context.locals)
-	return runtime.previewMode ? runtime : undefined
-}
-
-function notFound(): Response {
-	return plain(404, 'Not found')
+	if (!runtime.previewMode) {
+		return plain(404, 'Not found')
+	}
+	const trust = hostTrust(context)
+	if (trust === 'untrusted') {
+		return plain(500, 'Preview host not trusted')
+	}
+	return { runtime, secure: trust === 'public' }
 }
 
 export async function startPreview(context: PreviewContext): Promise<Response> {
-	const runtime = previewRuntime(context)
-	if (runtime === undefined) {
-		return notFound()
+	const scope = previewScope(context)
+	if (scope instanceof Response) {
+		return scope
 	}
+	const { runtime, secure } = scope
 	const request = readPreviewRequest(context.url.searchParams, runtime.urls)
 	if (request === undefined) {
 		return invalidLink()
@@ -205,7 +242,7 @@ export async function startPreview(context: PreviewContext): Promise<Response> {
 	try {
 		await client.site.get()
 		const path = await targetPath(client, runtime.urls, request.target)
-		return enterPreview(context.url, request, path)
+		return enterPreview(context.url, secure, request, path)
 	} catch (err) {
 		if (!isRushError(err)) {
 			throw err
@@ -215,9 +252,10 @@ export async function startPreview(context: PreviewContext): Promise<Response> {
 }
 
 export function exitPreview(context: PreviewContext): Response {
-	if (previewRuntime(context) === undefined) {
-		return notFound()
+	const scope = previewScope(context)
+	if (scope instanceof Response) {
+		return scope
 	}
 	const target = sameOriginUrl(context.url.searchParams.get('return'), context.url, context.url)
-	return seeOther(target?.href ?? '/', previewCookie(context.url, '', 0))
+	return redirectWithCookie(target?.href ?? '/', previewCookie(scope.secure, '', 0))
 }
