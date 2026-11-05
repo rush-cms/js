@@ -1,0 +1,133 @@
+import { describe, expect, it } from 'vitest'
+import type { EtagRecord, EtagStore } from '../src/index'
+import { responseExample } from './fixtures/contract'
+import { deferred, header, jsonResponse, rejection, testClient } from './fixtures/fetch'
+
+type MemoryEtagStore = EtagStore & {
+	records: Map<string, EtagRecord>
+}
+
+function memoryEtagStore(): MemoryEtagStore {
+	const records = new Map<string, EtagRecord>()
+	return {
+		records,
+		get: async (key) => records.get(key),
+		set: async (key, value) => {
+			records.set(key, value)
+		}
+	}
+}
+
+const ETAG = '"9f86d081884c7d659a2feaa0c55ad015"'
+
+describe('request reuse', () => {
+	it('deduplicates identical in-flight GETs', async () => {
+		const gate = deferred<Response>()
+		const { client, calls } = testClient(() => gate.promise)
+
+		const first = client.site.get()
+		const second = client.site.get()
+		gate.resolve(jsonResponse(responseExample('SiteOk')))
+		const [a, b] = await Promise.all([first, second])
+
+		expect(calls).toHaveLength(1)
+		expect(a).toBe(b)
+	})
+
+	it('keeps requests that differ in url or perspective apart', async () => {
+		const gate = deferred<void>()
+		const { client, calls } = testClient(async () => {
+			await gate.promise
+			return jsonResponse(responseExample('EntryOk'))
+		})
+
+		const pending = Promise.all([
+			client.entries.get('blog', 'ola-mundo'),
+			client.entries.get('blog', 'ola-mundo', { perspective: 'draft' }),
+			client.entries.get('blog', 'ola-mundo', { locale: 'en' })
+		])
+		gate.resolve()
+		await pending
+
+		expect(calls).toHaveLength(3)
+	})
+
+	it('does not memoize settled GETs by default', async () => {
+		const { client, calls } = testClient(() => jsonResponse(responseExample('SiteOk')))
+
+		await client.site.get()
+		await client.site.get()
+
+		expect(calls).toHaveLength(2)
+	})
+
+	it('memoizes settled GETs when memo is enabled', async () => {
+		const { client, calls } = testClient(() => jsonResponse(responseExample('SiteOk')), {
+			memo: true
+		})
+
+		const first = await client.site.get()
+		const second = await client.site.get()
+
+		expect(calls).toHaveLength(1)
+		expect(second).toBe(first)
+	})
+
+	it('never memoizes failures', async () => {
+		const { client, calls } = testClient(
+			() => jsonResponse(responseExample('Forbidden'), 403),
+			{
+				memo: true
+			}
+		)
+
+		await rejection(client.site.get())
+		await rejection(client.site.get())
+
+		expect(calls).toHaveLength(2)
+	})
+
+	it('never deduplicates form submissions', async () => {
+		const { client, calls } = testClient(
+			() => jsonResponse(responseExample('FormSubmitted'), 201),
+			{
+				memo: true
+			}
+		)
+
+		await client.forms.submit('contact', { name: 'Ana' })
+		await client.forms.submit('contact', { name: 'Ana' })
+
+		expect(calls).toHaveLength(2)
+	})
+
+	it('revalidates with the etag store and returns the stored body on 304', async () => {
+		const etagStore = memoryEtagStore()
+		const example = responseExample('SiteOk') as Record<string, unknown>
+		const { client, calls } = testClient(
+			(call) =>
+				header(call, 'If-None-Match') === ETAG
+					? new Response(null, { status: 304, headers: { ETag: ETAG } })
+					: jsonResponse(example, 200, { ETag: ETAG }),
+			{ etagStore }
+		)
+
+		const fresh = await client.site.get()
+		const revalidated = await client.site.get()
+
+		expect(calls.map((call) => header(call, 'If-None-Match'))).toEqual([null, ETAG])
+		expect(revalidated).toEqual(example.data)
+		expect(revalidated).toEqual(fresh)
+		expect([...etagStore.records.values()]).toEqual([{ etag: ETAG, body: example }])
+		expect([...etagStore.records.keys()].join()).not.toContain('delivery-token')
+	})
+
+	it('stores nothing without an ETag header', async () => {
+		const etagStore = memoryEtagStore()
+		const { client } = testClient(() => jsonResponse(responseExample('SiteOk')), { etagStore })
+
+		await client.site.get()
+
+		expect(etagStore.records.size).toBe(0)
+	})
+})
