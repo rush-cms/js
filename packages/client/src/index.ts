@@ -5,6 +5,7 @@ export { toBcp47 } from './locales'
 export { alternates, createUrls } from './urls'
 export type { Alternate, CollectionRef, RushUrls, UrlConfig } from './urls'
 export { RushError, isRushError } from './errors'
+export { isRecord } from './json'
 export type {
 	ClientErrorCode,
 	ContractErrorCode,

@@ -1,0 +1,80 @@
+# @rushcms/astro
+
+Astro integration for [Rush CMS](https://github.com/rush-cms/rush-cms): environment schema, build-time site check,
+remote image host, a locale-bound API client for pages and an on-demand forms route.
+
+Requires Astro 7.4 or later and an adapter (`@astrojs/node` in standalone mode is the documented default), because
+the forms route is rendered on demand. Pages stay static unless you opt out.
+
+## Setup
+
+```js
+import node from '@astrojs/node'
+import rush from '@rushcms/astro'
+import { defineConfig } from 'astro/config'
+
+export default defineConfig({
+	adapter: node({ mode: 'standalone' }),
+	security: { allowedDomains: [{ protocol: 'https', hostname: 'www.example.com' }] },
+	integrations: [
+		rush({
+			localePaths: { pt_BR: '', en: 'en' },
+			routes: { artigos: '/{locale}/blog/{slug}' },
+			seo: { artigos: { title: 'headline', description: 'summary', image: 'cover' } }
+		})
+	]
+})
+```
+
+| Option        | Description                                                                                  |
+| ------------- | -------------------------------------------------------------------------------------------- |
+| `localePaths` | CMS locale code → URL prefix; at most one `''`. Must list exactly the site's active locales. |
+| `routes`      | Collection slug (any locale) → URL pattern with `{locale}`, `{collection}`, `{slug}`.        |
+| `seo`         | Per collection, the data fields used for title, description and image.                       |
+
+## Environment
+
+Declared through `astro:env`; the token is a secret and never reaches the client bundle or the build output.
+
+| Variable         | Access          | Description                                                  |
+| ---------------- | --------------- | ------------------------------------------------------------ |
+| `RUSH_API_URL`   | server, public  | API base URL                                                 |
+| `RUSH_SITE_ID`   | server, public  | Site ULID                                                    |
+| `RUSH_API_TOKEN` | server, secret  | Delivery token                                               |
+| `RUSH_MEDIA_URL` | server, public  | Media host, allowed for `astro:assets` (defaults to the API) |
+| `RUSH_PREVIEW`   | server, boolean | Preview deployment mode (default `false`)                    |
+
+At build and dev start the integration reads `/site` and `/collections` once per locale. It fails when the set of
+`localePaths` keys differs from the site's locales, listing both sets.
+
+## Pages
+
+```astro
+---
+import { getRush } from '@rushcms/astro'
+
+const rush = getRush(Astro)
+const entry = await rush.entries.get('artigos', Astro.params.slug)
+---
+```
+
+`getRush(Astro)` returns a client bound to the route's locale: `Astro.currentLocale` mapped back to the CMS code
+through `localePaths` (by prefix or code), else the locale with the `''` prefix, else the site's default locale.
+Static builds share one memoized client per locale; on-demand requests and `astro dev` never memoize.
+
+## Forms
+
+`POST /_rush/forms/[key]` accepts `application/x-www-form-urlencoded`, `multipart/form-data` (forwarded as is, files
+included) and `application/json`. It sends the visitor IP (`Astro.clientAddress`) as `X-Rush-Client-IP` and the
+captcha token from the `cf-turnstile-response` field or the `X-Captcha-Token` header.
+
+- Requests with `Accept: application/json` get `201 {"data": …}` or the API error (`status`, `code`, `params`,
+  `errors`).
+- HTML form posts get `303` back to the same-origin `Referer` with `rush_form=<key>&status=sent|error`; a missing or
+  cross-origin referrer redirects to `/`.
+
+Cross-site form posts are rejected by Astro's `security.checkOrigin` (on by default; keep it on). Astro only trusts
+the `Host` header for hosts listed in `security.allowedDomains`; without it, the request origin falls back to
+`localhost` and real form posts are rejected, so list your production domain. Behind a reverse proxy, Astro reads
+`X-Forwarded-For` (the visitor IP) and `X-Forwarded-Host` only for those domains; without them every visitor shares
+the proxy's IP in the API's rate limits.

@@ -1,9 +1,14 @@
 import { defineConfig } from 'tsup'
 
 export default defineConfig({
-	entry: ['src/index.ts'],
+	entry: {
+		index: 'src/index.ts',
+		middleware: 'src/middleware.ts',
+		'routes/forms': 'src/routes/forms.ts'
+	},
 	format: ['esm'],
-	dts: true,
+	dts: { entry: { index: 'src/index.ts' } },
 	clean: true,
-	target: 'es2023'
+	target: 'es2023',
+	external: [/^astro:/, /^virtual:/]
 })
