@@ -14,7 +14,6 @@ export type RushUrls = {
 	collection(collection: CollectionRef, locale: LocaleCode): string
 	entry(entry: Entry): string
 	translation(entry: Entry, locale: LocaleCode): string
-	entryAt(collection: CollectionRef, locale: LocaleCode, slug: string): string
 	entryParams(collection: CollectionRef, locale: LocaleCode, slug: string): RouteParams
 	homepage(locale: LocaleCode): string
 	navigationItem(item: NavigationItem, locale: LocaleCode): string | undefined
@@ -150,16 +149,8 @@ export function createUrls(config: UrlConfig): RushUrls {
 		return build(index, { locale, collection: ref.slug, slug: '' })
 	}
 
-	function entryParts(ref: CollectionRef, locale: LocaleCode, slug: string): UrlParts {
-		return { locale, collection: ref.slug, slug }
-	}
-
-	function entryAt(ref: CollectionRef, locale: LocaleCode, slug: string): string {
-		return build(segmentsFor(ref.id, [ref.slug]), entryParts(ref, locale, slug))
-	}
-
 	function entryParams(ref: CollectionRef, locale: LocaleCode, slug: string): RouteParams {
-		const values = valuesOf(entryParts(ref, locale, slug))
+		const values = valuesOf({ locale, collection: ref.slug, slug })
 		const names = segmentsFor(ref.id, [ref.slug])
 			.flatMap((segment) => [...segment.matchAll(PLACEHOLDER)])
 			.map((match) => match[1] ?? '')
@@ -170,7 +161,6 @@ export function createUrls(config: UrlConfig): RushUrls {
 
 	return {
 		collection,
-		entryAt,
 		entryParams,
 		locales: localeOrder,
 		entry: (entry) => translation(entry, entry.locale),

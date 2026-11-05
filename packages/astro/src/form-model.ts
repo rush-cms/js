@@ -7,8 +7,6 @@ export type MessageParams = Record<string, unknown>
 
 export type FormField = Form['fields'][number]
 
-export type ChoiceKind = 'select' | 'radio' | 'checkbox'
-
 export const TURNSTILE_SCRIPT = 'https://challenges.cloudflare.com/turnstile/v0/api.js'
 
 const STATUSES: FormStatus[] = ['sent', 'error']

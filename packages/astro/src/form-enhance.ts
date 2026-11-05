@@ -1,21 +1,30 @@
 import { isRecord } from '@rushcms/client'
 import { formStatusOf, messageFor } from './form-model'
-import type { FormMessages } from './form-model'
+import type { FormMessages, MessageParams } from './form-model'
 import type { FormStatus } from './forms'
+
+export type FetchFunction = typeof fetch
 
 type FieldErrorBody = {
 	field: string
 	code: string
-	params?: Record<string, unknown>
+	params?: MessageParams
+}
+
+type FormFailure = {
+	code?: string
+	params?: MessageParams
+	errors: FieldErrorBody[]
 }
 
 const FORM_SELECTOR = 'form[data-rush-form]'
 const STATUS_SELECTOR = '[data-rush-status]'
 const ERROR_SELECTOR = '[data-rush-error-for]'
+const SUBMIT_SELECTOR = 'button[type="submit"]'
 
 function messagesOf(form: HTMLFormElement): FormMessages {
 	try {
-		const parsed: unknown = JSON.parse(form.dataset.messages ?? '{}')
+		const parsed: unknown = JSON.parse(form.getAttribute('data-messages') ?? '{}')
 		return isRecord(parsed)
 			? Object.fromEntries(
 					Object.entries(parsed).filter(
@@ -28,22 +37,24 @@ function messagesOf(form: HTMLFormElement): FormMessages {
 	}
 }
 
-function showStatus(form: HTMLFormElement, status: FormStatus | undefined): void {
+function showStatus(form: HTMLFormElement, status: FormStatus | undefined, text?: string): void {
 	const element = form.querySelector<HTMLElement>(STATUS_SELECTOR)
 	if (element === null) {
 		return
 	}
 	element.hidden = status === undefined
-	element.textContent = status === undefined ? '' : messageFor(messagesOf(form), status)
+	element.textContent = status === undefined ? '' : (text ?? messageFor(messagesOf(form), status))
 	if (status === undefined) {
-		delete element.dataset.rushStatus
+		element.removeAttribute('data-state')
 	} else {
-		element.dataset.rushStatus = status
+		element.setAttribute('data-state', status)
 	}
 }
 
 function controlsOf(form: HTMLFormElement, handle: string): Element[] {
-	return [...form.elements].filter((element) => element.getAttribute('name') === handle)
+	return [...form.querySelectorAll('[name]')].filter(
+		(element) => element.getAttribute('name') === handle
+	)
 }
 
 function clearErrors(form: HTMLFormElement): void {
@@ -58,7 +69,7 @@ function clearErrors(form: HTMLFormElement): void {
 
 function showFieldError(form: HTMLFormElement, error: FieldErrorBody): void {
 	const element = [...form.querySelectorAll<HTMLElement>(ERROR_SELECTOR)].find(
-		(candidate) => candidate.dataset.rushErrorFor === error.field
+		(candidate) => candidate.getAttribute('data-rush-error-for') === error.field
 	)
 	if (element === undefined) {
 		return
@@ -74,13 +85,27 @@ function isFieldError(value: unknown): value is FieldErrorBody {
 	return isRecord(value) && typeof value.field === 'string' && typeof value.code === 'string'
 }
 
-async function fieldErrorsOf(response: Response): Promise<FieldErrorBody[]> {
+async function failureOf(response: Response): Promise<FormFailure> {
 	try {
 		const body: unknown = await response.json()
-		return isRecord(body) && Array.isArray(body.errors) ? body.errors.filter(isFieldError) : []
+		if (!isRecord(body)) {
+			return { errors: [] }
+		}
+		return {
+			errors: Array.isArray(body.errors) ? body.errors.filter(isFieldError) : [],
+			...(typeof body.code === 'string' ? { code: body.code } : {}),
+			...(isRecord(body.params) ? { params: body.params } : {})
+		}
 	} catch {
-		return []
+		return { errors: [] }
 	}
+}
+
+function failureText(form: HTMLFormElement, failure: FormFailure): string {
+	const messages = messagesOf(form)
+	return failure.code !== undefined && Object.hasOwn(messages, failure.code)
+		? messageFor(messages, failure.code, failure.params)
+		: messageFor(messages, 'error')
 }
 
 function resetCaptcha(): void {
@@ -90,24 +115,25 @@ function resetCaptcha(): void {
 	}
 }
 
-async function send(form: HTMLFormElement): Promise<void> {
+export async function sendForm(form: HTMLFormElement, fetchImpl: FetchFunction): Promise<void> {
 	clearErrors(form)
 	showStatus(form, undefined)
 	try {
-		const response = await fetch(form.action, {
+		const response = await fetchImpl(form.getAttribute('action') ?? '', {
 			method: 'POST',
 			body: new FormData(form),
 			headers: { Accept: 'application/json' }
 		})
 		if (response.ok) {
-			form.reset()
+			HTMLFormElement.prototype.reset.call(form)
 			showStatus(form, 'sent')
 			return
 		}
-		for (const error of await fieldErrorsOf(response)) {
+		const failure = await failureOf(response)
+		for (const error of failure.errors) {
 			showFieldError(form, error)
 		}
-		showStatus(form, 'error')
+		showStatus(form, 'error', failureText(form, failure))
 	} catch {
 		showStatus(form, 'error')
 	} finally {
@@ -115,30 +141,36 @@ async function send(form: HTMLFormElement): Promise<void> {
 	}
 }
 
-function enhance(form: HTMLFormElement): void {
+export async function submitForm(form: HTMLFormElement, fetchImpl: FetchFunction): Promise<void> {
+	const buttons = form.querySelectorAll<HTMLButtonElement>(SUBMIT_SELECTOR)
+	for (const button of buttons) {
+		button.disabled = true
+	}
+	try {
+		await sendForm(form, fetchImpl)
+	} finally {
+		for (const button of buttons) {
+			button.disabled = false
+		}
+	}
+}
+
+function enhance(form: HTMLFormElement, fetchImpl: FetchFunction): void {
 	form.addEventListener('submit', (event) => {
 		event.preventDefault()
-		const buttons = form.querySelectorAll<HTMLButtonElement>('button[type="submit"]')
-		for (const button of buttons) {
-			button.disabled = true
-		}
-		void send(form).finally(() => {
-			for (const button of buttons) {
-				button.disabled = false
-			}
-		})
+		void submitForm(form, fetchImpl)
 	})
 	const status = formStatusOf(
 		new URLSearchParams(window.location.search),
-		form.dataset.rushForm ?? ''
+		form.getAttribute('data-rush-form') ?? ''
 	)
 	if (status !== undefined) {
 		showStatus(form, status)
 	}
 }
 
-export function enhanceForms(root: ParentNode): void {
+export function enhanceForms(root: ParentNode, fetchImpl: FetchFunction = fetch): void {
 	for (const form of root.querySelectorAll<HTMLFormElement>(FORM_SELECTOR)) {
-		enhance(form)
+		enhance(form, fetchImpl)
 	}
 }

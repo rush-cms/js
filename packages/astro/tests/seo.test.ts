@@ -3,13 +3,10 @@ import Seo from '../src/components/seo.astro'
 import type { SeoFieldMap } from '../src/config'
 import { entryExample, homepageExample } from '../../client/tests/fixtures/contract'
 import { linkHrefs, metaContent, renderComponent } from './fixtures/render'
-import { rushLocals, siteConfig } from './fixtures/runtime'
-
-const LOCALE_PATHS = { pt_BR: 'pt', en: 'en', es: 'es' }
-const API = { url: 'http://127.0.0.1:1', siteId: 'site', token: 'token' }
+import { LOCALE_PATHS, OFFLINE_API, rushLocals, siteConfig } from './fixtures/runtime'
 
 function localesFor(seo: Record<string, SeoFieldMap> = {}, defaultLocale = 'en'): object {
-	return rushLocals(API, siteConfig({ seo, defaultLocale, localePaths: LOCALE_PATHS }))
+	return rushLocals(OFFLINE_API, siteConfig({ seo, defaultLocale, localePaths: LOCALE_PATHS }))
 }
 
 function entryWith(data: Record<string, unknown>) {

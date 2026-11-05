@@ -3,9 +3,9 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { renderSitemap, sitemapResponse } from '../src/sitemap'
 import type { SitemapContext } from '../src/sitemap'
 import { entryExample, homepageExample } from '../../client/tests/fixtures/contract'
-import { SITE_PREFIX, apiError, envelope, startStubApi } from './fixtures/api'
+import { SITE_PREFIX, apiError, entryListsByLocale, envelope, startStubApi } from './fixtures/api'
 import type { StubApi } from './fixtures/api'
-import { rushLocals, siteConfig } from './fixtures/runtime'
+import { LOCALE_PATHS, rushLocals, siteConfig } from './fixtures/runtime'
 
 type Catalog = {
 	entries: Record<string, Entry[]>
@@ -13,8 +13,6 @@ type Catalog = {
 }
 
 const SITE = new URL('https://site.example')
-const LOCALE_PATHS = { pt_BR: 'pt', en: 'en', es: 'es' }
-const PAGE_META = { total: 1, per_page: 100, current_page: 1, last_page: 1 }
 const NOT_FOUND = { error: 'not found', code: 'not_found', params: { resource: 'homepage' } }
 
 let stub: StubApi
@@ -35,6 +33,7 @@ function onlyPortuguese(slug: string, locale: string, fallback: boolean): Entry 
 }
 
 function serve(catalog: Catalog): void {
+	const entryLists = entryListsByLocale(catalog.entries)
 	stub.handle((request) => {
 		const locale = request.query.get('locale') ?? ''
 		if (request.path === `${SITE_PREFIX}/homepage`) {
@@ -44,7 +43,7 @@ function serve(catalog: Catalog): void {
 		if (request.path === `${SITE_PREFIX}/collections`) {
 			return envelope([{ id: entryExample().collection.id, slug: 'blog' }])
 		}
-		return Response.json({ data: catalog.entries[locale] ?? [], meta: PAGE_META })
+		return entryLists(request)
 	})
 }
 

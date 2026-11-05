@@ -5,21 +5,33 @@ export type EntryStaticPath = {
 	props: { entry: Entry }
 }
 
+function paramsKey(params: RouteParams): string {
+	return JSON.stringify(Object.entries(params).sort(([a], [b]) => a.localeCompare(b)))
+}
+
+function preferred(current: EntryStaticPath | undefined, next: EntryStaticPath): EntryStaticPath {
+	return current !== undefined && (!current.props.entry.fallback || next.props.entry.fallback)
+		? current
+		: next
+}
+
 export async function collectEntryPaths(
 	collection: string,
 	client: RushClient,
 	urls: RushUrls
 ): Promise<EntryStaticPath[]> {
-	const paths: EntryStaticPath[] = []
+	const paths = new Map<string, EntryStaticPath>()
 	for (const locale of urls.locales) {
 		for await (const entry of client.entries.all(collection, { locale })) {
-			paths.push({
+			const next: EntryStaticPath = {
 				params: urls.entryParams(entry.collection, locale, entry.slug),
 				props: { entry }
-			})
+			}
+			const key = paramsKey(next.params)
+			paths.set(key, preferred(paths.get(key), next))
 		}
 	}
-	return paths
+	return [...paths.values()]
 }
 
 export async function entryPaths(

@@ -1,7 +1,12 @@
 ---
 import type { Form } from '@rushcms/client'
-import { TURNSTILE_SCRIPT, formAction, formStatusOf, messageFor } from '../form-model'
-import type { FormMessages } from '../form-model'
+import {
+	TURNSTILE_SCRIPT,
+	formAction,
+	formStatusOf,
+	messageFor
+} from '@rushcms/astro/components-runtime'
+import type { FormMessages } from '@rushcms/astro/components-runtime'
 import FormField from './form-field.astro'
 
 type Props = {
@@ -20,7 +25,7 @@ const status = formStatusOf(Astro.url.searchParams, form.key)
 	data-rush-form={form.key}
 	data-messages={JSON.stringify(messages)}
 >
-	<p role="status" data-rush-status={status} hidden={status === undefined}>
+	<p role="status" data-rush-status data-state={status} hidden={status === undefined}>
 		{status && messageFor(messages, status)}
 	</p>
 	{form.fields.map((field) => <FormField form={form} field={field} />)}
@@ -37,7 +42,7 @@ const status = formStatusOf(Astro.url.searchParams, form.key)
 {form.captcha && <script is:inline src={TURNSTILE_SCRIPT} async defer />}
 
 <script>
-	import { enhanceForms } from '../form-enhance'
+	import { enhanceForms } from '@rushcms/astro/form-enhance'
 
 	enhanceForms(document)
 </script>

@@ -196,13 +196,8 @@ describe('hardening', () => {
 	})
 })
 
-describe('entryAt and entryParams', () => {
+describe('entryParams', () => {
 	const ref = { id: entryExample().collection.id, slug: 'blog' }
-
-	it('builds a path for a locale and slug that need no translation', () => {
-		const urls = urlsFor()
-		expect(urls.entryAt(ref, 'en', 'borrowed')).toBe('/en/blog/borrowed')
-	})
 
 	it('derives the params from the route pattern', () => {
 		const urls = urlsFor({ routes: { blog: '/{locale}/posts/{slug}' } })
@@ -225,6 +220,5 @@ describe('entryAt and entryParams', () => {
 			routes: { blog: '/{locale}/blog/{slug}' }
 		})
 		expect(rooted.entryParams(ref, 'en', 'x')).toEqual({ locale: undefined, slug: 'x' })
-		expect(rooted.entryAt(ref, 'en', 'x')).toBe('/blog/x')
 	})
 })

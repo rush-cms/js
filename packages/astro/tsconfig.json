@@ -3,7 +3,9 @@
 	"compilerOptions": {
 		"types": ["node"],
 		"paths": {
-			"@rushcms/client": ["../client/src/index.ts"]
+			"@rushcms/client": ["../client/src/index.ts"],
+			"@rushcms/astro/components-runtime": ["./src/components-runtime.ts"],
+			"@rushcms/astro/form-enhance": ["./src/form-enhance.ts"]
 		}
 	},
 	"include": ["src", "tests", "tsup.config.ts", "vitest.config.ts"]

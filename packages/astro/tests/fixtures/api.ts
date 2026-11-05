@@ -3,6 +3,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { parameterExample, responseExample } from '../../../client/tests/fixtures/contract'
 import { isRecord } from '@rushcms/client'
+import type { Entry } from '@rushcms/client'
 import type { RushApiSettings } from '../../src/settings'
 
 export type StubRequest = {
@@ -47,6 +48,16 @@ async function bodyOf(message: IncomingMessage): Promise<Uint8Array<ArrayBuffer>
 async function send(response: Response, out: ServerResponse): Promise<void> {
 	out.writeHead(response.status, Object.fromEntries(response.headers))
 	out.end(Buffer.from(await response.arrayBuffer()))
+}
+
+export const PAGE_META = { total: 1, per_page: 100, current_page: 1, last_page: 1 }
+
+export function entryListsByLocale(entriesByLocale: Record<string, Entry[]>): StubHandler {
+	return (request) =>
+		Response.json({
+			data: entriesByLocale[request.query.get('locale') ?? ''] ?? [],
+			meta: PAGE_META
+		})
 }
 
 export function envelope(data: unknown, status = 200): Response {

@@ -1,8 +1,6 @@
 ---
 import type { Entry, Homepage } from '@rushcms/client'
-import { runtimeOf } from '../runtime'
-import { entrySeo, homepageSeo } from '../seo-model'
-import { requireSite } from '../site-origin'
+import { entrySeo, homepageSeo, requireSite, runtimeOf } from '@rushcms/astro/components-runtime'
 
 type Props = { entry: Entry; homepage?: never } | { homepage: Homepage; entry?: never }
 

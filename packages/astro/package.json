@@ -18,6 +18,14 @@
 			"import": "./dist/index.js"
 		},
 		"./middleware": "./dist/middleware.js",
+		"./components-runtime": {
+			"types": "./dist/components-runtime.d.ts",
+			"import": "./dist/components-runtime.js"
+		},
+		"./form-enhance": {
+			"types": "./dist/form-enhance.d.ts",
+			"import": "./dist/form-enhance.js"
+		},
 		"./routes/forms": "./dist/routes/forms.js",
 		"./routes/preview": "./dist/routes/preview.js",
 		"./routes/preview-exit": "./dist/routes/preview-exit.js",
@@ -52,6 +60,7 @@
 	"devDependencies": {
 		"@astrojs/check": "^0.9.12",
 		"astro": "7.4.6",
+		"happy-dom": "21.0.4",
 		"vite": "8.3.6"
 	}
 }

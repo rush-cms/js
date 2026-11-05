@@ -3,13 +3,12 @@ import PreviewBanner from '../src/components/preview-banner.astro'
 import { attachRuntime, createRushRuntime } from '../src/runtime'
 import type { RushRuntime } from '../src/runtime'
 import { renderComponent } from './fixtures/render'
-import { siteConfig } from './fixtures/runtime'
+import { OFFLINE_API, siteConfig } from './fixtures/runtime'
 
-const API = { url: 'http://127.0.0.1:1', siteId: 'site', token: 'delivery' }
 const TOKEN = 'rush_prv_e30.sig'
 
 function runtimeFor(preview: boolean): RushRuntime {
-	return createRushRuntime({ api: API, config: siteConfig({ preview }) })
+	return createRushRuntime({ api: OFFLINE_API, config: siteConfig({ preview }) })
 }
 
 function render(runtime: RushRuntime, props: Record<string, unknown> = {}) {

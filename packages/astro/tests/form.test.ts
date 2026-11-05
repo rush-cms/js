@@ -131,12 +131,14 @@ describe('Form status and messages', () => {
 		const html = await render(formExample(), '?rush_form=contact&status=sent', {
 			sent: 'Thanks!'
 		})
-		expect(html).toMatch(/<p role="status" data-rush-status="sent"[^>]*>\s*Thanks!\s*<\/p>/)
+		expect(html).toMatch(
+			/<p role="status" data-rush-status data-state="sent"[^>]*>\s*Thanks!\s*<\/p>/
+		)
 	})
 
 	it('falls back to the status code without a message', async () => {
 		const html = await render(formExample(), '?rush_form=contact&status=error')
-		expect(html).toMatch(/data-rush-status="error"[^>]*>\s*error\s*<\/p>/)
+		expect(html).toMatch(/data-rush-status[^>]*data-state="error"[^>]*>\s*error\s*<\/p>/)
 	})
 
 	it('ignores the status of another form or an unknown status', async () => {

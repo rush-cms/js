@@ -18,10 +18,11 @@
 		"typecheck": "tsc -p tsconfig.json && bun run --filter '*' typecheck",
 		"test": "bun run --filter '*' test",
 		"build": "bun run --filter '*' build",
+		"pack:check": "bun scripts/check-pack.ts",
 		"types:drift": "bun run api:types && git diff --exit-code -- packages/client/src/generated/api.ts",
 		"changeset": "changeset",
 		"release": "bun run build && changeset publish",
-		"ci": "bun run format:check && bun run lint && bun run typecheck && bun run test && bun run build && bun run types:drift"
+		"ci": "bun run format:check && bun run lint && bun run typecheck && bun run test && bun run build && bun run pack:check && bun run types:drift"
 	},
 	"devDependencies": {
 		"@changesets/changelog-github": "1.0.1",
