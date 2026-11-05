@@ -1,0 +1,15 @@
+---
+import RichTextChildren from './rich-text-children.astro'
+import { codeLanguage, nodeChildren } from './rich-text-model'
+import type { RichTextContent, RichTextContext } from './rich-text-model'
+
+type Props = {
+	node: RichTextContent
+	context: RichTextContext
+}
+
+const { node, context } = Astro.props
+const language = codeLanguage(node)
+---
+
+<pre><code class={language && `language-${language}`}><RichTextChildren content={nodeChildren(node)} context={context} /></code></pre>

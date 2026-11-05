@@ -12,4 +12,4 @@ type Props = {
 const { content, media = {}, blocks = {}, nodes = {} } = Astro.props
 ---
 
-{content && <RichTextChildren content={content.content ?? []} context={{ media, blocks, nodes }} />}
+{content && <RichTextChildren content={content.content ?? []} context={{ media, blocks, nodes, depth: 0 }} />}

@@ -1,0 +1,19 @@
+---
+import RichTextChildren from './rich-text-children.astro'
+import { elementTag, nodeChildren, orderedStart } from './rich-text-model'
+import type { RichTextContent, RichTextContext } from './rich-text-model'
+
+type Props = {
+	node: RichTextContent
+	context: RichTextContext
+}
+
+const { node, context } = Astro.props
+const Tag = elementTag(node)
+const start = Tag === 'ol' ? orderedStart(node) : undefined
+const attributes = start === undefined ? {} : { start }
+---
+
+{Tag === 'br' && <br />}
+{Tag === 'hr' && <hr />}
+{Tag !== 'br' && Tag !== 'hr' && <Tag {...attributes}><RichTextChildren content={nodeChildren(node)} context={context} /></Tag>}

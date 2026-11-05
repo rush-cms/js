@@ -1,5 +1,6 @@
 ---
 import RichTextNode from './rich-text-node.astro'
+import { MAX_DEPTH } from './rich-text-model'
 import type { RichTextContent, RichTextContext } from './rich-text-model'
 
 type Props = {
@@ -8,6 +9,7 @@ type Props = {
 }
 
 const { content, context } = Astro.props
+const deeper = { ...context, depth: context.depth + 1 }
 ---
 
-{content.map((child) => <RichTextNode node={child} context={context} />)}
+{deeper.depth <= MAX_DEPTH && content.map((child) => <RichTextNode node={child} context={deeper} />)}

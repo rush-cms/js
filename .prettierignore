@@ -3,3 +3,4 @@ dist
 bun.lock
 CHANGELOG.md
 openapi/public.json
+.astro

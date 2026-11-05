@@ -3,7 +3,14 @@ import globals from 'globals'
 import tseslint from 'typescript-eslint'
 
 export default tseslint.config(
-	{ ignores: ['**/dist/**', '**/node_modules/**', 'packages/client/src/generated/**'] },
+	{
+		ignores: [
+			'**/dist/**',
+			'**/node_modules/**',
+			'**/.astro/**',
+			'packages/client/src/generated/**'
+		]
+	},
 	js.configs.recommended,
 	...tseslint.configs.recommended,
 	{ languageOptions: { globals: globals.node } }

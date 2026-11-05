@@ -17,6 +17,7 @@ export type RichTextContext = {
 	media: MediaMap
 	blocks: BlockComponents
 	nodes: NodeComponents
+	depth: number
 }
 
 export type ResolvedImage = {
@@ -96,14 +97,33 @@ export function customBlockContent(node: RichTextContent): CustomBlockContent {
 	return { block: text(attrs.block), values: isRecord(attrs.values) ? attrs.values : {} }
 }
 
+const SAFE_SCHEMES: readonly string[] = ['http', 'https', 'mailto', 'tel']
+const TARGETS: readonly string[] = ['_blank', '_self', '_parent', '_top']
+const SCHEME_PREFIX = /^([^/?#]*):/
+
+function visibleCharacters(value: string): string {
+	return Array.from(value)
+		.filter((character) => {
+			const code = character.codePointAt(0) ?? 0
+			return code > 0x20 && (code < 0x7f || code > 0x9f)
+		})
+		.join('')
+}
+
+export function isSafeHref(href: string): boolean {
+	const scheme = SCHEME_PREFIX.exec(visibleCharacters(href))?.[1]
+	return scheme === undefined || SAFE_SCHEMES.includes(scheme.toLowerCase())
+}
+
 export function linkAttributes(mark: RichTextMark): LinkAttributes | undefined {
 	const attrs = isRecord(mark.attrs) ? mark.attrs : {}
 	const href = text(attrs.href)
-	if (href === '') {
+	if (href === '' || !isSafeHref(href)) {
 		return undefined
 	}
-	const target = text(attrs.target) || undefined
-	const rel = target === '_blank' ? 'noopener noreferrer' : text(attrs.rel) || undefined
+	const requested = text(attrs.target)
+	const target = TARGETS.includes(requested) ? requested : undefined
+	const rel = target === '_blank' ? 'noopener noreferrer' : undefined
 	return { href, target, rel }
 }
 
@@ -154,18 +174,18 @@ export function markTag(mark: RichTextMark): string | undefined {
 	return Object.hasOwn(MARK_TAGS, mark.type) ? MARK_TAGS[mark.type] : undefined
 }
 
-export const KNOWN_NODE_TYPES: readonly string[] = [
-	'text',
-	'paragraph',
-	'heading',
-	'bulletList',
-	'orderedList',
-	'listItem',
-	'blockquote',
-	'codeBlock',
-	'hardBreak',
-	'horizontalRule',
-	'image',
-	'gallery',
-	'customBlock'
-]
+export const MAX_DEPTH = 32
+
+const ELEMENT_TAGS: Record<string, string> = {
+	paragraph: 'p',
+	bulletList: 'ul',
+	orderedList: 'ol',
+	listItem: 'li',
+	blockquote: 'blockquote',
+	hardBreak: 'br',
+	horizontalRule: 'hr'
+}
+
+export function elementTag(node: RichTextContent): string {
+	return node.type === 'heading' ? headingTag(node) : (ELEMENT_TAGS[node.type] ?? 'div')
+}

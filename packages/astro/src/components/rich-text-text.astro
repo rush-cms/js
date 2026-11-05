@@ -1,0 +1,13 @@
+---
+import RichTextMarks from './rich-text-marks.astro'
+import { nodeMarks, nodeText } from './rich-text-model'
+import type { RichTextContent } from './rich-text-model'
+
+type Props = {
+	node: RichTextContent
+}
+
+const { node } = Astro.props
+---
+
+<RichTextMarks marks={nodeMarks(node)} text={nodeText(node)} />

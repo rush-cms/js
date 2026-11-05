@@ -1,0 +1,24 @@
+---
+import RichTextImage from './rich-text-image.astro'
+import { dataValue, galleryCaption, galleryItems, nodeAttrs } from './rich-text-model'
+import type { RichTextContent, RichTextContext } from './rich-text-model'
+
+type Props = {
+	node: RichTextContent
+	context: RichTextContext
+}
+
+const { node, context } = Astro.props
+const attrs = nodeAttrs(node)
+---
+
+<div data-type="gallery" data-layout={dataValue(attrs.layout)} data-lightbox={attrs.lightbox === true ? 'true' : undefined}>
+	{
+		galleryItems(node).map((item) => (
+			<figure>
+				<RichTextImage reference={item} media={context.media} />
+				{galleryCaption(item) !== '' && <figcaption>{galleryCaption(item)}</figcaption>}
+			</figure>
+		))
+	}
+</div>

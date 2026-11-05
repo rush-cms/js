@@ -37,7 +37,7 @@
 	},
 	"scripts": {
 		"build": "tsup",
-		"typecheck": "tsc -p tsconfig.json",
+		"typecheck": "tsc -p tsconfig.json && astro check",
 		"test": "vitest run"
 	},
 	"dependencies": {
@@ -48,6 +48,7 @@
 		"vite": ">=8.0.0"
 	},
 	"devDependencies": {
+		"@astrojs/check": "^0.9.12",
 		"astro": "7.4.6",
 		"vite": "8.3.6"
 	}

@@ -68,6 +68,21 @@ describe('rich text structure', () => {
 		expect(html).not.toContain('mystery')
 	})
 
+	it('renders nesting up to 32 levels and drops deeper nodes', async () => {
+		const nest = (levels: number): RichTextContent => {
+			let node: RichTextContent = { type: 'horizontalRule' }
+			for (let level = 0; level < levels; level++) {
+				node = nodeOf('blockquote', [node])
+			}
+			return node
+		}
+		const within = await render(doc(nest(31)))
+		expect(within).toContain('<hr>')
+		const beyond = await render(doc(nest(32)))
+		expect(beyond).not.toContain('<hr>')
+		expect(beyond.match(/<blockquote>/g)).toHaveLength(32)
+	})
+
 	it('renders nothing for a missing document', async () => {
 		const container = await import('./fixtures/rich-text')
 		expect(await container.render({ type: 'doc' })).toBe('')
@@ -120,7 +135,9 @@ describe('rich text marks', () => {
 		expect(html).toContain(
 			'<a href="https://x.test" target="_blank" rel="noopener noreferrer">blank</a>'
 		)
-		expect(html).toContain('<a href="/b" rel="nofollow">rel</a>')
+		expect(html).toContain('<a href="/b">rel</a>')
+		expect(html).not.toContain('evil')
+		expect(html).not.toContain('nofollow')
 	})
 
 	it('renders a link with an empty href as plain text, keeping other marks', async () => {
@@ -135,6 +152,38 @@ describe('rich text marks', () => {
 		expect(html).toContain('<strong>unsafe</strong>')
 		expect(html).toContain('none')
 		expect(html).not.toContain('<a')
+	})
+
+	it.each([
+		'javascript:alert(1)',
+		' JaVaScRiPt:alert(1)',
+		'java\tscript:alert(1)',
+		'java\nscript:alert(1)',
+		'data:text/html,<b>x</b>',
+		'vbscript:x',
+		'foo:bar'
+	])('renders an unsafe href %j as plain text', async (href) => {
+		const html = await render(
+			doc(paragraph(text('t', [{ type: 'link', attrs: { href } }, { type: 'bold' }])))
+		)
+		expect(html).toContain('<strong>t</strong>')
+		expect(html).not.toContain('<a')
+	})
+
+	it.each([
+		'http://x.test/a',
+		'HTTPS://x.test',
+		'mailto:a@x.test',
+		'tel:+5511',
+		'/path',
+		'#top',
+		'?q=1',
+		'page.html',
+		'a/b:c',
+		'//cdn.x.test/a'
+	])('keeps a safe href %j', async (href) => {
+		const html = await render(doc(paragraph(text('t', [{ type: 'link', attrs: { href } }]))))
+		expect(html).toContain('<a href=')
 	})
 
 	it('ignores unknown marks', async () => {

@@ -85,3 +85,24 @@ the `Host` header for hosts listed in `security.allowedDomains`; without it, the
 `localhost` and real form posts are rejected, so list your production domain. Behind a reverse proxy, Astro reads
 `X-Forwarded-For` (the visitor IP) and `X-Forwarded-Host` only for those domains; without them every visitor shares
 the proxy's IP in the API's rate limits.
+
+## Rich text and images
+
+```astro
+---
+import RichText from '@rushcms/astro/components/rich-text.astro'
+import Callout from '../components/callout.astro'
+---
+
+<RichText content={entry.data.body} media={entry.media} blocks={{ callout: Callout }} />
+```
+
+- `blocks` maps a block slug to a component that receives `{values}`; an unmapped block renders nothing.
+- `nodes` maps a node type to a component that receives `{node}`; the rendered children arrive in its default slot.
+- Text is always escaped. Links are rendered only for `http`, `https`, `mailto`, `tel` and relative `href`s; any other
+  scheme renders the text without a link. `rel` is never taken from content (`target="_blank"` gets
+  `noopener noreferrer`). Nesting deeper than 32 levels renders nothing.
+- An image is joined to `media` by `attrs.mediaId`. Without a media entry (or without its dimensions) a plain
+  `<img>` with the API `src` is rendered: it skips Astro's remote-image check and optimization.
+- `RushImage` (`@rushcms/astro/components/rush-image.astro`) wraps `astro:assets` `<Image>` with width, height and alt
+  from a `media` entry.

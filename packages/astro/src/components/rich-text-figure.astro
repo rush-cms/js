@@ -1,0 +1,17 @@
+---
+import RichTextImage from './rich-text-image.astro'
+import { dataValue, nodeAttrs } from './rich-text-model'
+import type { RichTextContent, RichTextContext } from './rich-text-model'
+
+type Props = {
+	node: RichTextContent
+	context: RichTextContext
+}
+
+const { node, context } = Astro.props
+const attrs = nodeAttrs(node)
+---
+
+<figure data-align={dataValue(attrs.align)}>
+	<RichTextImage reference={attrs} media={context.media} />
+</figure>

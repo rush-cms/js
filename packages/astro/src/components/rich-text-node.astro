@@ -1,22 +1,8 @@
 ---
 import RichTextChildren from './rich-text-children.astro'
-import RichTextImage from './rich-text-image.astro'
-import RichTextMarks from './rich-text-marks.astro'
-import {
-	KNOWN_NODE_TYPES,
-	codeLanguage,
-	customBlockContent,
-	dataValue,
-	galleryCaption,
-	galleryItems,
-	headingTag,
-	nodeAttrs,
-	nodeChildren,
-	nodeMarks,
-	nodeText,
-	orderedStart
-} from './rich-text-model'
+import { nodeChildren } from './rich-text-model'
 import type { RichTextContent, RichTextContext } from './rich-text-model'
+import { RENDERERS } from './rich-text-renderers'
 
 type Props = {
 	node: RichTextContent
@@ -24,16 +10,9 @@ type Props = {
 }
 
 const { node, context } = Astro.props
-const { media, blocks, nodes } = context
-const type = node.type
 const children = nodeChildren(node)
-const attrs = nodeAttrs(node)
-const Override = Object.hasOwn(nodes, type) ? nodes[type] : undefined
-const Heading = headingTag(node)
-const block = type === 'customBlock' ? customBlockContent(node) : undefined
-const BlockComponent = block && Object.hasOwn(blocks, block.block) ? blocks[block.block] : undefined
-const language = codeLanguage(node)
-const plain = !Override
+const Override = Object.hasOwn(context.nodes, node.type) ? context.nodes[node.type] : undefined
+const Renderer = Object.hasOwn(RENDERERS, node.type) ? RENDERERS[node.type] : undefined
 ---
 
 {
@@ -43,34 +22,5 @@ const plain = !Override
 		</Override>
 	)
 }
-{plain && type === 'text' && <RichTextMarks marks={nodeMarks(node)} text={nodeText(node)} />}
-{plain && type === 'paragraph' && <p><RichTextChildren content={children} context={context} /></p>}
-{plain && type === 'heading' && <Heading><RichTextChildren content={children} context={context} /></Heading>}
-{plain && type === 'bulletList' && <ul><RichTextChildren content={children} context={context} /></ul>}
-{plain && type === 'orderedList' && <ol start={orderedStart(node)}><RichTextChildren content={children} context={context} /></ol>}
-{plain && type === 'listItem' && <li><RichTextChildren content={children} context={context} /></li>}
-{plain && type === 'blockquote' && <blockquote><RichTextChildren content={children} context={context} /></blockquote>}
-{plain && type === 'codeBlock' && <pre><code class={language && `language-${language}`}><RichTextChildren content={children} context={context} /></code></pre>}
-{plain && type === 'hardBreak' && <br />}
-{plain && type === 'horizontalRule' && <hr />}
-{
-	plain && type === 'image' && (
-		<figure data-align={dataValue(attrs.align)}>
-			<RichTextImage reference={attrs} media={media} />
-		</figure>
-	)
-}
-{
-	plain && type === 'gallery' && (
-		<div data-type="gallery" data-layout={dataValue(attrs.layout)} data-lightbox={attrs.lightbox === true ? 'true' : undefined}>
-			{galleryItems(node).map((item) => (
-				<figure>
-					<RichTextImage reference={item} media={media} />
-					{galleryCaption(item) !== '' && <figcaption>{galleryCaption(item)}</figcaption>}
-				</figure>
-			))}
-		</div>
-	)
-}
-{plain && BlockComponent && block && <BlockComponent values={block.values} />}
-{plain && !KNOWN_NODE_TYPES.includes(type) && <RichTextChildren content={children} context={context} />}
+{!Override && Renderer && <Renderer node={node} context={context} />}
+{!Override && !Renderer && <RichTextChildren content={children} context={context} />}

@@ -1,0 +1,15 @@
+---
+import { customBlockContent } from './rich-text-model'
+import type { RichTextContent, RichTextContext } from './rich-text-model'
+
+type Props = {
+	node: RichTextContent
+	context: RichTextContext
+}
+
+const { node, context } = Astro.props
+const { block, values } = customBlockContent(node)
+const BlockComponent = Object.hasOwn(context.blocks, block) ? context.blocks[block] : undefined
+---
+
+{BlockComponent && <BlockComponent values={values} />}

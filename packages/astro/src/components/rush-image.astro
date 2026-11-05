@@ -1,11 +1,14 @@
 ---
 import { Image } from 'astro:assets'
-import type { ComponentProps } from 'astro/types'
+import type { ImageOutputFormat, ImageQuality } from 'astro'
+import type { HTMLAttributes } from 'astro/types'
 import type { RichTextMedia } from './rich-text-model'
 
-type Props = Omit<ComponentProps<typeof Image>, 'src' | 'width' | 'height' | 'alt'> & {
+type Props = Omit<HTMLAttributes<'img'>, 'src' | 'width' | 'height' | 'alt'> & {
 	media: RichTextMedia | undefined
 	alt?: string
+	quality?: ImageQuality
+	format?: ImageOutputFormat
 }
 
 const { media, alt, ...rest } = Astro.props
