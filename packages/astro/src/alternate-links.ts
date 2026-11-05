@@ -1,5 +1,5 @@
-import { alternates } from '@rushcms/client'
-import type { Entry, LocaleCode, RushUrls } from '@rushcms/client'
+import { alternates, translatedLocales, translatedUrl } from '@rushcms/client'
+import type { Entry, Homepage, LocaleCode, RushUrls } from '@rushcms/client'
 import { absoluteUrl } from './site-origin'
 
 export type HreflangLink = {
@@ -10,13 +10,13 @@ export type HreflangLink = {
 export const X_DEFAULT = 'x-default'
 
 export function hreflangLinks(
-	entry: Entry,
+	source: Entry | Homepage,
 	urls: RushUrls,
 	defaultLocale: LocaleCode
 ): HreflangLink[] {
-	const links = alternates(entry, urls).map(({ hreflang, url }) => ({ hreflang, url }))
-	return Object.hasOwn(entry.translations, defaultLocale)
-		? [...links, { hreflang: X_DEFAULT, url: urls.translation(entry, defaultLocale) }]
+	const links = alternates(source, urls).map(({ hreflang, url }) => ({ hreflang, url }))
+	return translatedLocales(source).includes(defaultLocale)
+		? [...links, { hreflang: X_DEFAULT, url: translatedUrl(source, defaultLocale, urls) }]
 		: links
 }
 

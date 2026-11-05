@@ -1,5 +1,12 @@
 import { toBcp47 } from './locales'
-import type { Entry, LocaleCode, NavigationItem, RushLocalePaths, RushRoutes } from './types'
+import type {
+	Entry,
+	Homepage,
+	LocaleCode,
+	NavigationItem,
+	RushLocalePaths,
+	RushRoutes
+} from './types'
 
 const DEFAULT_PATTERN = '/{locale}/{collection}/{slug}'
 
@@ -188,12 +195,28 @@ export function createUrls(config: UrlConfig): RushUrls {
 	}
 }
 
-export function alternates(entry: Entry, urls: RushUrls): Alternate[] {
-	return Object.keys(entry.translations)
+function isHomepage(source: Entry | Homepage): source is Homepage {
+	return Array.isArray(source.translations)
+}
+
+export function translatedLocales(source: Entry | Homepage): LocaleCode[] {
+	return isHomepage(source) ? [...source.translations] : Object.keys(source.translations)
+}
+
+export function translatedUrl(
+	source: Entry | Homepage,
+	locale: LocaleCode,
+	urls: RushUrls
+): string {
+	return isHomepage(source) ? urls.homepage(locale) : urls.translation(source, locale)
+}
+
+export function alternates(source: Entry | Homepage, urls: RushUrls): Alternate[] {
+	return translatedLocales(source)
 		.map((locale) => ({
 			locale,
 			hreflang: toBcp47(locale),
-			url: urls.translation(entry, locale)
+			url: translatedUrl(source, locale, urls)
 		}))
 		.sort((a, b) => urls.locales.indexOf(a.locale) - urls.locales.indexOf(b.locale))
 }

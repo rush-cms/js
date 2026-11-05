@@ -8,7 +8,8 @@ export interface paths {
 		}
 		/**
 		 * This OpenAPI document as JSON
-		 * @description Serves the embedded contract as JSON. Needs no token and may be cached.
+		 * @description Serves the embedded contract as JSON. Needs no token, may be cached and is readable from any origin
+		 *     (`Access-Control-Allow-Origin: *`). A matching `If-None-Match` answers `304`.
 		 */
 		get: operations['getOpenAPI']
 		put?: never
@@ -624,7 +625,7 @@ export interface paths {
 				 */
 				site_id: components['parameters']['SiteId']
 				/**
-				 * @description Form key.
+				 * @description Form key (lowercase letters, digits and single hyphens, at most 255 characters).
 				 * @example contact
 				 */
 				key: components['parameters']['FormKey']
@@ -652,7 +653,7 @@ export interface paths {
 				 */
 				site_id: components['parameters']['SiteId']
 				/**
-				 * @description Form key.
+				 * @description Form key (lowercase letters, digits and single hyphens, at most 255 characters).
 				 * @example contact
 				 */
 				key: components['parameters']['FormKey']
@@ -861,6 +862,11 @@ export interface components {
 			locale: components['schemas']['LocaleCode']
 			/** @description True when the served locale differs from the requested locale. */
 			fallback: boolean
+			/**
+			 * @description Locales that have a homepage in the request perspective, among the site's active locales, in the site's
+			 *     configured order, including the served one.
+			 */
+			translations: components['schemas']['LocaleCode'][]
 			/** @description Sections in display order. */
 			content: components['schemas']['HomepageSection'][]
 			meta: components['schemas']['HomepageMeta']
@@ -1361,6 +1367,10 @@ export interface components {
 				 *         "id": "01JCH3BV4H15G5E4G7X0NTH82F",
 				 *         "locale": "pt_BR",
 				 *         "fallback": false,
+				 *         "translations": [
+				 *           "en",
+				 *           "pt_BR"
+				 *         ],
 				 *         "content": [
 				 *           {
 				 *             "id": "hero-1",
@@ -2208,7 +2218,22 @@ export interface components {
 			}
 			content?: never
 		}
-		/** @description `invalid_perspective`: `perspective` is neither `published` nor `draft`. */
+		/** @description `bad_request`: a query parameter or header is sent more than once. */
+		BadRequestParameter: {
+			headers: {
+				[name: string]: unknown
+			}
+			content: {
+				/**
+				 * @example {
+				 *       "error": "If-None-Match is sent more than once",
+				 *       "code": "bad_request"
+				 *     }
+				 */
+				'application/json': components['schemas']['Error']
+			}
+		}
+		/** @description `invalid_perspective`: `perspective` is neither `published` nor `draft`. `bad_request`: a query parameter or header is sent more than once. */
 		BadRequest: {
 			headers: {
 				[name: string]: unknown
@@ -2225,7 +2250,7 @@ export interface components {
 		}
 		/**
 		 * @description `locale_not_served` (`params.available` lists the site's locales): `?locale=` names a locale the site does not
-		 *     serve. `invalid_perspective`: `perspective` is neither `published` nor `draft`.
+		 *     serve. `invalid_perspective`: `perspective` is neither `published` nor `draft`. `bad_request`: a query parameter or header is sent more than once.
 		 */
 		BadRequestLocale: {
 			headers: {
@@ -2249,9 +2274,12 @@ export interface components {
 			}
 		}
 		/**
-		 * @description `bad_request`: `page` or `per_page` is not a number, or `type` is neither `tag` nor `category`.
+		 * @description `bad_request`: `page` or `per_page` is not a number, `type` is neither `tag` nor `category`, or a query
+		 *     parameter or header is sent more than once.
 		 *     `locale_not_served` (`params.available` lists the site's locales): `?locale=` names a locale the site does
 		 *     not serve. `invalid_perspective`: `perspective` is neither `published` nor `draft`.
+		 *     Precedence: `invalid_perspective` is decided with the token, before the other parameters; every
+		 *     `bad_request` then comes before `locale_not_served`.
 		 */
 		BadRequestQuery: {
 			headers: {
@@ -2268,8 +2296,9 @@ export interface components {
 			}
 		}
 		/**
-		 * @description `bad_request`: the body cannot be parsed as JSON, multipart or urlencoded. `invalid_perspective`: `perspective`
-		 *     is neither `published` nor `draft`.
+		 * @description `bad_request`: the body cannot be parsed as JSON, multipart or urlencoded, the form key does not match its
+		 *     pattern, or a query parameter or header is sent more than once. `invalid_perspective`: `perspective` is neither
+		 *     `published` nor `draft`.
 		 */
 		BadRequestSubmit: {
 			headers: {
@@ -2551,7 +2580,7 @@ export interface components {
 		 */
 		LinkPageSlug: string
 		/**
-		 * @description Form key.
+		 * @description Form key (lowercase letters, digits and single hyphens, at most 255 characters).
 		 * @example contact
 		 */
 		FormKey: string
@@ -2631,13 +2660,21 @@ export interface operations {
 	getOpenAPI: {
 		parameters: {
 			query?: never
-			header?: never
+			header?: {
+				/**
+				 * @description An `ETag` from an earlier response; a match answers `304`.
+				 * @example "9f86d081884c7d659a2feaa0c55ad015"
+				 */
+				'If-None-Match'?: components['parameters']['IfNoneMatch']
+			}
 			path?: never
 			cookie?: never
 		}
 		requestBody?: never
 		responses: {
 			200: components['responses']['OpenAPIDocument']
+			304: components['responses']['NotModified']
+			400: components['responses']['BadRequestParameter']
 		}
 	}
 	getSite: {
@@ -3569,7 +3606,7 @@ export interface operations {
 				 */
 				site_id: components['parameters']['SiteId']
 				/**
-				 * @description Form key.
+				 * @description Form key (lowercase letters, digits and single hyphens, at most 255 characters).
 				 * @example contact
 				 */
 				key: components['parameters']['FormKey']
@@ -3612,7 +3649,7 @@ export interface operations {
 				 */
 				site_id: components['parameters']['SiteId']
 				/**
-				 * @description Form key.
+				 * @description Form key (lowercase letters, digits and single hyphens, at most 255 characters).
 				 * @example contact
 				 */
 				key: components['parameters']['FormKey']

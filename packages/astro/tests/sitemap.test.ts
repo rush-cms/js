@@ -165,8 +165,19 @@ describe('sitemap', () => {
 		expect(block).not.toContain('hreflang="es"')
 	})
 
+	it('takes homepage alternates from the translations list', async () => {
+		const pt = { ...homepageExample(), translations: ['pt_BR', 'es'] }
+		const xml = await sitemap({ entries: {}, homepages: { pt_BR: pt } }, [])
+		const block = blockFor(xml, 'https://site.example/pt')
+		expect(block).toContain('hreflang="pt-BR" href="https://site.example/pt"')
+		expect(block).toContain('hreflang="es" href="https://site.example/es"')
+		expect(block).not.toContain('hreflang="en"')
+		expect(block).not.toContain('x-default')
+	})
+
 	it('skips a locale without a homepage', async () => {
-		const xml = await sitemap({ entries: {}, homepages: { pt_BR: homepageExample() } }, [])
+		const pt = { ...homepageExample(), translations: ['pt_BR'] }
+		const xml = await sitemap({ entries: {}, homepages: { pt_BR: pt } }, [])
 		expect(locs(xml)).toEqual(['https://site.example/pt'])
 		expect(blockFor(xml, 'https://site.example/pt')).not.toContain('x-default')
 	})

@@ -7,7 +7,7 @@
 			"name": "MIT",
 			"url": "https://opensource.org/licenses/MIT"
 		},
-		"description": "Read API for sites built on Rush CMS, plus form submission. Every operation under `/api/v1/{site_id}` requires a\nbearer API token bound to that site; `GET /api/v1/openapi.json` is public.\n\n**Tokens and perspectives.** A delivery token reads the published perspective. A preview token (an API token of\nscope `preview`, or a signed `rush_prv_` preview link valid for one hour) reads the draft perspective by default and\nmay ask for `perspective=published`. Draft responses carry `X-Rush-Perspective: draft` and\n`Cache-Control: no-store`, are never cached and carry no `ETag`. Only entries, tag entries, entry terms, authors,\nthe homepage, navigation entry targets and tag counts depend on the perspective; every other resource is live.\n\n**Locales.** Locale codes are returned as stored (`pt_BR`); only `Content-Language` uses BCP 47 (`pt-BR`). The\nrequested locale L comes from `?locale=`, then `Accept-Language` (quality order, base-language match), then the\nsite default. Structure (collection, tag, database and navigation names and slugs, site option group names, form\nlabels) always falls back through the site's preference order for L. Content (entries, homepage, site option field\nvalues, navigation targets) follows the site flag `fallback` (`serve_untranslated_fallback`): when on, each item is\nserved in the first locale of the preference order it exists in and is marked `fallback: true` when that locale is\nnot L; when off, only content translated into L exists. Blocks and link pages are locale-less.\n\n**Caching.** Successful GETs in the published perspective carry a strong `ETag` (hash of the body) and\n`Cache-Control: no-cache`; `If-None-Match` answers `304` with no body. The server cache key uses the resolved\nlocale. `Vary: Accept-Language` is sent only when the locale did not come from `?locale=`.\n\n**HTTP.** Every GET also answers `HEAD` (same status and headers, no body). CORS applies only to origins allowed by\nthe site (its domain and allowed domains): preflight allows `GET, OPTIONS` and the headers `Authorization`,\n`Content-Type`, `Accept`, `If-None-Match`; `ETag` and `X-Rush-Perspective` are exposed. Form submission is meant\nto come from the site's server, never from a browser.\n\n**Errors.** Every error is JSON `{\"error\", \"code\", \"params\"?, \"errors\"?}` (see `Error`). `error` is English text\nfor logs; `code` is the stable value clients branch on and localize. Unknown paths under `/api/v1` answer `404`\n`not_found` (`params.resource: route`) and a known path with an unsupported method answers `405`\n`method_not_allowed`. A request running longer than the global timeout answers a bare `504` with an empty body;\nthat response is outside this contract.\n\n**Rich text.** Rich-text field values inside `data` and `values` are TipTap JSON documents (see `RichText`).\n"
+		"description": "Read API for sites built on Rush CMS, plus form submission. Every operation under `/api/v1/{site_id}` requires a\nbearer API token bound to that site; `GET /api/v1/openapi.json` is public.\n\n**Tokens and perspectives.** A delivery token reads the published perspective. A preview token (an API token of\nscope `preview`, or a signed `rush_prv_` preview link valid for one hour) reads the draft perspective by default and\nmay ask for `perspective=published`. Draft responses carry `X-Rush-Perspective: draft` and\n`Cache-Control: no-store`, are never cached and carry no `ETag`. Only entries, tag entries, entry terms, authors,\nthe homepage, navigation entry targets and tag counts depend on the perspective; every other resource is live.\n\n**Locales.** Locale codes are returned as stored (`pt_BR`); only `Content-Language` uses BCP 47 (`pt-BR`). The\nrequested locale L comes from `?locale=`, then `Accept-Language` (quality order, base-language match), then the\nsite default. Structure (collection, tag, database and navigation names and slugs, site option group names, form\nlabels) always falls back through the site's preference order for L. Content (entries, homepage, site option field\nvalues, navigation targets) follows the site flag `fallback` (`serve_untranslated_fallback`): when on, each item is\nserved in the first locale of the preference order it exists in and is marked `fallback: true` when that locale is\nnot L; when off, only content translated into L exists. Blocks and link pages are locale-less.\n\n**Caching.** Successful GETs in the published perspective carry a strong `ETag` (hash of the body) and\n`Cache-Control: no-cache`; `If-None-Match` answers `304` with no body. The server cache key uses the resolved\nlocale. `Vary: Accept-Language` is sent only when the locale did not come from `?locale=`.\n\n**HTTP.** Every GET also answers `HEAD` (same status and headers, no body). CORS applies only to origins allowed by\nthe site (its domain and allowed domains): preflight allows `GET, HEAD, OPTIONS` and the headers `Authorization`,\n`Content-Type`, `Accept`, `If-None-Match`; `ETag` and `X-Rush-Perspective` are exposed. Form submission is meant\nto come from the site's server, never from a browser. A documented query parameter or header sent more than once\n(`?page=1&page=2`, two `If-None-Match` lines) answers `400` `bad_request`.\n\n**Errors.** Every error is JSON `{\"error\", \"code\", \"params\"?, \"errors\"?}` (see `Error`). `error` is English text\nfor logs; `code` is the stable value clients branch on and localize. Unknown paths under `/api/v1` answer `404`\n`not_found` (`params.resource: route`) and a known path with an unsupported method answers `405`\n`method_not_allowed`. A request running longer than the global timeout answers a bare `504` with an empty body;\nthat response is outside this contract.\n\n**Rich text.** Rich-text field values inside `data` and `values` are TipTap JSON documents (see `RichText`).\n"
 	},
 	"servers": [
 		{
@@ -84,11 +84,22 @@
 					"Contract"
 				],
 				"summary": "This OpenAPI document as JSON",
-				"description": "Serves the embedded contract as JSON. Needs no token and may be cached.",
+				"description": "Serves the embedded contract as JSON. Needs no token, may be cached and is readable from any origin\n(`Access-Control-Allow-Origin: *`). A matching `If-None-Match` answers `304`.\n",
 				"security": [],
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/IfNoneMatch"
+					}
+				],
 				"responses": {
 					"200": {
 						"$ref": "#/components/responses/OpenAPIDocument"
+					},
+					"304": {
+						"$ref": "#/components/responses/NotModified"
+					},
+					"400": {
+						"$ref": "#/components/responses/BadRequestParameter"
 					}
 				}
 			}
@@ -1329,9 +1340,11 @@
 				"name": "key",
 				"in": "path",
 				"required": true,
-				"description": "Form key.",
+				"description": "Form key (lowercase letters, digits and single hyphens, at most 255 characters).",
 				"schema": {
-					"type": "string"
+					"type": "string",
+					"maxLength": 255,
+					"pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
 				},
 				"example": "contact"
 			},
@@ -1587,6 +1600,10 @@
 								"id": "01JCH3BV4H15G5E4G7X0NTH82F",
 								"locale": "pt_BR",
 								"fallback": false,
+								"translations": [
+									"en",
+									"pt_BR"
+								],
 								"content": [
 									{
 										"id": "hero-1",
@@ -2627,8 +2644,22 @@
 					}
 				}
 			},
+			"BadRequestParameter": {
+				"description": "`bad_request`: a query parameter or header is sent more than once.",
+				"content": {
+					"application/json": {
+						"schema": {
+							"$ref": "#/components/schemas/Error"
+						},
+						"example": {
+							"error": "If-None-Match is sent more than once",
+							"code": "bad_request"
+						}
+					}
+				}
+			},
 			"BadRequest": {
-				"description": "`invalid_perspective`: `perspective` is neither `published` nor `draft`.",
+				"description": "`invalid_perspective`: `perspective` is neither `published` nor `draft`. `bad_request`: a query parameter or header is sent more than once.\n",
 				"content": {
 					"application/json": {
 						"schema": {
@@ -2642,7 +2673,7 @@
 				}
 			},
 			"BadRequestLocale": {
-				"description": "`locale_not_served` (`params.available` lists the site's locales): `?locale=` names a locale the site does not\nserve. `invalid_perspective`: `perspective` is neither `published` nor `draft`.\n",
+				"description": "`locale_not_served` (`params.available` lists the site's locales): `?locale=` names a locale the site does not\nserve. `invalid_perspective`: `perspective` is neither `published` nor `draft`. `bad_request`: a query parameter or header is sent more than once.\n",
 				"content": {
 					"application/json": {
 						"schema": {
@@ -2663,7 +2694,7 @@
 				}
 			},
 			"BadRequestQuery": {
-				"description": "`bad_request`: `page` or `per_page` is not a number, or `type` is neither `tag` nor `category`.\n`locale_not_served` (`params.available` lists the site's locales): `?locale=` names a locale the site does\nnot serve. `invalid_perspective`: `perspective` is neither `published` nor `draft`.\n",
+				"description": "`bad_request`: `page` or `per_page` is not a number, `type` is neither `tag` nor `category`, or a query\nparameter or header is sent more than once.\n`locale_not_served` (`params.available` lists the site's locales): `?locale=` names a locale the site does\nnot serve. `invalid_perspective`: `perspective` is neither `published` nor `draft`.\nPrecedence: `invalid_perspective` is decided with the token, before the other parameters; every\n`bad_request` then comes before `locale_not_served`.\n",
 				"content": {
 					"application/json": {
 						"schema": {
@@ -2677,7 +2708,7 @@
 				}
 			},
 			"BadRequestSubmit": {
-				"description": "`bad_request`: the body cannot be parsed as JSON, multipart or urlencoded. `invalid_perspective`: `perspective`\nis neither `published` nor `draft`.\n",
+				"description": "`bad_request`: the body cannot be parsed as JSON, multipart or urlencoded, the form key does not match its\npattern, or a query parameter or header is sent more than once. `invalid_perspective`: `perspective` is neither\n`published` nor `draft`.\n",
 				"content": {
 					"application/json": {
 						"schema": {
@@ -3342,6 +3373,7 @@
 					"id",
 					"locale",
 					"fallback",
+					"translations",
 					"content",
 					"meta",
 					"created_at",
@@ -3357,6 +3389,13 @@
 					"fallback": {
 						"type": "boolean",
 						"description": "True when the served locale differs from the requested locale."
+					},
+					"translations": {
+						"type": "array",
+						"description": "Locales that have a homepage in the request perspective, among the site's active locales, in the site's\nconfigured order, including the served one.\n",
+						"items": {
+							"$ref": "#/components/schemas/LocaleCode"
+						}
 					},
 					"content": {
 						"type": "array",

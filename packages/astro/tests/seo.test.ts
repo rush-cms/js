@@ -174,6 +174,31 @@ describe('Seo for the homepage', () => {
 		expect(linkHrefs(html, 'canonical')).toEqual(['https://site.example/pt'])
 	})
 
+	it('lists hreflang alternates for the translations of the homepage with x-default', async () => {
+		const homepage = { ...homepageExample(), translations: ['pt_BR', 'en', 'es'] }
+		const html = await renderComponent(Seo, { props: { homepage }, locals: localesFor() })
+		expect(linkHrefs(html, 'alternate')).toEqual([
+			'https://site.example/pt',
+			'https://site.example/en',
+			'https://site.example/es',
+			'https://site.example/en'
+		])
+		expect(html).toContain(
+			'<link rel="alternate" hreflang="x-default" href="https://site.example/en">'
+		)
+		expect(metaContent(html, 'property', 'og:locale:alternate')).toEqual(['en', 'es'])
+	})
+
+	it('omits x-default when the default locale has no homepage', async () => {
+		const homepage = { ...homepageExample(), translations: ['pt_BR', 'es'] }
+		const html = await renderComponent(Seo, { props: { homepage }, locals: localesFor() })
+		expect(linkHrefs(html, 'alternate')).toEqual([
+			'https://site.example/pt',
+			'https://site.example/es'
+		])
+		expect(html).not.toContain('x-default')
+	})
+
 	it('renders only canonical and locale when meta was never set', async () => {
 		const homepage = { ...homepageExample(), meta: null }
 		const html = await renderComponent(Seo, { props: { homepage }, locals: localesFor() })

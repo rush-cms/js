@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { alternates, createUrls, toBcp47 } from '../src/index'
-import type { Entry, NavigationItem, RushLocalePaths, UrlConfig } from '../src/index'
-import { entryExample } from './fixtures/contract'
+import type { Entry, Navigation, NavigationItem, RushLocalePaths, UrlConfig } from '../src/index'
+import { entryExample, responseExample } from './fixtures/contract'
 
 type EntrySummary = NonNullable<NonNullable<NavigationItem['target']>['entry']>
 
@@ -97,6 +97,30 @@ describe('navigationItem', () => {
 			'https://a.test/x?y=1'
 		)
 		expect(urls.navigationItem(navigationItem(), 'en')).toBeUndefined()
+	})
+})
+
+describe('navigationItem from the contract examples', () => {
+	const urls = urlsFor({
+		routes: { artigos: '/{locale}/posts/{slug}', blog: '/{locale}/{collection}/{slug}' }
+	})
+	const menu = (responseExample('NavigationOk') as { data: Navigation }).data
+	const listed = (responseExample('NavigationListOk') as { data: Navigation[] }).data[0]
+
+	it('builds an entry target from the nested entry summary', () => {
+		const [entryItem] = menu.items
+		expect(entryItem && urls.navigationItem(entryItem, 'en')).toBe('/pt/posts/ola-mundo')
+	})
+
+	it('returns the url target and exposes link_target on the item', () => {
+		const urlItem = menu.items[1]
+		expect(urlItem && urls.navigationItem(urlItem, 'en')).toBe('https://example.com/contato')
+		expect(urlItem?.link_target).toBe('_blank')
+	})
+
+	it('builds a collection target in the requested locale', () => {
+		const [collectionItem] = listed?.items ?? []
+		expect(collectionItem && urls.navigationItem(collectionItem, 'es')).toBe('/es/blog')
 	})
 })
 

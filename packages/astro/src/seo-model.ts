@@ -1,4 +1,4 @@
-import { isRecord, toBcp47 } from '@rushcms/client'
+import { isRecord, toBcp47, translatedLocales } from '@rushcms/client'
 import type { Entry, Homepage, LocaleCode, Media, RushUrls } from '@rushcms/client'
 import type { SeoFieldMap } from './config'
 import { absoluteLinks, hreflangLinks } from './alternate-links'
@@ -126,8 +126,10 @@ export function homepageSeo(homepage: Homepage, settings: SeoSettings): SeoTags 
 		type: 'website',
 		canonical: absoluteUrl(urls.homepage(homepage.locale), site),
 		locale: toBcp47(homepage.locale),
-		alternateLocales: [],
-		links: []
+		alternateLocales: translatedLocales(homepage)
+			.filter((locale) => locale !== homepage.locale)
+			.map(toBcp47),
+		links: absoluteLinks(hreflangLinks(homepage, urls, settings.defaultLocale), site)
 	}
 	withText(tags, filled(meta?.title), filled(meta?.description))
 	const image = filled(meta?.og_image)

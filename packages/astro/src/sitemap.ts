@@ -1,6 +1,6 @@
-import { isRushError, toBcp47 } from '@rushcms/client'
+import { isRushError } from '@rushcms/client'
 import type { Entry, Homepage, LocaleCode, RushClient, RushUrls } from '@rushcms/client'
-import { X_DEFAULT, absoluteLinks, hreflangLinks } from './alternate-links'
+import { absoluteLinks, hreflangLinks } from './alternate-links'
 import type { HreflangLink } from './alternate-links'
 import { getRush } from './get-rush'
 import { runtimeOf } from './runtime'
@@ -78,17 +78,16 @@ async function homepageUrls(source: SitemapSource): Promise<SitemapUrl[]> {
 	const pages = await Promise.all(
 		source.urls.locales.map((locale) => homepageIn(source.client, locale))
 	)
-	const served = pages.filter((page): page is Homepage => page !== undefined)
-	const located = served.map((page) => ({
-		page,
-		url: absoluteUrl(source.urls.homepage(page.locale), source.site)
-	}))
-	const defaultUrl = located.find(({ page }) => page.locale === source.defaultLocale)?.url
-	const links: HreflangLink[] = [
-		...located.map(({ page, url }) => ({ hreflang: toBcp47(page.locale), url })),
-		...(defaultUrl === undefined ? [] : [{ hreflang: X_DEFAULT, url: defaultUrl }])
-	]
-	return located.map(({ page, url }) => ({ loc: url, lastmod: page.updated_at, links }))
+	return pages
+		.filter((page): page is Homepage => page !== undefined)
+		.map((page) => ({
+			loc: absoluteUrl(source.urls.homepage(page.locale), source.site),
+			lastmod: page.updated_at,
+			links: absoluteLinks(
+				hreflangLinks(page, source.urls, source.defaultLocale),
+				source.site
+			)
+		}))
 }
 
 function renderLink(link: HreflangLink): string {

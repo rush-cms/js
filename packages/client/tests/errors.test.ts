@@ -1,6 +1,8 @@
 import { describe, expect, expectTypeOf, it } from 'vitest'
 import { RushError, isRushError } from '../src/index'
-import type { FieldError, RushErrorCode } from '../src/index'
+import type { FieldError, RushErrorCode, components } from '../src/index'
+
+type ContractErrorCode = components['schemas']['ErrorCode']
 import { errorCodes, errorExamples, responseExample } from './fixtures/contract'
 import { jsonResponse, rejection, testClient } from './fixtures/fetch'
 
@@ -33,6 +35,30 @@ describe('errors', () => {
 		expect(isRushError(error, code as RushErrorCode)).toBe(true)
 		expect(error).toMatchObject({ status: 418, code, params })
 	})
+
+	it('covers exactly the contract enum plus the client codes', () => {
+		expectTypeOf<ContractErrorCode>().toExtend<RushErrorCode>()
+		expectTypeOf<Exclude<RushErrorCode, ContractErrorCode>>().toEqualTypeOf<
+			'network_error' | 'invalid_response'
+		>()
+		expect(errorCodes()).toEqual(
+			expect.arrayContaining(['payload_too_large', 'forbidden', 'token_expired'])
+		)
+	})
+
+	it.each(['payload_too_large', 'forbidden', 'token_expired'] as const)(
+		'narrows %s through isRushError',
+		async (code) => {
+			const error = await failingWith({ error: 'failure', code }, 400)
+
+			expect(isRushError(error, code)).toBe(true)
+			expect(isRushError(error, 'bad_request')).toBe(false)
+			if (isRushError(error, code)) {
+				expectTypeOf(error.code).toEqualTypeOf<typeof code>()
+				expectTypeOf(error.params).toEqualTypeOf<Record<string, unknown>>()
+			}
+		}
+	)
 
 	it('narrows params per code', async () => {
 		const moved = responseExample('NotFoundEntry') as Record<string, unknown>
