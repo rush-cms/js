@@ -194,4 +194,8 @@ describe('hardening', () => {
 		}
 		expect(urlsFor().entry(edited)).toBe('/pt/artigos/a//b/')
 	})
+
+	it('rejects locale prefixes containing a slash', () => {
+		expect(() => createUrls({ localePaths: { en: 'en', pt_BR: '/pt' } })).toThrow(/"pt_BR"/)
+	})
 })

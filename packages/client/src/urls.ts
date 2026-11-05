@@ -54,6 +54,14 @@ function assertSlugLast(key: string, segments: string[]): void {
 	}
 }
 
+function assertPlainPrefixes(localePaths: RushLocalePaths): void {
+	for (const [locale, prefix] of Object.entries(localePaths)) {
+		if (prefix.includes('/')) {
+			throw new Error(`localePaths prefix for "${locale}" must not contain "/"`)
+		}
+	}
+}
+
 function assertSingleEmptyPrefix(localePaths: RushLocalePaths): void {
 	const empty = Object.entries(localePaths).filter(([, prefix]) => prefix === '')
 	if (empty.length > 1) {
@@ -74,6 +82,7 @@ function parseRoutes(routes: RushRoutes): Map<string, string[]> {
 }
 
 export function createUrls(config: UrlConfig): RushUrls {
+	assertPlainPrefixes(config.localePaths)
 	assertSingleEmptyPrefix(config.localePaths)
 	const routeSegments = parseRoutes(config.routes ?? {})
 	const routeKeysById = config.routeKeysById ?? {}
@@ -115,8 +124,10 @@ export function createUrls(config: UrlConfig): RushUrls {
 	}
 
 	function translation(entry: Entry, locale: LocaleCode): string {
-		const target = entry.translations[locale]
-		if (target === undefined || !Object.hasOwn(entry.translations, locale)) {
+		const target = Object.hasOwn(entry.translations, locale)
+			? entry.translations[locale]
+			: undefined
+		if (target === undefined) {
 			throw new Error(`entry "${entry.id}" has no translation for locale "${locale}"`)
 		}
 		return buildEntry({
