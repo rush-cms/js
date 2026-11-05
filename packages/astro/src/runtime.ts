@@ -1,7 +1,7 @@
 import { createClient, createUrls, toBcp47 } from '@rushcms/client'
 import type { LocaleCode, Perspective, RushClient, RushFetch, RushUrls } from '@rushcms/client'
 import type { APIContext } from 'astro'
-import type { RushSiteConfig } from './config'
+import type { RushSiteConfig, SeoFieldMap } from './config'
 import { fallbackFetch } from './preview-session'
 import type { PreviewSession } from './preview-session'
 import type { RushApiSettings } from './settings'
@@ -13,10 +13,14 @@ export type RushRuntimeSettings = {
 	config: RushSiteConfig
 	perspective?: Perspective
 	fetch?: RushFetch
+	session?: PreviewSession
 }
 
 export type RushRuntime = {
 	readonly previewMode: boolean
+	readonly previewActive: boolean
+	readonly defaultLocale: LocaleCode
+	readonly seo: Readonly<Record<string, SeoFieldMap>>
 	readonly urls: RushUrls
 	client(context: RushContext): RushClient
 	onDemandClient(): RushClient
@@ -44,7 +48,7 @@ export function resolveLocale(config: RushSiteConfig, requested: string | undefi
 }
 
 export function createRushRuntime(settings: RushRuntimeSettings): RushRuntime {
-	const { api, config, perspective, fetch } = settings
+	const { api, config, perspective, fetch, session } = settings
 	const shareable = config.memo && !config.preview
 	const shared = new Map<LocaleCode, RushClient>()
 
@@ -72,6 +76,11 @@ export function createRushRuntime(settings: RushRuntimeSettings): RushRuntime {
 
 	return {
 		previewMode: config.preview,
+		get previewActive() {
+			return config.preview && perspective === 'draft' && session?.expired !== true
+		},
+		defaultLocale: config.defaultLocale,
+		seo: config.seo,
 		urls: createUrls(config),
 		client: (context) => {
 			const locale = resolveLocale(config, context.currentLocale ?? context.params.locale)
@@ -83,7 +92,9 @@ export function createRushRuntime(settings: RushRuntimeSettings): RushRuntime {
 				api: { ...api, token },
 				config,
 				perspective: 'draft',
-				...(fallback === undefined ? {} : { fetch: fallbackFetch(api.token, fallback) })
+				...(fallback === undefined
+					? {}
+					: { fetch: fallbackFetch(api.token, fallback), session: fallback })
 			})
 	}
 }

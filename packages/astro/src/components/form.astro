@@ -1,0 +1,43 @@
+---
+import type { Form } from '@rushcms/client'
+import { TURNSTILE_SCRIPT, formAction, formStatusOf, messageFor } from '../form-model'
+import type { FormMessages } from '../form-model'
+import FormField from './form-field.astro'
+
+type Props = {
+	form: Form
+	messages?: FormMessages
+	submitLabel?: string
+}
+
+const { form, messages = {}, submitLabel = 'Send' } = Astro.props
+const status = formStatusOf(Astro.url.searchParams, form.key)
+---
+
+<form
+	method="post"
+	action={formAction(form.key)}
+	data-rush-form={form.key}
+	data-messages={JSON.stringify(messages)}
+>
+	<p role="status" data-rush-status={status} hidden={status === undefined}>
+		{status && messageFor(messages, status)}
+	</p>
+	{form.fields.map((field) => <FormField form={form} field={field} />)}
+	{
+		form.honeypot_field && (
+			<div aria-hidden="true" style="position:absolute;left:-10000px">
+				<input type="text" name={form.honeypot_field} tabindex="-1" autocomplete="off" />
+			</div>
+		)
+	}
+	{form.captcha && <div class="cf-turnstile" data-sitekey={form.captcha.site_key} />}
+	<button type="submit">{submitLabel}</button>
+</form>
+{form.captcha && <script is:inline src={TURNSTILE_SCRIPT} async defer />}
+
+<script>
+	import { enhanceForms } from '../form-enhance'
+
+	enhanceForms(document)
+</script>

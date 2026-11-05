@@ -1,9 +1,6 @@
 import { readFileSync } from 'node:fs'
-import type { components } from '../../src/generated/api'
 import { isRecord } from '../../src/json'
-import type { Entry } from '../../src/types'
-
-type EntryEnvelope = components['schemas']['EntryEnvelope']
+import type { Entry, Form, Homepage } from '../../src/types'
 
 type MediaExample = {
 	example?: unknown
@@ -80,16 +77,36 @@ export function responseExample(name: string): unknown {
 	return jsonExample(contract.components.responses[name], `response ${name}`)
 }
 
-function isEntryEnvelope(value: unknown): value is EntryEnvelope {
-	return isRecord(value) && isRecord(value.data) && typeof value.data.id === 'string'
+function dataExample<T>(name: string, isData: (value: unknown) => value is T): T {
+	const example = responseExample(name)
+	if (!isRecord(example) || !isData(example.data)) {
+		throw new Error(`${name} example is not the expected envelope`)
+	}
+	return structuredClone(example.data)
+}
+
+function isEntry(value: unknown): value is Entry {
+	return isRecord(value) && typeof value.id === 'string'
+}
+
+function isHomepage(value: unknown): value is Homepage {
+	return isRecord(value) && Array.isArray(value.content)
+}
+
+function isForm(value: unknown): value is Form {
+	return isRecord(value) && Array.isArray(value.fields)
 }
 
 export function entryExample(): Entry {
-	const example = responseExample('EntryOk')
-	if (!isEntryEnvelope(example)) {
-		throw new Error('EntryOk example is not an entry envelope')
-	}
-	return example.data
+	return dataExample('EntryOk', isEntry)
+}
+
+export function homepageExample(): Homepage {
+	return dataExample('HomepageOk', isHomepage)
+}
+
+export function formExample(): Form {
+	return dataExample('FormOk', isForm)
 }
 
 export function requestExample(path: string, method: string): unknown {

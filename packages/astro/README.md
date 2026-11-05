@@ -103,7 +103,9 @@ https://preview.example.com/_rush/preview?token={token}&locale={locale}
   answers `303` to that page. Bad parameters answer `400`, a rejected or expired link `401`, a missing entry `404`.
 - With the cookie, `getRush` reads the draft perspective with the link's token; without it, published content. When
   the API refuses the token (`401`, e.g. `token_expired` after clock skew), that request falls back to published
-  content with the delivery token and the response clears the cookie.
+  content with the delivery token and the response clears the cookie. When that 401 happens in a component rendered
+  after the response started streaming, the request still shows published content, but the cookie is cleared only on
+  a later request.
 - `GET /_rush/preview/exit` clears the cookie and answers `303` to `/`, or to a same-origin `return` path.
 - Outside preview mode both routes do not exist and the cookie is never read. Set `security.allowedDomains` here too:
   the redirect and the `Secure` flag follow the request origin Astro trusts. When Astro falls back to `localhost`
@@ -134,3 +136,82 @@ import Callout from '../components/callout.astro'
   `<img>` with the API `src` is rendered: it skips Astro's remote-image check and optimization.
 - `RushImage` (`@rushcms/astro/components/rush-image.astro`) wraps `astro:assets` `<Image>` with width, height and alt
   from a `media` entry.
+
+## SEO
+
+```astro
+---
+import Seo from '@rushcms/astro/components/seo.astro'
+---
+
+<head>
+	<Seo entry={entry} />
+</head>
+```
+
+Set `site` in `astro.config`: absolute URLs are built from it and `<Seo>` throws without it.
+
+- `<Seo entry>` emits `<title>`, the meta description, Open Graph (`og:title`, `og:description`, `og:image` with
+  width and height when the media has them, `og:url`, `og:type`, `og:locale` and `og:locale:alternate` in BCP 47),
+  `rel="canonical"` and `<link rel="alternate" hreflang>` for every translation, plus `x-default` pointing at the
+  site's default locale when that translation exists.
+- Title, description and image come from the `seo` option for the entry's collection (keyed by the collection id or
+  the collection slug of any locale), naming data fields. Defaults: `title`, `excerpt`, `featured_image`. A mapped
+  field that is empty falls back to the default.
+- Canonical always points at the original translation, so a fallback page (an entry shown in a locale it is not
+  translated to) is canonical to the original locale's URL.
+- `<Seo homepage>` reads `meta.title`, `meta.description` and `meta.og_image`; it emits no hreflang links (the
+  homepage response lists no translations).
+
+## Forms component
+
+```astro
+---
+import Form from '@rushcms/astro/components/form.astro'
+
+const form = await getRush(Astro).forms.get('contact')
+---
+
+<Form form={form} messages={{ required: 'Required', sent: 'Thanks!', error: 'Something went wrong' }} />
+```
+
+- Renders the fields of the public form schema and posts to `/_rush/forms/<key>`; it works without JavaScript (the
+  route redirects back with `rush_form=<key>&status=sent|error`, shown above the fields). With JavaScript the form is
+  sent with `fetch`, the status is shown in place and each field error appears under its field.
+- `messages` maps error codes (`required`, `invalid_email`, `too_short`, …) and the statuses `sent` and `error` to
+  text; `{min}`, `{max}` and `{value}` placeholders are replaced from the error params. A missing key shows the code.
+- The server-rendered status needs the page to be rendered on demand; on a static page the script shows it instead.
+- The Turnstile widget and its script are added only when the form schema has `captcha`. The honeypot input is
+  rendered when the schema has one.
+
+## Preview banner
+
+`<PreviewBanner />` (`@rushcms/astro/components/preview-banner.astro`) renders only in a preview deployment while a
+preview cookie session is active, with a link to `/_rush/preview/exit` that returns to the current page. `label` and
+`exitLabel` props set its texts.
+
+## Static paths and sitemap
+
+```astro
+---
+import { entryPaths } from '@rushcms/astro'
+
+export const getStaticPaths = () => entryPaths('artigos')
+const { entry } = Astro.props
+---
+```
+
+`entryPaths(collection, rush?)` walks the collection in every `localePaths` locale and returns
+`{ params, props: { entry } }`; `params` holds the `locale` (undefined for the empty prefix), `collection` and `slug`
+of the route pattern that applies to the collection. Entries served as a fallback produce a page under the requested
+locale too. Pass a client as `rush` to override the default one.
+
+```ts
+import { sitemapResponse } from '@rushcms/astro'
+
+export const GET = (context) => sitemapResponse({ context, collections: ['artigos'] })
+```
+
+`sitemapResponse` answers `application/xml` with canonical URLs only (fallback pages are excluded), `lastmod` from
+`updated_at` and `xhtml:link` alternates from the entry translations, plus the homepage of each locale that has one.
+Without `collections` it lists every collection of the site.

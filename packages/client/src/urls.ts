@@ -14,6 +14,8 @@ export type RushUrls = {
 	collection(collection: CollectionRef, locale: LocaleCode): string
 	entry(entry: Entry): string
 	translation(entry: Entry, locale: LocaleCode): string
+	entryAt(collection: CollectionRef, locale: LocaleCode, slug: string): string
+	entryParams(collection: CollectionRef, locale: LocaleCode, slug: string): RouteParams
 	homepage(locale: LocaleCode): string
 	navigationItem(item: NavigationItem, locale: LocaleCode): string | undefined
 }
@@ -25,6 +27,8 @@ export type Alternate = {
 }
 
 export type CollectionRef = Entry['collection']
+
+export type RouteParams = Record<string, string | undefined>
 
 type UrlParts = {
 	locale: LocaleCode
@@ -107,12 +111,12 @@ export function createUrls(config: UrlConfig): RushUrls {
 		return (key === undefined ? undefined : routeSegments.get(key)) ?? defaultSegments
 	}
 
+	function valuesOf(parts: UrlParts): Record<string, string> {
+		return { locale: prefixOf(parts.locale), collection: parts.collection, slug: parts.slug }
+	}
+
 	function build(segments: string[], parts: UrlParts): string {
-		const values: Record<string, string> = {
-			locale: prefixOf(parts.locale),
-			collection: parts.collection,
-			slug: parts.slug
-		}
+		const values = valuesOf(parts)
 		const filled = segments
 			.map((segment) => segment.replace(PLACEHOLDER, (_, name: string) => values[name] ?? ''))
 			.filter((segment) => segment !== '')
@@ -146,8 +150,28 @@ export function createUrls(config: UrlConfig): RushUrls {
 		return build(index, { locale, collection: ref.slug, slug: '' })
 	}
 
+	function entryParts(ref: CollectionRef, locale: LocaleCode, slug: string): UrlParts {
+		return { locale, collection: ref.slug, slug }
+	}
+
+	function entryAt(ref: CollectionRef, locale: LocaleCode, slug: string): string {
+		return build(segmentsFor(ref.id, [ref.slug]), entryParts(ref, locale, slug))
+	}
+
+	function entryParams(ref: CollectionRef, locale: LocaleCode, slug: string): RouteParams {
+		const values = valuesOf(entryParts(ref, locale, slug))
+		const names = segmentsFor(ref.id, [ref.slug])
+			.flatMap((segment) => [...segment.matchAll(PLACEHOLDER)])
+			.map((match) => match[1] ?? '')
+		return Object.fromEntries(
+			[...new Set(names)].map((name) => [name, values[name] || undefined])
+		)
+	}
+
 	return {
 		collection,
+		entryAt,
+		entryParams,
 		locales: localeOrder,
 		entry: (entry) => translation(entry, entry.locale),
 		translation,

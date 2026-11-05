@@ -1,0 +1,21 @@
+---
+import { runtimeOf } from '../runtime'
+
+type Props = {
+	label?: string
+	exitLabel?: string
+}
+
+const { label = 'Preview mode', exitLabel = 'Exit preview' } = Astro.props
+const active = runtimeOf(Astro.locals).previewActive
+const exit = `/_rush/preview/exit?return=${encodeURIComponent(Astro.url.pathname)}`
+---
+
+{
+	active && (
+		<aside role="status" data-rush-preview>
+			<span>{label}</span>
+			<a href={exit}>{exitLabel}</a>
+		</aside>
+	)
+}

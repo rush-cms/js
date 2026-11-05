@@ -1,0 +1,84 @@
+---
+import type { Form } from '@rushcms/client'
+import { errorId, fieldId, helpId } from '../form-model'
+import type { FormField } from '../form-model'
+
+type Props = {
+	form: Form
+	field: FormField
+}
+
+const { form, field } = Astro.props
+const id = fieldId(form, field)
+const describedBy = field.help_text ? helpId(form, field) : undefined
+const options = field.options ?? []
+const choiceType = field.type === 'radio' ? 'radio' : 'checkbox'
+const grouped = field.type === 'radio' || (field.type === 'checkbox' && options.length > 0)
+const constraints = {
+	required: field.required === true,
+	minlength: field.min_length,
+	maxlength: field.max_length,
+	min: field.min,
+	max: field.max,
+	pattern: field.pattern,
+	placeholder: field.placeholder,
+	'aria-describedby': describedBy
+}
+---
+
+{
+	field.type === 'hidden' ? (
+		<input type="hidden" name={field.handle} />
+	) : (
+		<div data-rush-field={field.handle}>
+			{grouped ? (
+				<fieldset aria-describedby={describedBy}>
+					<legend>{field.label}</legend>
+					{options.map((option) => (
+						<label>
+							<input
+								type={choiceType}
+								name={field.handle}
+								value={option.value}
+								required={field.type === 'radio' && field.required === true}
+							/>
+							{option.label}
+						</label>
+					))}
+				</fieldset>
+			) : (
+				<>
+					<label for={id}>{field.label}</label>
+					{field.type === 'textarea' ? (
+						<textarea id={id} name={field.handle} {...constraints} />
+					) : field.type === 'select' ? (
+						<select
+							id={id}
+							name={field.handle}
+							required={constraints.required}
+							aria-describedby={describedBy}
+						>
+							<option value="">{field.placeholder ?? ''}</option>
+							{options.map((option) => (
+								<option value={option.value}>{option.label}</option>
+							))}
+						</select>
+					) : field.type === 'checkbox' ? (
+						<input
+							id={id}
+							type="checkbox"
+							name={field.handle}
+							value="true"
+							required={constraints.required}
+							aria-describedby={describedBy}
+						/>
+					) : (
+						<input id={id} type={field.type} name={field.handle} {...constraints} />
+					)}
+				</>
+			)}
+			{field.help_text && <p id={helpId(form, field)}>{field.help_text}</p>}
+			<p id={errorId(form, field)} data-rush-error-for={field.handle} role="alert" hidden />
+		</div>
+	)
+}

@@ -1,3 +1,7 @@
 export { rush as default } from './integration'
 export { getRush } from './get-rush'
 export type { RushAstroOptions, SeoFieldMap } from './config'
+export { entryPaths } from './paths'
+export type { EntryStaticPath } from './paths'
+export { sitemapResponse } from './sitemap'
+export type { SitemapContext, SitemapOptions } from './sitemap'

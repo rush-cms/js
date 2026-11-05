@@ -1,0 +1,33 @@
+---
+import type { Entry, Homepage } from '@rushcms/client'
+import { runtimeOf } from '../runtime'
+import { entrySeo, homepageSeo } from '../seo-model'
+import { requireSite } from '../site-origin'
+
+type Props = { entry: Entry; homepage?: never } | { homepage: Homepage; entry?: never }
+
+const { entry, homepage } = Astro.props
+const runtime = runtimeOf(Astro.locals)
+const settings = {
+	urls: runtime.urls,
+	seo: runtime.seo,
+	defaultLocale: runtime.defaultLocale,
+	site: requireSite(Astro.site, '<Seo>')
+}
+const tags = entry ? entrySeo(entry, settings) : homepageSeo(homepage, settings)
+---
+
+{tags.title && <title>{tags.title}</title>}
+{tags.description && <meta name="description" content={tags.description} />}
+<link rel="canonical" href={tags.canonical} />
+{tags.links.map((link) => <link rel="alternate" hreflang={link.hreflang} href={link.url} />)}
+<meta property="og:type" content={tags.type} />
+<meta property="og:url" content={tags.canonical} />
+{tags.title && <meta property="og:title" content={tags.title} />}
+{tags.description && <meta property="og:description" content={tags.description} />}
+{tags.image && <meta property="og:image" content={tags.image.url} />}
+{tags.image?.width && <meta property="og:image:width" content={String(tags.image.width)} />}
+{tags.image?.height && <meta property="og:image:height" content={String(tags.image.height)} />}
+{tags.image?.alt && <meta property="og:image:alt" content={tags.image.alt} />}
+<meta property="og:locale" content={tags.locale} />
+{tags.alternateLocales.map((locale) => <meta property="og:locale:alternate" content={locale} />)}

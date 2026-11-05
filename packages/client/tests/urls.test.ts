@@ -195,3 +195,36 @@ describe('hardening', () => {
 		expect(() => createUrls({ localePaths: { en: 'en', pt_BR: '/pt' } })).toThrow(/"pt_BR"/)
 	})
 })
+
+describe('entryAt and entryParams', () => {
+	const ref = { id: entryExample().collection.id, slug: 'blog' }
+
+	it('builds a path for a locale and slug that need no translation', () => {
+		const urls = urlsFor()
+		expect(urls.entryAt(ref, 'en', 'borrowed')).toBe('/en/blog/borrowed')
+	})
+
+	it('derives the params from the route pattern', () => {
+		const urls = urlsFor({ routes: { blog: '/{locale}/posts/{slug}' } })
+		expect(urls.entryParams(ref, 'en', 'borrowed')).toEqual({ locale: 'en', slug: 'borrowed' })
+		expect(urlsFor().entryParams(ref, 'es', 'x')).toEqual({
+			locale: 'es',
+			collection: 'blog',
+			slug: 'x'
+		})
+	})
+
+	it('leaves the locale param undefined for an empty prefix and omits unused ones', () => {
+		const urls = urlsFor({
+			localePaths: { en: '', pt_BR: 'pt', es: 'es' },
+			routes: { blog: '/blog/{slug}' }
+		})
+		expect(urls.entryParams(ref, 'en', 'x')).toEqual({ slug: 'x' })
+		const rooted = urlsFor({
+			localePaths: { en: '', pt_BR: 'pt', es: 'es' },
+			routes: { blog: '/{locale}/blog/{slug}' }
+		})
+		expect(rooted.entryParams(ref, 'en', 'x')).toEqual({ locale: undefined, slug: 'x' })
+		expect(rooted.entryAt(ref, 'en', 'x')).toBe('/blog/x')
+	})
+})
