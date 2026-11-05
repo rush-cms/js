@@ -18,10 +18,12 @@
 			"import": "./dist/index.js"
 		},
 		"./middleware": "./dist/middleware.js",
-		"./routes/forms": "./dist/routes/forms.js"
+		"./routes/forms": "./dist/routes/forms.js",
+		"./components/*.astro": "./src/components/*.astro"
 	},
 	"files": [
-		"dist"
+		"dist",
+		"src/components"
 	],
 	"repository": {
 		"type": "git",

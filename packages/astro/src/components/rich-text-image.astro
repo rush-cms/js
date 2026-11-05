@@ -1,0 +1,21 @@
+---
+import RushImage from './rush-image.astro'
+import { resolveImage } from './rich-text-model'
+import type { ImageReference, MediaMap } from './rich-text-model'
+
+type Props = {
+	reference: ImageReference
+	media: MediaMap
+}
+
+const { reference, media } = Astro.props
+const image = resolveImage(reference, media)
+const sized = image?.width !== undefined && image.height !== undefined
+---
+
+{
+	image && sized && (
+		<RushImage media={{ url: image.src, width: image.width, height: image.height }} alt={image.alt} loading="lazy" />
+	)
+}
+{image && !sized && <img src={image.src} alt={image.alt} loading="lazy" />}

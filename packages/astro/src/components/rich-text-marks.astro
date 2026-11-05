@@ -1,0 +1,26 @@
+---
+import { linkAttributes, markTag } from './rich-text-model'
+import type { RichTextMark } from './rich-text-model'
+import RichTextMarks from './rich-text-marks.astro'
+
+type Props = {
+	marks: RichTextMark[]
+	text: string
+}
+
+const { marks, text } = Astro.props
+const [mark, ...rest] = marks
+const Tag = mark ? markTag(mark) : undefined
+const link = mark?.type === 'link' ? linkAttributes(mark) : undefined
+---
+
+{!mark && text}
+{mark && Tag && <Tag><RichTextMarks marks={rest} text={text} /></Tag>}
+{
+	link && (
+		<a href={link.href} target={link.target} rel={link.rel}>
+			<RichTextMarks marks={rest} text={text} />
+		</a>
+	)
+}
+{mark && !Tag && !link && <RichTextMarks marks={rest} text={text} />}

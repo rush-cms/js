@@ -1,7 +1,8 @@
+/// <reference types="vitest/config" />
 import { fileURLToPath } from 'node:url'
-import { defineConfig } from 'vitest/config'
+import { getViteConfig } from 'astro/config'
 
-export default defineConfig({
+export default getViteConfig({
 	resolve: {
 		alias: {
 			'@rushcms/client': fileURLToPath(new URL('../client/src/index.ts', import.meta.url))

@@ -1,0 +1,13 @@
+---
+import RichTextNode from './rich-text-node.astro'
+import type { RichTextContent, RichTextContext } from './rich-text-model'
+
+type Props = {
+	content: RichTextContent[]
+	context: RichTextContext
+}
+
+const { content, context } = Astro.props
+---
+
+{content.map((child) => <RichTextNode node={child} context={context} />)}

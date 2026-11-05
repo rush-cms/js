@@ -1,0 +1,6 @@
+---
+type Props = { values: { title?: string } }
+const { values } = Astro.props
+---
+
+<aside class="callout">{values.title}</aside>

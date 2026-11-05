@@ -1,0 +1,19 @@
+---
+import { Image } from 'astro:assets'
+import type { ComponentProps } from 'astro/types'
+import type { RichTextMedia } from './rich-text-model'
+
+type Props = Omit<ComponentProps<typeof Image>, 'src' | 'width' | 'height' | 'alt'> & {
+	media: RichTextMedia | undefined
+	alt?: string
+}
+
+const { media, alt, ...rest } = Astro.props
+const url = media?.url
+---
+
+{
+	url && media.width && media.height && (
+		<Image {...rest} src={url} width={media.width} height={media.height} alt={alt ?? media.alt ?? ''} />
+	)
+}

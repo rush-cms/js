@@ -1,0 +1,15 @@
+---
+import RichTextChildren from './rich-text-children.astro'
+import type { BlockComponents, MediaMap, NodeComponents, RichTextDoc } from './rich-text-model'
+
+type Props = {
+	content: RichTextDoc | null | undefined
+	media?: MediaMap
+	blocks?: BlockComponents
+	nodes?: NodeComponents
+}
+
+const { content, media = {}, blocks = {}, nodes = {} } = Astro.props
+---
+
+{content && <RichTextChildren content={content.content ?? []} context={{ media, blocks, nodes }} />}
