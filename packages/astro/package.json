@@ -1,0 +1,32 @@
+{
+	"name": "@rushcms/astro",
+	"version": "0.0.0",
+	"description": "Astro integration for Rush CMS.",
+	"type": "module",
+	"license": "MIT",
+	"sideEffects": false,
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.js"
+		}
+	},
+	"files": [
+		"dist"
+	],
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/rush-cms/js.git",
+		"directory": "packages/astro"
+	},
+	"homepage": "https://github.com/rush-cms/js",
+	"publishConfig": {
+		"access": "public",
+		"provenance": true
+	},
+	"scripts": {
+		"build": "tsup",
+		"typecheck": "tsc -p tsconfig.json",
+		"test": "vitest run"
+	}
+}

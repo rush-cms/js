@@ -1,0 +1,44 @@
+# Rush CMS JavaScript SDK
+
+Monorepo for the JavaScript tooling around [Rush CMS](https://github.com/rush-cms/rush-cms): a typed client for the
+public API, an Astro integration and the project starter.
+
+## Packages
+
+| Package                                       | Description                                  |
+| --------------------------------------------- | -------------------------------------------- |
+| [`@rushcms/client`](packages/client)          | Framework-agnostic client for the public API |
+| [`@rushcms/astro`](packages/astro)            | Astro integration                            |
+| [`create-rush-cms`](packages/create-rush-cms) | Project starter (placeholder)                |
+
+## Development
+
+Requires Node 24 and Bun 1.4.
+
+```bash
+bun install
+bun run ci
+```
+
+`bun run ci` runs the format check, lint, typecheck, tests, build and the types drift check.
+
+| Command                            | What it does                                                                                          |
+| ---------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `bun run api:sync [--from <path>]` | Copies the API contract into `openapi/public.json` (default `../rush-cms-v2/backend/api/public.yaml`) |
+| `bun run api:types`                | Generates `packages/client/src/generated/api.ts` from the contract                                    |
+| `bun run types:drift`              | Regenerates the types and fails if the committed file differs                                         |
+| `bun run changeset`                | Records a release note for a change                                                                   |
+
+`openapi/public.json` is a pinned copy of the contract. After the API changes, run `api:sync` and `api:types` and
+commit both results.
+
+## Releasing
+
+Releases use [changesets](https://github.com/changesets/changesets) and npm trusted publishing (OIDC with
+provenance, no npm token). The release workflow stays inert until the owner configures trusted publishing on npm for
+each package (`@rushcms/client`, `@rushcms/astro`) pointing to the `release.yml` workflow of this repository. Until
+then, the workflow only opens or updates the version pull request.
+
+## License
+
+MIT

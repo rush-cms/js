@@ -1,0 +1,4577 @@
+{
+	"openapi": "3.0.3",
+	"info": {
+		"title": "Rush CMS public API",
+		"version": "1.0.0",
+		"license": {
+			"name": "MIT",
+			"url": "https://opensource.org/licenses/MIT"
+		},
+		"description": "Read API for sites built on Rush CMS, plus form submission. Every operation under `/api/v1/{site_id}` requires a\nbearer API token bound to that site; `GET /api/v1/openapi.json` is public.\n\n**Tokens and perspectives.** A delivery token reads the published perspective. A preview token (an API token of\nscope `preview`, or a signed `rush_prv_` preview link valid for one hour) reads the draft perspective by default and\nmay ask for `perspective=published`. Draft responses carry `X-Rush-Perspective: draft` and\n`Cache-Control: no-store`, are never cached and carry no `ETag`. Only entries, tag entries, entry terms, authors,\nthe homepage, navigation entry targets and tag counts depend on the perspective; every other resource is live.\n\n**Locales.** Locale codes are returned as stored (`pt_BR`); only `Content-Language` uses BCP 47 (`pt-BR`). The\nrequested locale L comes from `?locale=`, then `Accept-Language` (quality order, base-language match), then the\nsite default. Structure (collection, tag, database and navigation names and slugs, site option group names, form\nlabels) always falls back through the site's preference order for L. Content (entries, homepage, site option field\nvalues, navigation targets) follows the site flag `fallback` (`serve_untranslated_fallback`): when on, each item is\nserved in the first locale of the preference order it exists in and is marked `fallback: true` when that locale is\nnot L; when off, only content translated into L exists. Blocks and link pages are locale-less.\n\n**Caching.** Successful GETs in the published perspective carry a strong `ETag` (hash of the body) and\n`Cache-Control: no-cache`; `If-None-Match` answers `304` with no body. The server cache key uses the resolved\nlocale. `Vary: Accept-Language` is sent only when the locale did not come from `?locale=`.\n\n**HTTP.** Every GET also answers `HEAD` (same status and headers, no body). CORS applies only to origins allowed by\nthe site (its domain and allowed domains): preflight allows `GET, OPTIONS` and the headers `Authorization`,\n`Content-Type`, `Accept`, `If-None-Match`; `ETag` and `X-Rush-Perspective` are exposed. Form submission is meant\nto come from the site's server, never from a browser.\n\n**Errors.** Every error is JSON `{\"error\", \"code\", \"params\"?, \"errors\"?}` (see `Error`). `error` is English text\nfor logs; `code` is the stable value clients branch on and localize. Unknown paths under `/api/v1` answer `404`\n`not_found` (`params.resource: route`) and a known path with an unsupported method answers `405`\n`method_not_allowed`. A request running longer than the global timeout answers a bare `504` with an empty body;\nthat response is outside this contract.\n\n**Rich text.** Rich-text field values inside `data` and `values` are TipTap JSON documents (see `RichText`).\n"
+	},
+	"servers": [
+		{
+			"url": "{origin}",
+			"description": "The Rush CMS instance.",
+			"variables": {
+				"origin": {
+					"default": "http://localhost:8080",
+					"description": "Scheme, host and port of the instance."
+				}
+			}
+		}
+	],
+	"security": [
+		{
+			"bearerAuth": []
+		}
+	],
+	"tags": [
+		{
+			"name": "Site",
+			"description": "Public settings of the site."
+		},
+		{
+			"name": "Homepage",
+			"description": "The site homepage, per locale."
+		},
+		{
+			"name": "Collections",
+			"description": "Active collections of the site."
+		},
+		{
+			"name": "Entries",
+			"description": "Entries of a collection, by list, search or localized slug."
+		},
+		{
+			"name": "Tags",
+			"description": "Tags and categories, and the entries carrying them."
+		},
+		{
+			"name": "Navigations",
+			"description": "Active navigation menus."
+		},
+		{
+			"name": "Site options",
+			"description": "Public site option groups (global settings and texts)."
+		},
+		{
+			"name": "Blocks",
+			"description": "Reusable block definitions referenced by content."
+		},
+		{
+			"name": "Databases",
+			"description": "Option databases and their items."
+		},
+		{
+			"name": "Link pages",
+			"description": "Link-in-bio pages."
+		},
+		{
+			"name": "Forms",
+			"description": "Public form schemas and submission."
+		},
+		{
+			"name": "Contract",
+			"description": "This document."
+		}
+	],
+	"paths": {
+		"/api/v1/openapi.json": {
+			"get": {
+				"operationId": "getOpenAPI",
+				"tags": [
+					"Contract"
+				],
+				"summary": "This OpenAPI document as JSON",
+				"description": "Serves the embedded contract as JSON. Needs no token and may be cached.",
+				"security": [],
+				"responses": {
+					"200": {
+						"$ref": "#/components/responses/OpenAPIDocument"
+					}
+				}
+			}
+		},
+		"/api/v1/{site_id}/site": {
+			"parameters": [
+				{
+					"$ref": "#/components/parameters/SiteId"
+				}
+			],
+			"get": {
+				"operationId": "getSite",
+				"tags": [
+					"Site"
+				],
+				"summary": "Public site settings",
+				"description": "Locales, default locale, timezone and the fallback flag of the site. Perspective-independent.",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/Perspective"
+					},
+					{
+						"$ref": "#/components/parameters/IfNoneMatch"
+					}
+				],
+				"responses": {
+					"200": {
+						"$ref": "#/components/responses/SiteOk"
+					},
+					"304": {
+						"$ref": "#/components/responses/NotModified"
+					},
+					"400": {
+						"$ref": "#/components/responses/BadRequest"
+					},
+					"401": {
+						"$ref": "#/components/responses/Unauthorized"
+					},
+					"403": {
+						"$ref": "#/components/responses/Forbidden"
+					},
+					"500": {
+						"$ref": "#/components/responses/InternalError"
+					}
+				}
+			}
+		},
+		"/api/v1/{site_id}/homepage": {
+			"parameters": [
+				{
+					"$ref": "#/components/parameters/SiteId"
+				}
+			],
+			"get": {
+				"operationId": "getHomepage",
+				"tags": [
+					"Homepage"
+				],
+				"summary": "Homepage in the requested locale",
+				"description": "Content rule: with the site flag on, the homepage of the first locale of the preference order that has one\n(`fallback: true` when it is not L); with the flag off, only L's homepage, otherwise `404 not_translated`.\nSends `Content-Language` with the served locale in BCP 47.\n",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/Locale"
+					},
+					{
+						"$ref": "#/components/parameters/Perspective"
+					},
+					{
+						"$ref": "#/components/parameters/IfNoneMatch"
+					}
+				],
+				"responses": {
+					"200": {
+						"$ref": "#/components/responses/HomepageOk"
+					},
+					"304": {
+						"$ref": "#/components/responses/NotModified"
+					},
+					"400": {
+						"$ref": "#/components/responses/BadRequestLocale"
+					},
+					"401": {
+						"$ref": "#/components/responses/Unauthorized"
+					},
+					"403": {
+						"$ref": "#/components/responses/Forbidden"
+					},
+					"404": {
+						"$ref": "#/components/responses/NotFoundTranslatable"
+					},
+					"500": {
+						"$ref": "#/components/responses/InternalError"
+					}
+				}
+			}
+		},
+		"/api/v1/{site_id}/collections": {
+			"parameters": [
+				{
+					"$ref": "#/components/parameters/SiteId"
+				}
+			],
+			"get": {
+				"operationId": "listCollections",
+				"tags": [
+					"Collections"
+				],
+				"summary": "Active collections",
+				"description": "Unpaginated. Ordered by creation time, oldest first. Names and slugs follow the structure rule.",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/Locale"
+					},
+					{
+						"$ref": "#/components/parameters/Perspective"
+					},
+					{
+						"$ref": "#/components/parameters/IfNoneMatch"
+					}
+				],
+				"responses": {
+					"200": {
+						"$ref": "#/components/responses/CollectionListOk"
+					},
+					"304": {
+						"$ref": "#/components/responses/NotModified"
+					},
+					"400": {
+						"$ref": "#/components/responses/BadRequestLocale"
+					},
+					"401": {
+						"$ref": "#/components/responses/Unauthorized"
+					},
+					"403": {
+						"$ref": "#/components/responses/Forbidden"
+					},
+					"500": {
+						"$ref": "#/components/responses/InternalError"
+					}
+				}
+			}
+		},
+		"/api/v1/{site_id}/collections/{collection}": {
+			"parameters": [
+				{
+					"$ref": "#/components/parameters/SiteId"
+				},
+				{
+					"$ref": "#/components/parameters/CollectionSlug"
+				}
+			],
+			"get": {
+				"operationId": "getCollection",
+				"tags": [
+					"Collections"
+				],
+				"summary": "One active collection",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/Locale"
+					},
+					{
+						"$ref": "#/components/parameters/Perspective"
+					},
+					{
+						"$ref": "#/components/parameters/IfNoneMatch"
+					}
+				],
+				"responses": {
+					"200": {
+						"$ref": "#/components/responses/CollectionOk"
+					},
+					"304": {
+						"$ref": "#/components/responses/NotModified"
+					},
+					"400": {
+						"$ref": "#/components/responses/BadRequestLocale"
+					},
+					"401": {
+						"$ref": "#/components/responses/Unauthorized"
+					},
+					"403": {
+						"$ref": "#/components/responses/Forbidden"
+					},
+					"404": {
+						"$ref": "#/components/responses/NotFound"
+					},
+					"500": {
+						"$ref": "#/components/responses/InternalError"
+					}
+				}
+			}
+		},
+		"/api/v1/{site_id}/collections/{collection}/entries": {
+			"parameters": [
+				{
+					"$ref": "#/components/parameters/SiteId"
+				},
+				{
+					"$ref": "#/components/parameters/CollectionSlug"
+				}
+			],
+			"get": {
+				"operationId": "listEntries",
+				"tags": [
+					"Entries"
+				],
+				"summary": "Entries of a collection",
+				"description": "Paginated; `per_page` defaults to the collection's `items_per_page`. Content rule: each entry appears once,\nin its served translation. Order: when the collection `is_reorderable`, `sort_order` ascending with nulls\nlast, then `published_at` descending, then entry id descending; otherwise `published_at` descending, then\nentry id descending. The trailing id keeps pages stable. A page past the end answers an empty `data` with\nthe real `meta.total`.\n",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/Locale"
+					},
+					{
+						"$ref": "#/components/parameters/Perspective"
+					},
+					{
+						"$ref": "#/components/parameters/Page"
+					},
+					{
+						"$ref": "#/components/parameters/PerPage"
+					},
+					{
+						"$ref": "#/components/parameters/IfNoneMatch"
+					}
+				],
+				"responses": {
+					"200": {
+						"$ref": "#/components/responses/EntryPageOk"
+					},
+					"304": {
+						"$ref": "#/components/responses/NotModified"
+					},
+					"400": {
+						"$ref": "#/components/responses/BadRequestQuery"
+					},
+					"401": {
+						"$ref": "#/components/responses/Unauthorized"
+					},
+					"403": {
+						"$ref": "#/components/responses/Forbidden"
+					},
+					"404": {
+						"$ref": "#/components/responses/NotFound"
+					},
+					"500": {
+						"$ref": "#/components/responses/InternalError"
+					}
+				}
+			}
+		},
+		"/api/v1/{site_id}/collections/{collection}/search": {
+			"parameters": [
+				{
+					"$ref": "#/components/parameters/SiteId"
+				},
+				{
+					"$ref": "#/components/parameters/CollectionSlug"
+				}
+			],
+			"get": {
+				"operationId": "searchEntries",
+				"tags": [
+					"Entries"
+				],
+				"summary": "Full-text search in a collection",
+				"description": "Paginated like `listEntries`. Each entry is matched against its served translation (content rule) with that\ntranslation's text search configuration; title weighs more than excerpt, excerpt more than data. Order:\nrelevance descending, then `published_at` descending, then entry id descending. A missing or blank `q`\nanswers an empty page.\n",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/Query"
+					},
+					{
+						"$ref": "#/components/parameters/Locale"
+					},
+					{
+						"$ref": "#/components/parameters/Perspective"
+					},
+					{
+						"$ref": "#/components/parameters/Page"
+					},
+					{
+						"$ref": "#/components/parameters/PerPage"
+					},
+					{
+						"$ref": "#/components/parameters/IfNoneMatch"
+					}
+				],
+				"responses": {
+					"200": {
+						"$ref": "#/components/responses/EntryPageOk"
+					},
+					"304": {
+						"$ref": "#/components/responses/NotModified"
+					},
+					"400": {
+						"$ref": "#/components/responses/BadRequestQuery"
+					},
+					"401": {
+						"$ref": "#/components/responses/Unauthorized"
+					},
+					"403": {
+						"$ref": "#/components/responses/Forbidden"
+					},
+					"404": {
+						"$ref": "#/components/responses/NotFound"
+					},
+					"500": {
+						"$ref": "#/components/responses/InternalError"
+					}
+				}
+			}
+		},
+		"/api/v1/{site_id}/collections/{collection}/entries/{entry}": {
+			"parameters": [
+				{
+					"$ref": "#/components/parameters/SiteId"
+				},
+				{
+					"$ref": "#/components/parameters/CollectionSlug"
+				},
+				{
+					"$ref": "#/components/parameters/EntrySlug"
+				}
+			],
+			"get": {
+				"operationId": "getEntry",
+				"tags": [
+					"Entries"
+				],
+				"summary": "One entry by localized slug",
+				"description": "Exactly one URL answers 200 per (entry, requested locale L); every other URL reaching the entry gets a coded\n404 the site turns into a redirect.\n\n1. The served translation T of an entry E: flag off, E's translation in L if it exists; flag on, E's first\n   translation in the preference order.\n2. A current slug in L equal to `{entry}` finds E (T is then L's translation).\n3. Else a current slug in another active locale finds E (several matches: the locale first in the preference\n   order, then the smallest entry id).\n4. Else a retired slug (slug history) in any locale finds E; the most recent retirement wins. Current slugs\n   always win over history.\n5. For E found in 3 or 4: T exists and `T.slug == {entry}` → 200; T exists with another slug → `404 moved`\n   with `params {locale, slug, collection_slug}`; no T → `404 not_translated` with `params.available`.\n6. Nothing found → `404 not_found` (`params.resource: entry`).\n7. `{collection}` resolves through the collection slug of any locale, but a 200 also requires it to equal the\n   collection slug in L; otherwise the answer is `moved`, carrying both corrections at once.\n\nSends `Content-Language` with T's locale in BCP 47.\n",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/Locale"
+					},
+					{
+						"$ref": "#/components/parameters/Perspective"
+					},
+					{
+						"$ref": "#/components/parameters/IfNoneMatch"
+					}
+				],
+				"responses": {
+					"200": {
+						"$ref": "#/components/responses/EntryOk"
+					},
+					"304": {
+						"$ref": "#/components/responses/NotModified"
+					},
+					"400": {
+						"$ref": "#/components/responses/BadRequestLocale"
+					},
+					"401": {
+						"$ref": "#/components/responses/Unauthorized"
+					},
+					"403": {
+						"$ref": "#/components/responses/Forbidden"
+					},
+					"404": {
+						"$ref": "#/components/responses/NotFoundEntry"
+					},
+					"500": {
+						"$ref": "#/components/responses/InternalError"
+					}
+				}
+			}
+		},
+		"/api/v1/{site_id}/tags": {
+			"parameters": [
+				{
+					"$ref": "#/components/parameters/SiteId"
+				}
+			],
+			"get": {
+				"operationId": "listTags",
+				"tags": [
+					"Tags"
+				],
+				"summary": "Tags or categories",
+				"description": "Unpaginated. Ordered by name, then tag id. Names and slugs follow the structure rule. `entry_count` is the\nnumber of entries `listTagEntries` lists for the same locale and perspective (`entry_count == meta.total`).\nA `type` other than `tag` or `category` answers `400 bad_request`.\n",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/TagType"
+					},
+					{
+						"$ref": "#/components/parameters/Locale"
+					},
+					{
+						"$ref": "#/components/parameters/Perspective"
+					},
+					{
+						"$ref": "#/components/parameters/IfNoneMatch"
+					}
+				],
+				"responses": {
+					"200": {
+						"$ref": "#/components/responses/TagListOk"
+					},
+					"304": {
+						"$ref": "#/components/responses/NotModified"
+					},
+					"400": {
+						"$ref": "#/components/responses/BadRequestQuery"
+					},
+					"401": {
+						"$ref": "#/components/responses/Unauthorized"
+					},
+					"403": {
+						"$ref": "#/components/responses/Forbidden"
+					},
+					"500": {
+						"$ref": "#/components/responses/InternalError"
+					}
+				}
+			}
+		},
+		"/api/v1/{site_id}/tags/{tag}/entries": {
+			"parameters": [
+				{
+					"$ref": "#/components/parameters/SiteId"
+				},
+				{
+					"$ref": "#/components/parameters/TagSlug"
+				}
+			],
+			"get": {
+				"operationId": "listTagEntries",
+				"tags": [
+					"Tags"
+				],
+				"summary": "Entries carrying a tag or category",
+				"description": "Paginated; `per_page` defaults to 15. Entries of every active collection, content rule as in `listEntries`\n(each carries its own `collection`). Order: `published_at` descending, then entry id descending.\n",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/Locale"
+					},
+					{
+						"$ref": "#/components/parameters/Perspective"
+					},
+					{
+						"$ref": "#/components/parameters/Page"
+					},
+					{
+						"$ref": "#/components/parameters/PerPage"
+					},
+					{
+						"$ref": "#/components/parameters/IfNoneMatch"
+					}
+				],
+				"responses": {
+					"200": {
+						"$ref": "#/components/responses/EntryPageOk"
+					},
+					"304": {
+						"$ref": "#/components/responses/NotModified"
+					},
+					"400": {
+						"$ref": "#/components/responses/BadRequestQuery"
+					},
+					"401": {
+						"$ref": "#/components/responses/Unauthorized"
+					},
+					"403": {
+						"$ref": "#/components/responses/Forbidden"
+					},
+					"404": {
+						"$ref": "#/components/responses/NotFound"
+					},
+					"500": {
+						"$ref": "#/components/responses/InternalError"
+					}
+				}
+			}
+		},
+		"/api/v1/{site_id}/navigations": {
+			"parameters": [
+				{
+					"$ref": "#/components/parameters/SiteId"
+				}
+			],
+			"get": {
+				"operationId": "listNavigations",
+				"tags": [
+					"Navigations"
+				],
+				"summary": "Active navigations",
+				"description": "Unpaginated. Ordered by key. Items keep their stored order.",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/Locale"
+					},
+					{
+						"$ref": "#/components/parameters/Perspective"
+					},
+					{
+						"$ref": "#/components/parameters/IfNoneMatch"
+					}
+				],
+				"responses": {
+					"200": {
+						"$ref": "#/components/responses/NavigationListOk"
+					},
+					"304": {
+						"$ref": "#/components/responses/NotModified"
+					},
+					"400": {
+						"$ref": "#/components/responses/BadRequestLocale"
+					},
+					"401": {
+						"$ref": "#/components/responses/Unauthorized"
+					},
+					"403": {
+						"$ref": "#/components/responses/Forbidden"
+					},
+					"500": {
+						"$ref": "#/components/responses/InternalError"
+					}
+				}
+			}
+		},
+		"/api/v1/{site_id}/navigations/{key}": {
+			"parameters": [
+				{
+					"$ref": "#/components/parameters/SiteId"
+				},
+				{
+					"$ref": "#/components/parameters/NavigationKey"
+				}
+			],
+			"get": {
+				"operationId": "getNavigation",
+				"tags": [
+					"Navigations"
+				],
+				"summary": "One active navigation by key",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/Locale"
+					},
+					{
+						"$ref": "#/components/parameters/Perspective"
+					},
+					{
+						"$ref": "#/components/parameters/IfNoneMatch"
+					}
+				],
+				"responses": {
+					"200": {
+						"$ref": "#/components/responses/NavigationOk"
+					},
+					"304": {
+						"$ref": "#/components/responses/NotModified"
+					},
+					"400": {
+						"$ref": "#/components/responses/BadRequestLocale"
+					},
+					"401": {
+						"$ref": "#/components/responses/Unauthorized"
+					},
+					"403": {
+						"$ref": "#/components/responses/Forbidden"
+					},
+					"404": {
+						"$ref": "#/components/responses/NotFound"
+					},
+					"500": {
+						"$ref": "#/components/responses/InternalError"
+					}
+				}
+			}
+		},
+		"/api/v1/{site_id}/site-options": {
+			"parameters": [
+				{
+					"$ref": "#/components/parameters/SiteId"
+				}
+			],
+			"get": {
+				"operationId": "listSiteOptionGroups",
+				"tags": [
+					"Site options"
+				],
+				"summary": "Public site option groups",
+				"description": "Unpaginated. Non-private groups ordered by their sort order, then slug; private fields are never listed.\nValues are live (no draft model). Name and description follow the structure rule; field values follow the\ncontent rule (an untranslated localized field is `null`).\n",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/Locale"
+					},
+					{
+						"$ref": "#/components/parameters/Perspective"
+					},
+					{
+						"$ref": "#/components/parameters/IfNoneMatch"
+					}
+				],
+				"responses": {
+					"200": {
+						"$ref": "#/components/responses/SiteOptionGroupListOk"
+					},
+					"304": {
+						"$ref": "#/components/responses/NotModified"
+					},
+					"400": {
+						"$ref": "#/components/responses/BadRequestLocale"
+					},
+					"401": {
+						"$ref": "#/components/responses/Unauthorized"
+					},
+					"403": {
+						"$ref": "#/components/responses/Forbidden"
+					},
+					"500": {
+						"$ref": "#/components/responses/InternalError"
+					}
+				}
+			}
+		},
+		"/api/v1/{site_id}/site-options/{slug}": {
+			"parameters": [
+				{
+					"$ref": "#/components/parameters/SiteId"
+				},
+				{
+					"$ref": "#/components/parameters/SiteOptionGroupSlug"
+				}
+			],
+			"get": {
+				"operationId": "getSiteOptionGroup",
+				"tags": [
+					"Site options"
+				],
+				"summary": "One public site option group",
+				"description": "A private or unknown group answers `404 not_found`.",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/Locale"
+					},
+					{
+						"$ref": "#/components/parameters/Perspective"
+					},
+					{
+						"$ref": "#/components/parameters/IfNoneMatch"
+					}
+				],
+				"responses": {
+					"200": {
+						"$ref": "#/components/responses/SiteOptionGroupOk"
+					},
+					"304": {
+						"$ref": "#/components/responses/NotModified"
+					},
+					"400": {
+						"$ref": "#/components/responses/BadRequestLocale"
+					},
+					"401": {
+						"$ref": "#/components/responses/Unauthorized"
+					},
+					"403": {
+						"$ref": "#/components/responses/Forbidden"
+					},
+					"404": {
+						"$ref": "#/components/responses/NotFound"
+					},
+					"500": {
+						"$ref": "#/components/responses/InternalError"
+					}
+				}
+			}
+		},
+		"/api/v1/{site_id}/blocks": {
+			"parameters": [
+				{
+					"$ref": "#/components/parameters/SiteId"
+				}
+			],
+			"get": {
+				"operationId": "listBlocks",
+				"tags": [
+					"Blocks"
+				],
+				"summary": "Block definitions",
+				"description": "Unpaginated, locale-less. Ordered by slug.",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/Perspective"
+					},
+					{
+						"$ref": "#/components/parameters/IfNoneMatch"
+					}
+				],
+				"responses": {
+					"200": {
+						"$ref": "#/components/responses/BlockListOk"
+					},
+					"304": {
+						"$ref": "#/components/responses/NotModified"
+					},
+					"400": {
+						"$ref": "#/components/responses/BadRequest"
+					},
+					"401": {
+						"$ref": "#/components/responses/Unauthorized"
+					},
+					"403": {
+						"$ref": "#/components/responses/Forbidden"
+					},
+					"500": {
+						"$ref": "#/components/responses/InternalError"
+					}
+				}
+			}
+		},
+		"/api/v1/{site_id}/blocks/{block}": {
+			"parameters": [
+				{
+					"$ref": "#/components/parameters/SiteId"
+				},
+				{
+					"$ref": "#/components/parameters/BlockSlug"
+				}
+			],
+			"get": {
+				"operationId": "getBlock",
+				"tags": [
+					"Blocks"
+				],
+				"summary": "One block definition by slug",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/Perspective"
+					},
+					{
+						"$ref": "#/components/parameters/IfNoneMatch"
+					}
+				],
+				"responses": {
+					"200": {
+						"$ref": "#/components/responses/BlockOk"
+					},
+					"304": {
+						"$ref": "#/components/responses/NotModified"
+					},
+					"400": {
+						"$ref": "#/components/responses/BadRequest"
+					},
+					"401": {
+						"$ref": "#/components/responses/Unauthorized"
+					},
+					"403": {
+						"$ref": "#/components/responses/Forbidden"
+					},
+					"404": {
+						"$ref": "#/components/responses/NotFound"
+					},
+					"500": {
+						"$ref": "#/components/responses/InternalError"
+					}
+				}
+			}
+		},
+		"/api/v1/{site_id}/databases": {
+			"parameters": [
+				{
+					"$ref": "#/components/parameters/SiteId"
+				}
+			],
+			"get": {
+				"operationId": "listDatabases",
+				"tags": [
+					"Databases"
+				],
+				"summary": "Option databases",
+				"description": "Unpaginated, without items. Ordered by creation time, oldest first. Names and slugs follow the structure rule.",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/Locale"
+					},
+					{
+						"$ref": "#/components/parameters/Perspective"
+					},
+					{
+						"$ref": "#/components/parameters/IfNoneMatch"
+					}
+				],
+				"responses": {
+					"200": {
+						"$ref": "#/components/responses/DatabaseListOk"
+					},
+					"304": {
+						"$ref": "#/components/responses/NotModified"
+					},
+					"400": {
+						"$ref": "#/components/responses/BadRequestLocale"
+					},
+					"401": {
+						"$ref": "#/components/responses/Unauthorized"
+					},
+					"403": {
+						"$ref": "#/components/responses/Forbidden"
+					},
+					"500": {
+						"$ref": "#/components/responses/InternalError"
+					}
+				}
+			}
+		},
+		"/api/v1/{site_id}/databases/{database}": {
+			"parameters": [
+				{
+					"$ref": "#/components/parameters/SiteId"
+				},
+				{
+					"$ref": "#/components/parameters/DatabaseSlug"
+				}
+			],
+			"get": {
+				"operationId": "getDatabase",
+				"tags": [
+					"Databases"
+				],
+				"summary": "One database with its items",
+				"description": "`{database}` matches the database slug of any locale of the preference order. Items form a flat list\nordered by `order`, then creation time; rebuild the tree with `parent_item_id`.\n",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/Locale"
+					},
+					{
+						"$ref": "#/components/parameters/Perspective"
+					},
+					{
+						"$ref": "#/components/parameters/IfNoneMatch"
+					}
+				],
+				"responses": {
+					"200": {
+						"$ref": "#/components/responses/DatabaseOk"
+					},
+					"304": {
+						"$ref": "#/components/responses/NotModified"
+					},
+					"400": {
+						"$ref": "#/components/responses/BadRequestLocale"
+					},
+					"401": {
+						"$ref": "#/components/responses/Unauthorized"
+					},
+					"403": {
+						"$ref": "#/components/responses/Forbidden"
+					},
+					"404": {
+						"$ref": "#/components/responses/NotFound"
+					},
+					"500": {
+						"$ref": "#/components/responses/InternalError"
+					}
+				}
+			}
+		},
+		"/api/v1/{site_id}/link-pages": {
+			"parameters": [
+				{
+					"$ref": "#/components/parameters/SiteId"
+				}
+			],
+			"get": {
+				"operationId": "listLinkPages",
+				"tags": [
+					"Link pages"
+				],
+				"summary": "Active link pages",
+				"description": "Unpaginated, locale-less. Ordered by slug.",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/Perspective"
+					},
+					{
+						"$ref": "#/components/parameters/IfNoneMatch"
+					}
+				],
+				"responses": {
+					"200": {
+						"$ref": "#/components/responses/LinkPageListOk"
+					},
+					"304": {
+						"$ref": "#/components/responses/NotModified"
+					},
+					"400": {
+						"$ref": "#/components/responses/BadRequest"
+					},
+					"401": {
+						"$ref": "#/components/responses/Unauthorized"
+					},
+					"403": {
+						"$ref": "#/components/responses/Forbidden"
+					},
+					"500": {
+						"$ref": "#/components/responses/InternalError"
+					}
+				}
+			}
+		},
+		"/api/v1/{site_id}/link-pages/{linkpage}": {
+			"parameters": [
+				{
+					"$ref": "#/components/parameters/SiteId"
+				},
+				{
+					"$ref": "#/components/parameters/LinkPageSlug"
+				}
+			],
+			"get": {
+				"operationId": "getLinkPage",
+				"tags": [
+					"Link pages"
+				],
+				"summary": "One active link page by slug",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/Perspective"
+					},
+					{
+						"$ref": "#/components/parameters/IfNoneMatch"
+					}
+				],
+				"responses": {
+					"200": {
+						"$ref": "#/components/responses/LinkPageOk"
+					},
+					"304": {
+						"$ref": "#/components/responses/NotModified"
+					},
+					"400": {
+						"$ref": "#/components/responses/BadRequest"
+					},
+					"401": {
+						"$ref": "#/components/responses/Unauthorized"
+					},
+					"403": {
+						"$ref": "#/components/responses/Forbidden"
+					},
+					"404": {
+						"$ref": "#/components/responses/NotFound"
+					},
+					"500": {
+						"$ref": "#/components/responses/InternalError"
+					}
+				}
+			}
+		},
+		"/api/v1/{site_id}/forms": {
+			"parameters": [
+				{
+					"$ref": "#/components/parameters/SiteId"
+				}
+			],
+			"get": {
+				"operationId": "listForms",
+				"tags": [
+					"Forms"
+				],
+				"summary": "Active form schemas",
+				"description": "Unpaginated. Ordered by key. Labels follow the structure rule.",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/Locale"
+					},
+					{
+						"$ref": "#/components/parameters/Perspective"
+					},
+					{
+						"$ref": "#/components/parameters/IfNoneMatch"
+					}
+				],
+				"responses": {
+					"200": {
+						"$ref": "#/components/responses/FormListOk"
+					},
+					"304": {
+						"$ref": "#/components/responses/NotModified"
+					},
+					"400": {
+						"$ref": "#/components/responses/BadRequestLocale"
+					},
+					"401": {
+						"$ref": "#/components/responses/Unauthorized"
+					},
+					"403": {
+						"$ref": "#/components/responses/Forbidden"
+					},
+					"500": {
+						"$ref": "#/components/responses/InternalError"
+					}
+				}
+			}
+		},
+		"/api/v1/{site_id}/forms/{key}": {
+			"parameters": [
+				{
+					"$ref": "#/components/parameters/SiteId"
+				},
+				{
+					"$ref": "#/components/parameters/FormKey"
+				}
+			],
+			"get": {
+				"operationId": "getForm",
+				"tags": [
+					"Forms"
+				],
+				"summary": "One active form schema by key",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/Locale"
+					},
+					{
+						"$ref": "#/components/parameters/Perspective"
+					},
+					{
+						"$ref": "#/components/parameters/IfNoneMatch"
+					}
+				],
+				"responses": {
+					"200": {
+						"$ref": "#/components/responses/FormOk"
+					},
+					"304": {
+						"$ref": "#/components/responses/NotModified"
+					},
+					"400": {
+						"$ref": "#/components/responses/BadRequestLocale"
+					},
+					"401": {
+						"$ref": "#/components/responses/Unauthorized"
+					},
+					"403": {
+						"$ref": "#/components/responses/Forbidden"
+					},
+					"404": {
+						"$ref": "#/components/responses/NotFound"
+					},
+					"500": {
+						"$ref": "#/components/responses/InternalError"
+					}
+				}
+			}
+		},
+		"/api/v1/{site_id}/forms/{key}/submit": {
+			"parameters": [
+				{
+					"$ref": "#/components/parameters/SiteId"
+				},
+				{
+					"$ref": "#/components/parameters/FormKey"
+				}
+			],
+			"post": {
+				"operationId": "submitForm",
+				"tags": [
+					"Forms"
+				],
+				"summary": "Submit a form from the site's server",
+				"description": "Sent by the site's server on behalf of a visitor. `X-Rush-Client-IP` carries the visitor IP used for limits\nand stored with the submission; without a valid single IP literal the connection IP is used. Limits: 5 per\nminute per site, form and visitor IP, and 60 per minute per site; every attempt counts. When the site enables\ncaptcha (Cloudflare Turnstile) every form requires a token, read from the body field `cf-turnstile-response`\nor the `X-Captcha-Token` header, and verified with the visitor IP. A filled honeypot field\n(`Form.honeypot_field`) is discarded silently and answers exactly like a real submission. Unknown keys are\nignored. Body limit 1 MiB. Preview tokens and the draft perspective cannot submit.\n",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/ClientIp"
+					},
+					{
+						"$ref": "#/components/parameters/CaptchaToken"
+					},
+					{
+						"$ref": "#/components/parameters/Perspective"
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/FormSubmission"
+							},
+							"example": {
+								"name": "Ana",
+								"email": "ana@example.com",
+								"topics": [
+									"support",
+									"sales"
+								],
+								"cf-turnstile-response": "XXXX.DUMMY.TOKEN.XXXX"
+							}
+						},
+						"application/x-www-form-urlencoded": {
+							"schema": {
+								"$ref": "#/components/schemas/FormSubmission"
+							}
+						},
+						"multipart/form-data": {
+							"schema": {
+								"$ref": "#/components/schemas/FormSubmission"
+							}
+						}
+					}
+				},
+				"responses": {
+					"201": {
+						"$ref": "#/components/responses/FormSubmitted"
+					},
+					"400": {
+						"$ref": "#/components/responses/BadRequestSubmit"
+					},
+					"401": {
+						"$ref": "#/components/responses/Unauthorized"
+					},
+					"403": {
+						"$ref": "#/components/responses/ForbiddenSubmit"
+					},
+					"404": {
+						"$ref": "#/components/responses/NotFound"
+					},
+					"413": {
+						"$ref": "#/components/responses/PayloadTooLarge"
+					},
+					"422": {
+						"$ref": "#/components/responses/UnprocessableSubmit"
+					},
+					"429": {
+						"$ref": "#/components/responses/RateLimited"
+					},
+					"500": {
+						"$ref": "#/components/responses/InternalError"
+					},
+					"503": {
+						"$ref": "#/components/responses/CaptchaUnavailable"
+					}
+				}
+			}
+		}
+	},
+	"components": {
+		"securitySchemes": {
+			"bearerAuth": {
+				"type": "http",
+				"scheme": "bearer",
+				"description": "An API token of the site (`rush_live_…` in production, `rush_test_…` elsewhere; scope `delivery` or\n`preview`) or a signed preview link token (`rush_prv_…`, one hour, draft perspective). Keep every token on\nthe server; none is safe in a browser.\n"
+			}
+		},
+		"parameters": {
+			"SiteId": {
+				"name": "site_id",
+				"in": "path",
+				"required": true,
+				"description": "The site id (ULID), never its slug. Must be the site the token belongs to.",
+				"schema": {
+					"$ref": "#/components/schemas/Ulid"
+				},
+				"example": "01JCM9S346Q3D25VT4F5V37E3S"
+			},
+			"CollectionSlug": {
+				"name": "collection",
+				"in": "path",
+				"required": true,
+				"description": "Collection slug in any locale of the site.",
+				"schema": {
+					"type": "string"
+				},
+				"example": "blog"
+			},
+			"EntrySlug": {
+				"name": "entry",
+				"in": "path",
+				"required": true,
+				"description": "Entry slug, current or retired, in any locale (see the resolution steps).",
+				"schema": {
+					"type": "string"
+				},
+				"example": "hello-world"
+			},
+			"TagSlug": {
+				"name": "tag",
+				"in": "path",
+				"required": true,
+				"description": "Tag or category slug in any locale of the preference order.",
+				"schema": {
+					"type": "string"
+				},
+				"example": "news"
+			},
+			"NavigationKey": {
+				"name": "key",
+				"in": "path",
+				"required": true,
+				"description": "Navigation key.",
+				"schema": {
+					"type": "string"
+				},
+				"example": "main"
+			},
+			"SiteOptionGroupSlug": {
+				"name": "slug",
+				"in": "path",
+				"required": true,
+				"description": "Site option group slug.",
+				"schema": {
+					"type": "string"
+				},
+				"example": "contact"
+			},
+			"BlockSlug": {
+				"name": "block",
+				"in": "path",
+				"required": true,
+				"description": "Block slug.",
+				"schema": {
+					"type": "string"
+				},
+				"example": "call-to-action"
+			},
+			"DatabaseSlug": {
+				"name": "database",
+				"in": "path",
+				"required": true,
+				"description": "Database slug in any locale of the preference order.",
+				"schema": {
+					"type": "string"
+				},
+				"example": "services"
+			},
+			"LinkPageSlug": {
+				"name": "linkpage",
+				"in": "path",
+				"required": true,
+				"description": "Link page slug.",
+				"schema": {
+					"type": "string"
+				},
+				"example": "links"
+			},
+			"FormKey": {
+				"name": "key",
+				"in": "path",
+				"required": true,
+				"description": "Form key.",
+				"schema": {
+					"type": "string"
+				},
+				"example": "contact"
+			},
+			"Locale": {
+				"name": "locale",
+				"in": "query",
+				"required": false,
+				"description": "Requested locale. Matching ignores case and `-`/`_` and accepts a base language (`pt` → `pt_BR`). When absent,\n`Accept-Language` decides, then the site default. A value the site does not serve answers\n`400 locale_not_served`.\n",
+				"schema": {
+					"type": "string"
+				},
+				"example": "pt_BR"
+			},
+			"Perspective": {
+				"name": "perspective",
+				"in": "query",
+				"required": false,
+				"description": "`published` (default for delivery tokens) or `draft` (default for preview tokens; a delivery token gets\n`403 preview_requires_preview_token`). Any other value answers `400 invalid_perspective`.\n",
+				"schema": {
+					"$ref": "#/components/schemas/Perspective"
+				}
+			},
+			"Page": {
+				"name": "page",
+				"in": "query",
+				"required": false,
+				"description": "Page number, from 1. Below 1 means 1; a non-numeric value answers `400 bad_request`.",
+				"schema": {
+					"type": "integer",
+					"default": 1
+				}
+			},
+			"PerPage": {
+				"name": "per_page",
+				"in": "query",
+				"required": false,
+				"description": "Page size. Below 1 means the operation's default; above 100 is clamped to 100; a non-numeric value answers\n`400 bad_request`.\n",
+				"schema": {
+					"type": "integer"
+				}
+			},
+			"Query": {
+				"name": "q",
+				"in": "query",
+				"required": false,
+				"description": "Search text in PostgreSQL web-search syntax (quoted phrases, `or`, `-term`).",
+				"schema": {
+					"type": "string"
+				},
+				"example": "hello world"
+			},
+			"TagType": {
+				"name": "type",
+				"in": "query",
+				"required": false,
+				"description": "Which taxonomy to list. Any other value answers `400 bad_request`.",
+				"schema": {
+					"$ref": "#/components/schemas/TagType"
+				}
+			},
+			"IfNoneMatch": {
+				"name": "If-None-Match",
+				"in": "header",
+				"required": false,
+				"description": "An `ETag` from an earlier response; a match answers `304`.",
+				"schema": {
+					"type": "string"
+				},
+				"example": "\"9f86d081884c7d659a2feaa0c55ad015\""
+			},
+			"ClientIp": {
+				"name": "X-Rush-Client-IP",
+				"in": "header",
+				"required": false,
+				"description": "The visitor IP as seen by the site's server; a single IPv4 or IPv6 literal, otherwise ignored.",
+				"schema": {
+					"type": "string"
+				},
+				"example": "203.0.113.7"
+			},
+			"CaptchaToken": {
+				"name": "X-Captcha-Token",
+				"in": "header",
+				"required": false,
+				"description": "Turnstile token, when not sent as the body field `cf-turnstile-response`.",
+				"schema": {
+					"type": "string"
+				}
+			}
+		},
+		"headers": {
+			"ETag": {
+				"description": "Strong validator (hash of the body). Present on 200 and 304 in the published perspective only.",
+				"schema": {
+					"type": "string"
+				},
+				"example": "\"9f86d081884c7d659a2feaa0c55ad015\""
+			},
+			"CacheControl": {
+				"description": "`no-cache` in the published perspective (revalidate with `If-None-Match`); `no-store` in the draft perspective.",
+				"schema": {
+					"type": "string",
+					"enum": [
+						"no-cache",
+						"no-store"
+					]
+				}
+			},
+			"Vary": {
+				"description": "`Accept-Language` when the operation resolves a locale and `?locale=` was absent; `Origin` when CORS\napplied.\n",
+				"schema": {
+					"type": "string"
+				},
+				"example": "Accept-Language"
+			},
+			"RushPerspective": {
+				"description": "Present, with value `draft`, only in the draft perspective.",
+				"schema": {
+					"type": "string",
+					"enum": [
+						"draft"
+					]
+				}
+			},
+			"Cache": {
+				"description": "Server cache state; `BYPASS` in the draft perspective or when the cache is unavailable.",
+				"schema": {
+					"type": "string",
+					"enum": [
+						"HIT",
+						"MISS",
+						"BYPASS"
+					]
+				}
+			},
+			"ContentLanguage": {
+				"description": "Locale of the served translation, in BCP 47.",
+				"required": true,
+				"schema": {
+					"type": "string"
+				},
+				"example": "pt-BR"
+			},
+			"RetryAfter": {
+				"description": "Seconds until a new attempt may succeed.",
+				"required": true,
+				"schema": {
+					"type": "integer",
+					"minimum": 0
+				},
+				"example": 42
+			}
+		},
+		"responses": {
+			"OpenAPIDocument": {
+				"description": "The OpenAPI document.",
+				"headers": {
+					"ETag": {
+						"$ref": "#/components/headers/ETag"
+					},
+					"Cache-Control": {
+						"$ref": "#/components/headers/CacheControl"
+					}
+				},
+				"content": {
+					"application/json": {
+						"schema": {
+							"type": "object",
+							"additionalProperties": true
+						},
+						"example": {
+							"openapi": "3.0.3",
+							"info": {
+								"title": "Rush CMS public API",
+								"version": "1.0.0"
+							},
+							"paths": {}
+						}
+					}
+				}
+			},
+			"SiteOk": {
+				"description": "The site.",
+				"headers": {
+					"ETag": {
+						"$ref": "#/components/headers/ETag"
+					},
+					"Cache-Control": {
+						"$ref": "#/components/headers/CacheControl"
+					},
+					"Vary": {
+						"$ref": "#/components/headers/Vary"
+					},
+					"X-Rush-Perspective": {
+						"$ref": "#/components/headers/RushPerspective"
+					},
+					"X-Cache": {
+						"$ref": "#/components/headers/Cache"
+					}
+				},
+				"content": {
+					"application/json": {
+						"schema": {
+							"$ref": "#/components/schemas/SiteEnvelope"
+						},
+						"example": {
+							"data": {
+								"id": "01JCM9S346Q3D25VT4F5V37E3S",
+								"name": "Example Studio",
+								"domain": "www.example.com",
+								"default_locale": "en",
+								"locales": [
+									"en",
+									"pt_BR",
+									"es"
+								],
+								"timezone": "America/Sao_Paulo",
+								"fallback": true
+							}
+						}
+					}
+				}
+			},
+			"HomepageOk": {
+				"description": "The homepage in its served locale.",
+				"headers": {
+					"Content-Language": {
+						"$ref": "#/components/headers/ContentLanguage"
+					},
+					"ETag": {
+						"$ref": "#/components/headers/ETag"
+					},
+					"Cache-Control": {
+						"$ref": "#/components/headers/CacheControl"
+					},
+					"Vary": {
+						"$ref": "#/components/headers/Vary"
+					},
+					"X-Rush-Perspective": {
+						"$ref": "#/components/headers/RushPerspective"
+					},
+					"X-Cache": {
+						"$ref": "#/components/headers/Cache"
+					}
+				},
+				"content": {
+					"application/json": {
+						"schema": {
+							"$ref": "#/components/schemas/HomepageEnvelope"
+						},
+						"example": {
+							"data": {
+								"id": "01JCH3BV4H15G5E4G7X0NTH82F",
+								"locale": "pt_BR",
+								"fallback": false,
+								"content": [
+									{
+										"id": "hero-1",
+										"block": "hero",
+										"values": {
+											"heading": "Bem-vindo",
+											"image": "https://media.example.com/01JCM9S346Q3D25VT4F5V37E3S/01JC9EE0ZBGJ09TQM83XSSSS6Y/master"
+										}
+									},
+									{
+										"id": "cta-1",
+										"block": "call-to-action",
+										"values": {
+											"label": "Assine"
+										}
+									}
+								],
+								"meta": {
+									"title": "Example Studio",
+									"description": "Estúdio de design.",
+									"og_image": "https://media.example.com/01JCM9S346Q3D25VT4F5V37E3S/01JC9EE0ZBGJ09TQM83XSSSS6Y/master"
+								},
+								"created_at": "2026-10-01T12:00:00Z",
+								"updated_at": "2026-11-02T09:30:00Z"
+							}
+						}
+					}
+				}
+			},
+			"CollectionListOk": {
+				"description": "Active collections.",
+				"headers": {
+					"ETag": {
+						"$ref": "#/components/headers/ETag"
+					},
+					"Cache-Control": {
+						"$ref": "#/components/headers/CacheControl"
+					},
+					"Vary": {
+						"$ref": "#/components/headers/Vary"
+					},
+					"X-Rush-Perspective": {
+						"$ref": "#/components/headers/RushPerspective"
+					},
+					"X-Cache": {
+						"$ref": "#/components/headers/Cache"
+					}
+				},
+				"content": {
+					"application/json": {
+						"schema": {
+							"$ref": "#/components/schemas/CollectionListEnvelope"
+						},
+						"example": {
+							"data": [
+								{
+									"id": "01JC3E28JT97KB6CQ643DZVMXX",
+									"slug": "artigos",
+									"name": "Artigos",
+									"is_reorderable": false,
+									"items_per_page": 12,
+									"created_at": "2026-09-01T10:00:00Z",
+									"updated_at": "2026-10-20T15:00:00Z"
+								},
+								{
+									"id": "01JCQKFBF5KZNWJ47TAN9ZT24M",
+									"slug": "paginas",
+									"name": "Páginas",
+									"is_reorderable": true,
+									"items_per_page": 50,
+									"created_at": "2026-09-01T10:05:00Z",
+									"updated_at": "2026-09-01T10:05:00Z"
+								}
+							]
+						}
+					}
+				}
+			},
+			"CollectionOk": {
+				"description": "The collection.",
+				"headers": {
+					"ETag": {
+						"$ref": "#/components/headers/ETag"
+					},
+					"Cache-Control": {
+						"$ref": "#/components/headers/CacheControl"
+					},
+					"Vary": {
+						"$ref": "#/components/headers/Vary"
+					},
+					"X-Rush-Perspective": {
+						"$ref": "#/components/headers/RushPerspective"
+					},
+					"X-Cache": {
+						"$ref": "#/components/headers/Cache"
+					}
+				},
+				"content": {
+					"application/json": {
+						"schema": {
+							"$ref": "#/components/schemas/CollectionEnvelope"
+						},
+						"example": {
+							"data": {
+								"id": "01JC3E28JT97KB6CQ643DZVMXX",
+								"slug": "blog",
+								"name": "Blog",
+								"is_reorderable": false,
+								"items_per_page": 12,
+								"created_at": "2026-09-01T10:00:00Z",
+								"updated_at": "2026-10-20T15:00:00Z"
+							}
+						}
+					}
+				}
+			},
+			"EntryPageOk": {
+				"description": "One page of entries.",
+				"headers": {
+					"ETag": {
+						"$ref": "#/components/headers/ETag"
+					},
+					"Cache-Control": {
+						"$ref": "#/components/headers/CacheControl"
+					},
+					"Vary": {
+						"$ref": "#/components/headers/Vary"
+					},
+					"X-Rush-Perspective": {
+						"$ref": "#/components/headers/RushPerspective"
+					},
+					"X-Cache": {
+						"$ref": "#/components/headers/Cache"
+					}
+				},
+				"content": {
+					"application/json": {
+						"schema": {
+							"$ref": "#/components/schemas/EntryPage"
+						},
+						"example": {
+							"data": [
+								{
+									"id": "01JCDJ8FSSZ5AWSH8VHTPRE95B",
+									"slug": "only-english",
+									"title": "Only English",
+									"status": "published",
+									"tags": [],
+									"categories": [],
+									"data": {
+										"body": {
+											"type": "doc",
+											"content": [
+												{
+													"type": "paragraph",
+													"content": [
+														{
+															"type": "text",
+															"text": "Written in English only."
+														}
+													]
+												}
+											]
+										}
+									},
+									"media": {},
+									"locale": "en",
+									"fallback": true,
+									"collection": {
+										"id": "01JC3E28JT97KB6CQ643DZVMXX",
+										"slug": "articulos"
+									},
+									"translations": {
+										"en": {
+											"slug": "only-english",
+											"collection_slug": "blog"
+										}
+									},
+									"published_at": "2026-10-28T08:00:00Z",
+									"created_at": "2026-10-27T17:12:00Z",
+									"updated_at": "2026-10-28T08:00:00Z"
+								}
+							],
+							"meta": {
+								"total": 1,
+								"per_page": 12,
+								"current_page": 1,
+								"last_page": 1
+							}
+						}
+					}
+				}
+			},
+			"EntryOk": {
+				"description": "The entry in its served translation.",
+				"headers": {
+					"Content-Language": {
+						"$ref": "#/components/headers/ContentLanguage"
+					},
+					"ETag": {
+						"$ref": "#/components/headers/ETag"
+					},
+					"Cache-Control": {
+						"$ref": "#/components/headers/CacheControl"
+					},
+					"Vary": {
+						"$ref": "#/components/headers/Vary"
+					},
+					"X-Rush-Perspective": {
+						"$ref": "#/components/headers/RushPerspective"
+					},
+					"X-Cache": {
+						"$ref": "#/components/headers/Cache"
+					}
+				},
+				"content": {
+					"application/json": {
+						"schema": {
+							"$ref": "#/components/schemas/EntryEnvelope"
+						},
+						"example": {
+							"data": {
+								"id": "01JCNPZX45HY43KWJRP1XPA7Z3",
+								"slug": "ola-mundo",
+								"title": "Olá mundo",
+								"excerpt": "O primeiro artigo.",
+								"featured_image": {
+									"url": "https://media.example.com/01JCM9S346Q3D25VT4F5V37E3S/01JC9EE0ZBGJ09TQM83XSSSS6Y/master",
+									"media_id": "01JC9EE0ZBGJ09TQM83XSSSS6Y",
+									"mime_type": "image/webp",
+									"size": 182044,
+									"width": 1600,
+									"height": 900,
+									"alt": "A sunrise over the bay",
+									"variants": {
+										"thumb": {
+											"key": "01JCM9S346Q3D25VT4F5V37E3S/01JC9EE0ZBGJ09TQM83XSSSS6Y/thumb",
+											"url": "https://media.example.com/01JCM9S346Q3D25VT4F5V37E3S/01JC9EE0ZBGJ09TQM83XSSSS6Y/thumb"
+										}
+									},
+									"updated_at": "2026-10-02T11:00:00Z"
+								},
+								"status": "published",
+								"author": {
+									"id": "01JCS3C4DWA7N36096Q14DR9GP",
+									"name": "Ana Souza"
+								},
+								"tags": [
+									{
+										"id": "01JCQY77ZXYYK596NGYA1DQ91K",
+										"type": "tag",
+										"name": "Notícias",
+										"slug": "noticias"
+									}
+								],
+								"categories": [
+									{
+										"id": "01JC5GQAPENECFSECZP11HYGCP",
+										"type": "category",
+										"name": "Empresa",
+										"slug": "empresa"
+									}
+								],
+								"data": {
+									"body": {
+										"type": "doc",
+										"content": [
+											{
+												"type": "paragraph",
+												"content": [
+													{
+														"type": "text",
+														"text": "Olá, "
+													},
+													{
+														"type": "text",
+														"text": "mundo",
+														"marks": [
+															{
+																"type": "link",
+																"attrs": {
+																	"href": "https://example.com"
+																}
+															}
+														]
+													}
+												]
+											},
+											{
+												"type": "customBlock",
+												"attrs": {
+													"block": "call-to-action",
+													"values": {
+														"label": "Assine"
+													}
+												}
+											}
+										]
+									},
+									"seo_title": "Olá mundo | Example Studio"
+								},
+								"media": {
+									"01JC9EE0ZBGJ09TQM83XSSSS6Y": {
+										"url": "https://media.example.com/01JCM9S346Q3D25VT4F5V37E3S/01JC9EE0ZBGJ09TQM83XSSSS6Y/master",
+										"media_id": "01JC9EE0ZBGJ09TQM83XSSSS6Y",
+										"mime_type": "image/webp",
+										"size": 182044,
+										"width": 1600,
+										"height": 900,
+										"alt": "A sunrise over the bay",
+										"updated_at": "2026-10-02T11:00:00Z"
+									}
+								},
+								"locale": "pt_BR",
+								"fallback": false,
+								"collection": {
+									"id": "01JC3E28JT97KB6CQ643DZVMXX",
+									"slug": "artigos"
+								},
+								"translations": {
+									"en": {
+										"slug": "hello-world",
+										"collection_slug": "blog"
+									},
+									"pt_BR": {
+										"slug": "ola-mundo",
+										"collection_slug": "artigos"
+									},
+									"es": {
+										"slug": "hola-mundo",
+										"collection_slug": "articulos"
+									}
+								},
+								"published_at": "2026-10-05T09:00:00Z",
+								"created_at": "2026-10-01T14:22:00Z",
+								"updated_at": "2026-11-01T18:40:00Z"
+							}
+						}
+					}
+				}
+			},
+			"TagListOk": {
+				"description": "Tags or categories with their entry counts.",
+				"headers": {
+					"ETag": {
+						"$ref": "#/components/headers/ETag"
+					},
+					"Cache-Control": {
+						"$ref": "#/components/headers/CacheControl"
+					},
+					"Vary": {
+						"$ref": "#/components/headers/Vary"
+					},
+					"X-Rush-Perspective": {
+						"$ref": "#/components/headers/RushPerspective"
+					},
+					"X-Cache": {
+						"$ref": "#/components/headers/Cache"
+					}
+				},
+				"content": {
+					"application/json": {
+						"schema": {
+							"$ref": "#/components/schemas/TagListEnvelope"
+						},
+						"example": {
+							"data": [
+								{
+									"id": "01JCQY77ZXYYK596NGYA1DQ91K",
+									"type": "tag",
+									"name": "Notícias",
+									"slug": "noticias",
+									"entry_count": 2
+								}
+							]
+						}
+					}
+				}
+			},
+			"NavigationListOk": {
+				"description": "Active navigations.",
+				"headers": {
+					"ETag": {
+						"$ref": "#/components/headers/ETag"
+					},
+					"Cache-Control": {
+						"$ref": "#/components/headers/CacheControl"
+					},
+					"Vary": {
+						"$ref": "#/components/headers/Vary"
+					},
+					"X-Rush-Perspective": {
+						"$ref": "#/components/headers/RushPerspective"
+					},
+					"X-Cache": {
+						"$ref": "#/components/headers/Cache"
+					}
+				},
+				"content": {
+					"application/json": {
+						"schema": {
+							"$ref": "#/components/schemas/NavigationListEnvelope"
+						},
+						"example": {
+							"data": [
+								{
+									"id": "01JCWPQ5E6EYCNDY0YP57RCYBV",
+									"name": "Main menu",
+									"key": "main",
+									"items": [
+										{
+											"label": "Blog",
+											"type": "collection",
+											"target": {
+												"collection": {
+													"id": "01JC3E28JT97KB6CQ643DZVMXX",
+													"slug": "blog"
+												}
+											},
+											"children": []
+										}
+									],
+									"created_at": "2026-09-02T10:00:00Z",
+									"updated_at": "2026-10-30T12:00:00Z"
+								}
+							]
+						}
+					}
+				}
+			},
+			"NavigationOk": {
+				"description": "The navigation.",
+				"headers": {
+					"ETag": {
+						"$ref": "#/components/headers/ETag"
+					},
+					"Cache-Control": {
+						"$ref": "#/components/headers/CacheControl"
+					},
+					"Vary": {
+						"$ref": "#/components/headers/Vary"
+					},
+					"X-Rush-Perspective": {
+						"$ref": "#/components/headers/RushPerspective"
+					},
+					"X-Cache": {
+						"$ref": "#/components/headers/Cache"
+					}
+				},
+				"content": {
+					"application/json": {
+						"schema": {
+							"$ref": "#/components/schemas/NavigationEnvelope"
+						},
+						"example": {
+							"data": {
+								"id": "01JCWPQ5E6EYCNDY0YP57RCYBV",
+								"name": "Menu principal",
+								"key": "main",
+								"items": [
+									{
+										"label": "Olá mundo",
+										"type": "entry",
+										"target": {
+											"entry": {
+												"id": "01JCNPZX45HY43KWJRP1XPA7Z3",
+												"slug": "ola-mundo",
+												"locale": "pt_BR",
+												"fallback": false,
+												"collection": {
+													"id": "01JC3E28JT97KB6CQ643DZVMXX",
+													"slug": "artigos"
+												}
+											}
+										},
+										"children": []
+									},
+									{
+										"label": "Contato",
+										"type": "url",
+										"target": {
+											"url": "https://example.com/contato"
+										},
+										"link_target": "_blank",
+										"noreferrer": true,
+										"attributes": [
+											{
+												"name": "data-track",
+												"value": "contact"
+											}
+										],
+										"children": []
+									}
+								],
+								"created_at": "2026-09-02T10:00:00Z",
+								"updated_at": "2026-10-30T12:00:00Z"
+							}
+						}
+					}
+				}
+			},
+			"SiteOptionGroupListOk": {
+				"description": "Public site option groups.",
+				"headers": {
+					"ETag": {
+						"$ref": "#/components/headers/ETag"
+					},
+					"Cache-Control": {
+						"$ref": "#/components/headers/CacheControl"
+					},
+					"Vary": {
+						"$ref": "#/components/headers/Vary"
+					},
+					"X-Rush-Perspective": {
+						"$ref": "#/components/headers/RushPerspective"
+					},
+					"X-Cache": {
+						"$ref": "#/components/headers/Cache"
+					}
+				},
+				"content": {
+					"application/json": {
+						"schema": {
+							"$ref": "#/components/schemas/SiteOptionGroupListEnvelope"
+						},
+						"example": {
+							"data": [
+								{
+									"slug": "contact",
+									"name": "Contato",
+									"description": "",
+									"values": {
+										"phone": "+55 11 5555-0000",
+										"tagline": null
+									},
+									"media": {},
+									"updated_at": "2026-10-11T09:00:00Z"
+								}
+							]
+						}
+					}
+				}
+			},
+			"SiteOptionGroupOk": {
+				"description": "The site option group.",
+				"headers": {
+					"ETag": {
+						"$ref": "#/components/headers/ETag"
+					},
+					"Cache-Control": {
+						"$ref": "#/components/headers/CacheControl"
+					},
+					"Vary": {
+						"$ref": "#/components/headers/Vary"
+					},
+					"X-Rush-Perspective": {
+						"$ref": "#/components/headers/RushPerspective"
+					},
+					"X-Cache": {
+						"$ref": "#/components/headers/Cache"
+					}
+				},
+				"content": {
+					"application/json": {
+						"schema": {
+							"$ref": "#/components/schemas/SiteOptionGroupEnvelope"
+						},
+						"example": {
+							"data": {
+								"slug": "branding",
+								"name": "Marca",
+								"description": "Logotipo e slogan.",
+								"values": {
+									"tagline": "Design que conversa",
+									"logo": "https://media.example.com/01JCM9S346Q3D25VT4F5V37E3S/01JC9EE0ZBGJ09TQM83XSSSS6Y/master"
+								},
+								"media": {
+									"01JC9EE0ZBGJ09TQM83XSSSS6Y": {
+										"url": "https://media.example.com/01JCM9S346Q3D25VT4F5V37E3S/01JC9EE0ZBGJ09TQM83XSSSS6Y/master",
+										"media_id": "01JC9EE0ZBGJ09TQM83XSSSS6Y",
+										"mime_type": "image/svg+xml",
+										"size": 4210
+									}
+								},
+								"updated_at": "2026-10-11T09:00:00Z"
+							}
+						}
+					}
+				}
+			},
+			"BlockListOk": {
+				"description": "Block definitions.",
+				"headers": {
+					"ETag": {
+						"$ref": "#/components/headers/ETag"
+					},
+					"Cache-Control": {
+						"$ref": "#/components/headers/CacheControl"
+					},
+					"Vary": {
+						"$ref": "#/components/headers/Vary"
+					},
+					"X-Rush-Perspective": {
+						"$ref": "#/components/headers/RushPerspective"
+					},
+					"X-Cache": {
+						"$ref": "#/components/headers/Cache"
+					}
+				},
+				"content": {
+					"application/json": {
+						"schema": {
+							"$ref": "#/components/schemas/BlockListEnvelope"
+						},
+						"example": {
+							"data": [
+								{
+									"id": "01JCN5SXS5AA819X9YP981068V",
+									"name": "Call to action",
+									"slug": "call-to-action",
+									"fields": [
+										{
+											"name": "Content",
+											"fields": [
+												{
+													"type": "text",
+													"data": {
+														"config": {
+															"name": "label"
+														}
+													}
+												}
+											]
+										}
+									],
+									"created_at": "2026-09-05T10:00:00Z",
+									"updated_at": "2026-09-05T10:00:00Z"
+								}
+							]
+						}
+					}
+				}
+			},
+			"BlockOk": {
+				"description": "The block definition.",
+				"headers": {
+					"ETag": {
+						"$ref": "#/components/headers/ETag"
+					},
+					"Cache-Control": {
+						"$ref": "#/components/headers/CacheControl"
+					},
+					"Vary": {
+						"$ref": "#/components/headers/Vary"
+					},
+					"X-Rush-Perspective": {
+						"$ref": "#/components/headers/RushPerspective"
+					},
+					"X-Cache": {
+						"$ref": "#/components/headers/Cache"
+					}
+				},
+				"content": {
+					"application/json": {
+						"schema": {
+							"$ref": "#/components/schemas/BlockEnvelope"
+						},
+						"example": {
+							"data": {
+								"id": "01JCN5SXS5AA819X9YP981068V",
+								"name": "Call to action",
+								"slug": "call-to-action",
+								"description": "A button with a label.",
+								"fields": [
+									{
+										"name": "Content",
+										"fields": [
+											{
+												"type": "text",
+												"data": {
+													"config": {
+														"name": "label"
+													}
+												}
+											}
+										]
+									}
+								],
+								"locations": [
+									"homepage",
+									"entries"
+								],
+								"created_at": "2026-09-05T10:00:00Z",
+								"updated_at": "2026-09-05T10:00:00Z"
+							}
+						}
+					}
+				}
+			},
+			"DatabaseListOk": {
+				"description": "Option databases, without items.",
+				"headers": {
+					"ETag": {
+						"$ref": "#/components/headers/ETag"
+					},
+					"Cache-Control": {
+						"$ref": "#/components/headers/CacheControl"
+					},
+					"Vary": {
+						"$ref": "#/components/headers/Vary"
+					},
+					"X-Rush-Perspective": {
+						"$ref": "#/components/headers/RushPerspective"
+					},
+					"X-Cache": {
+						"$ref": "#/components/headers/Cache"
+					}
+				},
+				"content": {
+					"application/json": {
+						"schema": {
+							"$ref": "#/components/schemas/DatabaseListEnvelope"
+						},
+						"example": {
+							"data": [
+								{
+									"id": "01JCCD1GDJFMGT83PXT891WB09",
+									"name": "Serviços",
+									"slug": "servicos",
+									"is_required": false,
+									"is_multiple": true
+								}
+							]
+						}
+					}
+				}
+			},
+			"DatabaseOk": {
+				"description": "The database and its items.",
+				"headers": {
+					"ETag": {
+						"$ref": "#/components/headers/ETag"
+					},
+					"Cache-Control": {
+						"$ref": "#/components/headers/CacheControl"
+					},
+					"Vary": {
+						"$ref": "#/components/headers/Vary"
+					},
+					"X-Rush-Perspective": {
+						"$ref": "#/components/headers/RushPerspective"
+					},
+					"X-Cache": {
+						"$ref": "#/components/headers/Cache"
+					}
+				},
+				"content": {
+					"application/json": {
+						"schema": {
+							"$ref": "#/components/schemas/DatabaseDetailEnvelope"
+						},
+						"example": {
+							"data": {
+								"database": {
+									"id": "01JCCD1GDJFMGT83PXT891WB09",
+									"name": "Serviços",
+									"slug": "servicos",
+									"is_required": false,
+									"is_multiple": true
+								},
+								"items": [
+									{
+										"id": "01JCB9Y73MY63FCH26W14WMCHW",
+										"name": "Design",
+										"description": "Identidade visual e interfaces.",
+										"order": 0,
+										"created_at": "2026-09-06T10:00:00Z",
+										"updated_at": "2026-09-06T10:00:00Z"
+									},
+									{
+										"id": "01JCYFGCW8T7SWM4FV4DK79Q9G",
+										"name": "Logotipos",
+										"order": 1,
+										"parent_item_id": "01JCB9Y73MY63FCH26W14WMCHW",
+										"created_at": "2026-09-06T10:01:00Z",
+										"updated_at": "2026-09-06T10:01:00Z"
+									}
+								]
+							}
+						}
+					}
+				}
+			},
+			"LinkPageListOk": {
+				"description": "Active link pages.",
+				"headers": {
+					"ETag": {
+						"$ref": "#/components/headers/ETag"
+					},
+					"Cache-Control": {
+						"$ref": "#/components/headers/CacheControl"
+					},
+					"Vary": {
+						"$ref": "#/components/headers/Vary"
+					},
+					"X-Rush-Perspective": {
+						"$ref": "#/components/headers/RushPerspective"
+					},
+					"X-Cache": {
+						"$ref": "#/components/headers/Cache"
+					}
+				},
+				"content": {
+					"application/json": {
+						"schema": {
+							"$ref": "#/components/schemas/LinkPageListEnvelope"
+						},
+						"example": {
+							"data": [
+								{
+									"id": "01JC8XE6SZAEAVSNTCPM5Q1NXW",
+									"title": "Example Studio",
+									"slug": "links",
+									"links": [],
+									"created_at": "2026-09-07T10:00:00Z",
+									"updated_at": "2026-09-07T10:00:00Z"
+								}
+							]
+						}
+					}
+				}
+			},
+			"LinkPageOk": {
+				"description": "The link page.",
+				"headers": {
+					"ETag": {
+						"$ref": "#/components/headers/ETag"
+					},
+					"Cache-Control": {
+						"$ref": "#/components/headers/CacheControl"
+					},
+					"Vary": {
+						"$ref": "#/components/headers/Vary"
+					},
+					"X-Rush-Perspective": {
+						"$ref": "#/components/headers/RushPerspective"
+					},
+					"X-Cache": {
+						"$ref": "#/components/headers/Cache"
+					}
+				},
+				"content": {
+					"application/json": {
+						"schema": {
+							"$ref": "#/components/schemas/LinkPageEnvelope"
+						},
+						"example": {
+							"data": {
+								"id": "01JC8XE6SZAEAVSNTCPM5Q1NXW",
+								"title": "Example Studio",
+								"slug": "links",
+								"subtitle": "Design e tecnologia",
+								"avatar_url": "https://media.example.com/01JCM9S346Q3D25VT4F5V37E3S/01JC9EE0ZBGJ09TQM83XSSSS6Y/master",
+								"links": [
+									{
+										"title": "Portfolio",
+										"url": "https://example.com/portfolio",
+										"icon": null,
+										"display_mode": "text"
+									}
+								],
+								"theme": {
+									"background_color": "#101010",
+									"button_color": "#f5f5f5",
+									"text_color": "#101010",
+									"social_links": [
+										{
+											"platform": "instagram",
+											"url": "https://instagram.com/example"
+										}
+									]
+								},
+								"created_at": "2026-09-07T10:00:00Z",
+								"updated_at": "2026-10-07T10:00:00Z"
+							}
+						}
+					}
+				}
+			},
+			"FormListOk": {
+				"description": "Active form schemas.",
+				"headers": {
+					"ETag": {
+						"$ref": "#/components/headers/ETag"
+					},
+					"Cache-Control": {
+						"$ref": "#/components/headers/CacheControl"
+					},
+					"Vary": {
+						"$ref": "#/components/headers/Vary"
+					},
+					"X-Rush-Perspective": {
+						"$ref": "#/components/headers/RushPerspective"
+					},
+					"X-Cache": {
+						"$ref": "#/components/headers/Cache"
+					}
+				},
+				"content": {
+					"application/json": {
+						"schema": {
+							"$ref": "#/components/schemas/FormListEnvelope"
+						},
+						"example": {
+							"data": [
+								{
+									"id": "01JC1RNJ47E65GH2BH8VGS9ZM5",
+									"key": "newsletter",
+									"name": "Newsletter",
+									"fields": [
+										{
+											"handle": "email",
+											"type": "email",
+											"label": "E-mail",
+											"required": true
+										}
+									],
+									"honeypot_field": "_gotcha",
+									"created_at": "2026-09-08T10:00:00Z",
+									"updated_at": "2026-09-08T10:00:00Z"
+								}
+							]
+						}
+					}
+				}
+			},
+			"FormOk": {
+				"description": "The form schema.",
+				"headers": {
+					"ETag": {
+						"$ref": "#/components/headers/ETag"
+					},
+					"Cache-Control": {
+						"$ref": "#/components/headers/CacheControl"
+					},
+					"Vary": {
+						"$ref": "#/components/headers/Vary"
+					},
+					"X-Rush-Perspective": {
+						"$ref": "#/components/headers/RushPerspective"
+					},
+					"X-Cache": {
+						"$ref": "#/components/headers/Cache"
+					}
+				},
+				"content": {
+					"application/json": {
+						"schema": {
+							"$ref": "#/components/schemas/FormEnvelope"
+						},
+						"example": {
+							"data": {
+								"id": "01JC1RNJ47E65GH2BH8VGS9ZM5",
+								"key": "contact",
+								"name": "Contato",
+								"fields": [
+									{
+										"handle": "name",
+										"type": "text",
+										"label": "Nome",
+										"required": true,
+										"max_length": 120
+									},
+									{
+										"handle": "email",
+										"type": "email",
+										"label": "E-mail",
+										"placeholder": "voce@exemplo.com",
+										"required": true
+									},
+									{
+										"handle": "topics",
+										"type": "checkbox",
+										"label": "Assuntos",
+										"options": [
+											{
+												"value": "support",
+												"label": "Suporte"
+											},
+											{
+												"value": "sales",
+												"label": "Vendas"
+											}
+										]
+									}
+								],
+								"honeypot_field": "_gotcha",
+								"captcha": {
+									"provider": "turnstile",
+									"site_key": "1x00000000000000000000AA"
+								},
+								"created_at": "2026-09-08T10:00:00Z",
+								"updated_at": "2026-10-08T10:00:00Z"
+							}
+						}
+					}
+				}
+			},
+			"FormSubmitted": {
+				"description": "Received. A real submission and a discarded honeypot submission answer identically.",
+				"content": {
+					"application/json": {
+						"schema": {
+							"$ref": "#/components/schemas/FormSubmitEnvelope"
+						},
+						"example": {
+							"data": {
+								"received": true
+							}
+						}
+					}
+				}
+			},
+			"NotModified": {
+				"description": "The `If-None-Match` validator matches; no body.",
+				"headers": {
+					"ETag": {
+						"$ref": "#/components/headers/ETag"
+					},
+					"Cache-Control": {
+						"$ref": "#/components/headers/CacheControl"
+					},
+					"Vary": {
+						"$ref": "#/components/headers/Vary"
+					},
+					"X-Cache": {
+						"$ref": "#/components/headers/Cache"
+					}
+				}
+			},
+			"BadRequest": {
+				"description": "`invalid_perspective`: `perspective` is neither `published` nor `draft`.",
+				"content": {
+					"application/json": {
+						"schema": {
+							"$ref": "#/components/schemas/Error"
+						},
+						"example": {
+							"error": "invalid perspective",
+							"code": "invalid_perspective"
+						}
+					}
+				}
+			},
+			"BadRequestLocale": {
+				"description": "`locale_not_served` (`params.available` lists the site's locales): `?locale=` names a locale the site does not\nserve. `invalid_perspective`: `perspective` is neither `published` nor `draft`.\n",
+				"content": {
+					"application/json": {
+						"schema": {
+							"$ref": "#/components/schemas/Error"
+						},
+						"example": {
+							"error": "locale \"fr\" is not served by this site",
+							"code": "locale_not_served",
+							"params": {
+								"available": [
+									"en",
+									"pt_BR",
+									"es"
+								]
+							}
+						}
+					}
+				}
+			},
+			"BadRequestQuery": {
+				"description": "`bad_request`: `page` or `per_page` is not a number, or `type` is neither `tag` nor `category`.\n`locale_not_served` (`params.available` lists the site's locales): `?locale=` names a locale the site does\nnot serve. `invalid_perspective`: `perspective` is neither `published` nor `draft`.\n",
+				"content": {
+					"application/json": {
+						"schema": {
+							"$ref": "#/components/schemas/Error"
+						},
+						"example": {
+							"error": "per_page must be a number",
+							"code": "bad_request"
+						}
+					}
+				}
+			},
+			"BadRequestSubmit": {
+				"description": "`bad_request`: the body cannot be parsed as JSON, multipart or urlencoded. `invalid_perspective`: `perspective`\nis neither `published` nor `draft`.\n",
+				"content": {
+					"application/json": {
+						"schema": {
+							"$ref": "#/components/schemas/Error"
+						},
+						"example": {
+							"error": "invalid submission body",
+							"code": "bad_request"
+						}
+					}
+				}
+			},
+			"Unauthorized": {
+				"description": "`unauthorized`: missing, unknown or revoked token, inactive site, or a preview link whose issuer lost the view\npermission or whose links were revoked. `token_expired`: the API token or the preview link expired.\n",
+				"content": {
+					"application/json": {
+						"schema": {
+							"$ref": "#/components/schemas/Error"
+						},
+						"example": {
+							"error": "token expired",
+							"code": "token_expired"
+						}
+					}
+				}
+			},
+			"Forbidden": {
+				"description": "`forbidden`: the token belongs to another site. `site_suspended`: the site's billing is suspended.\n`preview_requires_preview_token`: `perspective=draft` with a delivery token.\n",
+				"content": {
+					"application/json": {
+						"schema": {
+							"$ref": "#/components/schemas/Error"
+						},
+						"example": {
+							"error": "token belongs to another site",
+							"code": "forbidden"
+						}
+					}
+				}
+			},
+			"ForbiddenSubmit": {
+				"description": "`forbidden`, `site_suspended` and `preview_requires_preview_token` as on reads, plus `preview_cannot_submit`:\na preview token or the draft perspective cannot submit.\n",
+				"content": {
+					"application/json": {
+						"schema": {
+							"$ref": "#/components/schemas/Error"
+						},
+						"example": {
+							"error": "preview tokens cannot submit forms",
+							"code": "preview_cannot_submit"
+						}
+					}
+				}
+			},
+			"NotFound": {
+				"description": "`not_found`, with `params.resource` naming what is missing: `collection`, `tag`, `navigation`,\n`site_option_group`, `block`, `database`, `link_page` or `form`.\n",
+				"content": {
+					"application/json": {
+						"schema": {
+							"$ref": "#/components/schemas/Error"
+						},
+						"example": {
+							"error": "collection not found",
+							"code": "not_found",
+							"params": {
+								"resource": "collection"
+							}
+						}
+					}
+				}
+			},
+			"NotFoundTranslatable": {
+				"description": "`not_found` (`params.resource: homepage`): no homepage in any served locale. `not_translated`\n(`params.available` lists the locales that have one): the flag is off and L has none.\n",
+				"content": {
+					"application/json": {
+						"schema": {
+							"$ref": "#/components/schemas/Error"
+						},
+						"example": {
+							"error": "homepage not translated into es",
+							"code": "not_translated",
+							"params": {
+								"available": [
+									"en",
+									"pt_BR"
+								]
+							}
+						}
+					}
+				}
+			},
+			"NotFoundEntry": {
+				"description": "`moved` (`params.locale`, `params.slug`, `params.collection_slug`): the entry lives at another URL for L;\nredirect there. `not_translated` (`params.available`): the entry exists but has no served translation for L.\n`not_found` (`params.resource`: `collection` or `entry`).\n",
+				"content": {
+					"application/json": {
+						"schema": {
+							"$ref": "#/components/schemas/Error"
+						},
+						"example": {
+							"error": "entry moved",
+							"code": "moved",
+							"params": {
+								"locale": "pt_BR",
+								"slug": "ola-mundo",
+								"collection_slug": "artigos"
+							}
+						}
+					}
+				}
+			},
+			"PayloadTooLarge": {
+				"description": "`payload_too_large`: the body exceeds 1 MiB.",
+				"content": {
+					"application/json": {
+						"schema": {
+							"$ref": "#/components/schemas/Error"
+						},
+						"example": {
+							"error": "submission too large",
+							"code": "payload_too_large"
+						}
+					}
+				}
+			},
+			"UnprocessableSubmit": {
+				"description": "`validation_failed` with `errors` (one `FieldError` per failed rule). `captcha_failed`: captcha is enabled and\nthe token is missing or rejected.\n",
+				"content": {
+					"application/json": {
+						"schema": {
+							"$ref": "#/components/schemas/Error"
+						},
+						"example": {
+							"error": "validation failed",
+							"code": "validation_failed",
+							"errors": [
+								{
+									"field": "email",
+									"code": "invalid_email"
+								},
+								{
+									"field": "name",
+									"code": "too_long",
+									"params": {
+										"max": 120
+									}
+								}
+							]
+						}
+					}
+				}
+			},
+			"RateLimited": {
+				"description": "`rate_limited` (`params.retry_after` in seconds, also in `Retry-After`).",
+				"headers": {
+					"Retry-After": {
+						"$ref": "#/components/headers/RetryAfter"
+					}
+				},
+				"content": {
+					"application/json": {
+						"schema": {
+							"$ref": "#/components/schemas/Error"
+						},
+						"example": {
+							"error": "too many requests, please retry later",
+							"code": "rate_limited",
+							"params": {
+								"retry_after": 42
+							}
+						}
+					}
+				}
+			},
+			"InternalError": {
+				"description": "`internal_error`.",
+				"content": {
+					"application/json": {
+						"schema": {
+							"$ref": "#/components/schemas/Error"
+						},
+						"example": {
+							"error": "internal server error",
+							"code": "internal_error"
+						}
+					}
+				}
+			},
+			"CaptchaUnavailable": {
+				"description": "`captcha_unavailable`: the captcha verifier could not be reached; retry later.",
+				"content": {
+					"application/json": {
+						"schema": {
+							"$ref": "#/components/schemas/Error"
+						},
+						"example": {
+							"error": "captcha verifier unavailable",
+							"code": "captcha_unavailable"
+						}
+					}
+				}
+			}
+		},
+		"schemas": {
+			"Ulid": {
+				"type": "string",
+				"description": "A ULID (26 characters, Crockford base32).",
+				"pattern": "^[0-9A-HJKMNP-TV-Z]{26}$",
+				"example": "01JCNPZX45HY43KWJRP1XPA7Z3"
+			},
+			"LocaleCode": {
+				"type": "string",
+				"description": "A locale code as stored by the site (`en`, `pt_BR`).",
+				"example": "pt_BR"
+			},
+			"Timestamp": {
+				"type": "string",
+				"format": "date-time",
+				"description": "RFC 3339, UTC.",
+				"example": "2026-11-05T12:00:00Z"
+			},
+			"Perspective": {
+				"type": "string",
+				"enum": [
+					"published",
+					"draft"
+				]
+			},
+			"TagType": {
+				"type": "string",
+				"enum": [
+					"tag",
+					"category"
+				],
+				"default": "tag"
+			},
+			"JsonValue": {
+				"description": "Any JSON value, including null.",
+				"anyOf": [
+					{
+						"type": "string",
+						"nullable": true
+					},
+					{
+						"type": "number"
+					},
+					{
+						"type": "boolean"
+					},
+					{
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/JsonValue"
+						}
+					},
+					{
+						"type": "object",
+						"additionalProperties": true
+					}
+				]
+			},
+			"FreeObject": {
+				"type": "object",
+				"additionalProperties": true,
+				"description": "A free-form JSON object."
+			},
+			"Site": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": [
+					"id",
+					"name",
+					"domain",
+					"default_locale",
+					"locales",
+					"timezone",
+					"fallback"
+				],
+				"properties": {
+					"id": {
+						"$ref": "#/components/schemas/Ulid"
+					},
+					"name": {
+						"type": "string"
+					},
+					"domain": {
+						"type": "string",
+						"nullable": true,
+						"description": "The site's primary domain, if set."
+					},
+					"default_locale": {
+						"$ref": "#/components/schemas/LocaleCode"
+					},
+					"locales": {
+						"type": "array",
+						"description": "Active locales, in the site's configured order.",
+						"items": {
+							"$ref": "#/components/schemas/LocaleCode"
+						}
+					},
+					"timezone": {
+						"type": "string",
+						"description": "IANA timezone; `UTC` when unset.",
+						"example": "America/Sao_Paulo"
+					},
+					"fallback": {
+						"type": "boolean",
+						"description": "Whether untranslated content is served from the preference order (`serve_untranslated_fallback`)."
+					}
+				}
+			},
+			"CollectionRef": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": [
+					"id",
+					"slug"
+				],
+				"properties": {
+					"id": {
+						"$ref": "#/components/schemas/Ulid"
+					},
+					"slug": {
+						"type": "string",
+						"description": "Collection slug in the requested locale (structure rule)."
+					}
+				}
+			},
+			"TranslationRef": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": [
+					"slug",
+					"collection_slug"
+				],
+				"properties": {
+					"slug": {
+						"type": "string",
+						"description": "Entry slug in that locale."
+					},
+					"collection_slug": {
+						"type": "string",
+						"description": "Collection slug in that locale."
+					}
+				}
+			},
+			"Author": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": [
+					"id",
+					"name"
+				],
+				"properties": {
+					"id": {
+						"$ref": "#/components/schemas/Ulid"
+					},
+					"name": {
+						"type": "string"
+					}
+				}
+			},
+			"TagRef": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": [
+					"id",
+					"type",
+					"name",
+					"slug"
+				],
+				"description": "A tag or category attached to an entry; name and slug follow the structure rule.",
+				"properties": {
+					"id": {
+						"$ref": "#/components/schemas/Ulid"
+					},
+					"type": {
+						"$ref": "#/components/schemas/TagType"
+					},
+					"name": {
+						"type": "string"
+					},
+					"slug": {
+						"type": "string"
+					}
+				}
+			},
+			"Tag": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": [
+					"id",
+					"type",
+					"name",
+					"slug",
+					"entry_count"
+				],
+				"properties": {
+					"id": {
+						"$ref": "#/components/schemas/Ulid"
+					},
+					"type": {
+						"$ref": "#/components/schemas/TagType"
+					},
+					"name": {
+						"type": "string"
+					},
+					"slug": {
+						"type": "string"
+					},
+					"entry_count": {
+						"type": "integer",
+						"minimum": 0,
+						"description": "Entries `listTagEntries` lists for the same locale and perspective."
+					}
+				}
+			},
+			"Media": {
+				"type": "object",
+				"additionalProperties": false,
+				"description": "A media file referenced by content. Every key is optional: `url` is absent when the stored URL is unsafe, and\nthe descriptor fields are absent when the file is not a media item of this site.\n",
+				"properties": {
+					"url": {
+						"type": "string",
+						"description": "`{MEDIA_BASE_URL}/{site_id}/{media_id}/master`, extensionless and stable."
+					},
+					"media_id": {
+						"$ref": "#/components/schemas/Ulid"
+					},
+					"mime_type": {
+						"type": "string"
+					},
+					"size": {
+						"type": "integer",
+						"format": "int64",
+						"description": "Bytes of the master file."
+					},
+					"width": {
+						"type": "integer"
+					},
+					"height": {
+						"type": "integer"
+					},
+					"alt": {
+						"type": "string"
+					},
+					"title": {
+						"type": "string"
+					},
+					"variants": {
+						"$ref": "#/components/schemas/MediaVariants"
+					},
+					"updated_at": {
+						"$ref": "#/components/schemas/Timestamp"
+					}
+				}
+			},
+			"MediaVariants": {
+				"type": "object",
+				"description": "Derived files keyed by variant name; `thumb` is a 300px WebP. A stored JSON null is served as an empty\nobject.\n",
+				"properties": {
+					"thumb": {
+						"$ref": "#/components/schemas/MediaVariant"
+					}
+				},
+				"additionalProperties": {
+					"$ref": "#/components/schemas/MediaVariant"
+				}
+			},
+			"MediaVariant": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": [
+					"key",
+					"url"
+				],
+				"properties": {
+					"key": {
+						"type": "string"
+					},
+					"url": {
+						"type": "string"
+					}
+				}
+			},
+			"MediaMap": {
+				"type": "object",
+				"description": "Media referenced by the content, keyed by media id.",
+				"additionalProperties": {
+					"$ref": "#/components/schemas/Media"
+				}
+			},
+			"Entry": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": [
+					"id",
+					"slug",
+					"title",
+					"status",
+					"tags",
+					"categories",
+					"data",
+					"media",
+					"locale",
+					"fallback",
+					"collection",
+					"translations",
+					"published_at",
+					"created_at",
+					"updated_at"
+				],
+				"properties": {
+					"id": {
+						"$ref": "#/components/schemas/Ulid"
+					},
+					"slug": {
+						"type": "string",
+						"description": "Slug of the served translation."
+					},
+					"title": {
+						"type": "string"
+					},
+					"excerpt": {
+						"type": "string",
+						"description": "Absent when empty."
+					},
+					"featured_image": {
+						"$ref": "#/components/schemas/Media"
+					},
+					"status": {
+						"type": "string",
+						"enum": [
+							"published",
+							"draft",
+							"changed"
+						],
+						"description": "Always `published` in the published perspective; the working state in the draft perspective."
+					},
+					"sort_order": {
+						"type": "integer",
+						"description": "Manual position in reorderable collections; absent when unset."
+					},
+					"author": {
+						"$ref": "#/components/schemas/Author"
+					},
+					"tags": {
+						"type": "array",
+						"description": "Ordered by name, then id.",
+						"items": {
+							"$ref": "#/components/schemas/TagRef"
+						}
+					},
+					"categories": {
+						"type": "array",
+						"description": "Ordered by name, then id.",
+						"items": {
+							"$ref": "#/components/schemas/TagRef"
+						}
+					},
+					"data": {
+						"$ref": "#/components/schemas/EntryData"
+					},
+					"media": {
+						"$ref": "#/components/schemas/MediaMap"
+					},
+					"locale": {
+						"$ref": "#/components/schemas/LocaleCode"
+					},
+					"fallback": {
+						"type": "boolean",
+						"description": "True when the served locale differs from the requested locale."
+					},
+					"collection": {
+						"$ref": "#/components/schemas/CollectionRef"
+					},
+					"translations": {
+						"type": "object",
+						"description": "Every translation of the entry that exists in the request perspective, in the site's active locales,\nincluding the served one, keyed by locale code.\n",
+						"additionalProperties": {
+							"$ref": "#/components/schemas/TranslationRef"
+						}
+					},
+					"published_at": {
+						"$ref": "#/components/schemas/Timestamp"
+					},
+					"created_at": {
+						"$ref": "#/components/schemas/Timestamp"
+					},
+					"updated_at": {
+						"$ref": "#/components/schemas/Timestamp"
+					}
+				}
+			},
+			"EntryData": {
+				"type": "object",
+				"additionalProperties": true,
+				"description": "Blueprint field values keyed by field name: shared fields merged with the served translation's localized\nfields. Rich-text fields hold a `RichText` document; markdown fields a string; image and file fields a media\nURL (joined with `media`); block fields `{block: <slug> | null, values}`; database fields an array of\n`{id, name, description, parent_id}`. Unsafe URLs are blanked; text is returned verbatim.\n"
+			},
+			"EntrySummary": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": [
+					"id",
+					"slug",
+					"locale",
+					"fallback",
+					"collection"
+				],
+				"description": "The served translation of an entry, enough to build its URL.",
+				"properties": {
+					"id": {
+						"$ref": "#/components/schemas/Ulid"
+					},
+					"slug": {
+						"type": "string"
+					},
+					"locale": {
+						"$ref": "#/components/schemas/LocaleCode"
+					},
+					"fallback": {
+						"type": "boolean"
+					},
+					"collection": {
+						"$ref": "#/components/schemas/CollectionRef"
+					}
+				}
+			},
+			"PaginationMeta": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": [
+					"total",
+					"per_page",
+					"current_page",
+					"last_page"
+				],
+				"properties": {
+					"total": {
+						"type": "integer",
+						"format": "int64",
+						"minimum": 0
+					},
+					"per_page": {
+						"type": "integer",
+						"minimum": 1,
+						"maximum": 100
+					},
+					"current_page": {
+						"type": "integer",
+						"minimum": 1
+					},
+					"last_page": {
+						"type": "integer",
+						"minimum": 1
+					}
+				}
+			},
+			"Homepage": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": [
+					"id",
+					"locale",
+					"fallback",
+					"content",
+					"meta",
+					"created_at",
+					"updated_at"
+				],
+				"properties": {
+					"id": {
+						"$ref": "#/components/schemas/Ulid"
+					},
+					"locale": {
+						"$ref": "#/components/schemas/LocaleCode"
+					},
+					"fallback": {
+						"type": "boolean",
+						"description": "True when the served locale differs from the requested locale."
+					},
+					"content": {
+						"type": "array",
+						"description": "Sections in display order.",
+						"items": {
+							"$ref": "#/components/schemas/HomepageSection"
+						}
+					},
+					"meta": {
+						"$ref": "#/components/schemas/HomepageMeta"
+					},
+					"created_at": {
+						"$ref": "#/components/schemas/Timestamp"
+					},
+					"updated_at": {
+						"$ref": "#/components/schemas/Timestamp"
+					}
+				}
+			},
+			"HomepageSection": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": [
+					"block",
+					"values"
+				],
+				"properties": {
+					"id": {
+						"type": "string",
+						"description": "Section id chosen by the editor."
+					},
+					"block": {
+						"type": "string",
+						"nullable": true,
+						"description": "Block slug; null when the block no longer exists."
+					},
+					"values": {
+						"$ref": "#/components/schemas/FreeObject"
+					}
+				}
+			},
+			"HomepageMeta": {
+				"type": "object",
+				"nullable": true,
+				"additionalProperties": false,
+				"description": "SEO of the served locale; null when never set.",
+				"properties": {
+					"title": {
+						"type": "string"
+					},
+					"description": {
+						"type": "string"
+					},
+					"og_image": {
+						"type": "string"
+					}
+				}
+			},
+			"Collection": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": [
+					"id",
+					"slug",
+					"name",
+					"is_reorderable",
+					"items_per_page",
+					"created_at",
+					"updated_at"
+				],
+				"properties": {
+					"id": {
+						"$ref": "#/components/schemas/Ulid"
+					},
+					"slug": {
+						"type": "string"
+					},
+					"name": {
+						"type": "string"
+					},
+					"is_reorderable": {
+						"type": "boolean",
+						"description": "When true, entry lists follow `sort_order`."
+					},
+					"items_per_page": {
+						"type": "integer",
+						"description": "Default `per_page` of the collection's entry lists."
+					},
+					"created_at": {
+						"$ref": "#/components/schemas/Timestamp"
+					},
+					"updated_at": {
+						"$ref": "#/components/schemas/Timestamp"
+					}
+				}
+			},
+			"Navigation": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": [
+					"id",
+					"name",
+					"key",
+					"items",
+					"created_at",
+					"updated_at"
+				],
+				"properties": {
+					"id": {
+						"$ref": "#/components/schemas/Ulid"
+					},
+					"name": {
+						"type": "string"
+					},
+					"key": {
+						"type": "string"
+					},
+					"items": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/NavigationItem"
+						}
+					},
+					"created_at": {
+						"$ref": "#/components/schemas/Timestamp"
+					},
+					"updated_at": {
+						"$ref": "#/components/schemas/Timestamp"
+					}
+				}
+			},
+			"NavigationItem": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": [
+					"label",
+					"type",
+					"children"
+				],
+				"description": "An entry or collection item whose target cannot be served (unpublished, untranslated under the content rule,\ninactive collection) is dropped, unless it has surviving children; it then stays without `target`.\n",
+				"properties": {
+					"label": {
+						"type": "string",
+						"description": "Structure rule."
+					},
+					"type": {
+						"type": "string",
+						"enum": [
+							"url",
+							"entry",
+							"collection"
+						]
+					},
+					"target": {
+						"$ref": "#/components/schemas/NavigationTarget"
+					},
+					"link_target": {
+						"type": "string",
+						"description": "The HTML `target` of the link (for example `_blank`)."
+					},
+					"nofollow": {
+						"type": "boolean"
+					},
+					"noreferrer": {
+						"type": "boolean"
+					},
+					"class": {
+						"type": "string"
+					},
+					"attributes": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/NavigationAttribute"
+						}
+					},
+					"children": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/NavigationItem"
+						}
+					}
+				}
+			},
+			"NavigationTarget": {
+				"type": "object",
+				"additionalProperties": false,
+				"minProperties": 1,
+				"maxProperties": 1,
+				"description": "Exactly one key, matching the item `type`.",
+				"properties": {
+					"url": {
+						"type": "string",
+						"description": "Empty when the stored URL is unsafe."
+					},
+					"entry": {
+						"$ref": "#/components/schemas/EntrySummary"
+					},
+					"collection": {
+						"$ref": "#/components/schemas/CollectionRef"
+					}
+				}
+			},
+			"NavigationAttribute": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": [
+					"name"
+				],
+				"description": "An extra HTML attribute; names are allow-listed (`data-*`, `aria-*`, `title`, `rel`, `id`, `role`, `lang`, `hreflang`, `download`, `type`).",
+				"properties": {
+					"name": {
+						"type": "string"
+					},
+					"value": {
+						"$ref": "#/components/schemas/JsonValue"
+					}
+				}
+			},
+			"SiteOptionGroup": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": [
+					"slug",
+					"name",
+					"description",
+					"values",
+					"media",
+					"updated_at"
+				],
+				"properties": {
+					"slug": {
+						"type": "string"
+					},
+					"name": {
+						"type": "string"
+					},
+					"description": {
+						"type": "string",
+						"description": "Empty when unset."
+					},
+					"values": {
+						"type": "object",
+						"description": "One key per public field; `null` when unfilled or untranslated under the content rule. Values take the same forms as `EntryData`.",
+						"additionalProperties": {
+							"$ref": "#/components/schemas/JsonValue"
+						}
+					},
+					"media": {
+						"$ref": "#/components/schemas/MediaMap"
+					},
+					"updated_at": {
+						"$ref": "#/components/schemas/Timestamp"
+					}
+				}
+			},
+			"Block": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": [
+					"id",
+					"name",
+					"slug",
+					"fields",
+					"created_at",
+					"updated_at"
+				],
+				"description": "`fields` is the block blueprint as stored (field groups, or `{main, sidebar}`); `locations` says where the\nblock may be used, as stored, and is absent when unset.\n",
+				"properties": {
+					"id": {
+						"$ref": "#/components/schemas/Ulid"
+					},
+					"name": {
+						"type": "string"
+					},
+					"slug": {
+						"type": "string"
+					},
+					"description": {
+						"type": "string"
+					},
+					"fields": {
+						"$ref": "#/components/schemas/JsonValue"
+					},
+					"locations": {
+						"$ref": "#/components/schemas/JsonValue"
+					},
+					"created_at": {
+						"$ref": "#/components/schemas/Timestamp"
+					},
+					"updated_at": {
+						"$ref": "#/components/schemas/Timestamp"
+					}
+				}
+			},
+			"Database": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": [
+					"id",
+					"name",
+					"slug",
+					"is_required",
+					"is_multiple"
+				],
+				"properties": {
+					"id": {
+						"$ref": "#/components/schemas/Ulid"
+					},
+					"name": {
+						"type": "string"
+					},
+					"slug": {
+						"type": "string"
+					},
+					"is_required": {
+						"type": "boolean"
+					},
+					"is_multiple": {
+						"type": "boolean"
+					}
+				}
+			},
+			"DatabaseItem": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": [
+					"id",
+					"name",
+					"order",
+					"created_at",
+					"updated_at"
+				],
+				"properties": {
+					"id": {
+						"$ref": "#/components/schemas/Ulid"
+					},
+					"name": {
+						"type": "string"
+					},
+					"description": {
+						"type": "string",
+						"description": "Absent when empty."
+					},
+					"order": {
+						"type": "integer"
+					},
+					"parent_item_id": {
+						"$ref": "#/components/schemas/Ulid"
+					},
+					"created_at": {
+						"$ref": "#/components/schemas/Timestamp"
+					},
+					"updated_at": {
+						"$ref": "#/components/schemas/Timestamp"
+					}
+				}
+			},
+			"DatabaseDetail": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": [
+					"database",
+					"items"
+				],
+				"properties": {
+					"database": {
+						"$ref": "#/components/schemas/Database"
+					},
+					"items": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/DatabaseItem"
+						}
+					}
+				}
+			},
+			"LinkPage": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": [
+					"id",
+					"title",
+					"slug",
+					"links",
+					"created_at",
+					"updated_at"
+				],
+				"properties": {
+					"id": {
+						"$ref": "#/components/schemas/Ulid"
+					},
+					"title": {
+						"type": "string"
+					},
+					"slug": {
+						"type": "string"
+					},
+					"subtitle": {
+						"type": "string"
+					},
+					"avatar_url": {
+						"type": "string"
+					},
+					"links": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/LinkPageLink"
+						}
+					},
+					"theme": {
+						"$ref": "#/components/schemas/LinkPageTheme"
+					},
+					"created_at": {
+						"$ref": "#/components/schemas/Timestamp"
+					},
+					"updated_at": {
+						"$ref": "#/components/schemas/Timestamp"
+					}
+				}
+			},
+			"LinkPageLink": {
+				"type": "object",
+				"additionalProperties": true,
+				"description": "A link as stored by the admin; URLs are sanitized.",
+				"properties": {
+					"title": {
+						"type": "string"
+					},
+					"url": {
+						"type": "string"
+					},
+					"icon": {
+						"type": "string",
+						"nullable": true
+					},
+					"display_mode": {
+						"type": "string",
+						"enum": [
+							"icon",
+							"icon_text",
+							"text"
+						]
+					}
+				}
+			},
+			"LinkPageTheme": {
+				"type": "object",
+				"additionalProperties": true,
+				"description": "Theme as stored by the admin; URLs are sanitized. A stored JSON null is served as an empty object.",
+				"properties": {
+					"background_color": {
+						"type": "string",
+						"nullable": true
+					},
+					"button_color": {
+						"type": "string",
+						"nullable": true
+					},
+					"text_color": {
+						"type": "string",
+						"nullable": true
+					},
+					"social_links": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/LinkPageSocialLink"
+						}
+					}
+				}
+			},
+			"LinkPageSocialLink": {
+				"type": "object",
+				"additionalProperties": true,
+				"properties": {
+					"platform": {
+						"type": "string"
+					},
+					"url": {
+						"type": "string"
+					}
+				}
+			},
+			"Form": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": [
+					"id",
+					"key",
+					"name",
+					"fields",
+					"created_at",
+					"updated_at"
+				],
+				"properties": {
+					"id": {
+						"$ref": "#/components/schemas/Ulid"
+					},
+					"key": {
+						"type": "string"
+					},
+					"name": {
+						"type": "string"
+					},
+					"fields": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/FormField"
+						}
+					},
+					"honeypot_field": {
+						"type": "string",
+						"description": "Name of the hidden input that must stay empty."
+					},
+					"captcha": {
+						"$ref": "#/components/schemas/FormCaptcha"
+					},
+					"created_at": {
+						"$ref": "#/components/schemas/Timestamp"
+					},
+					"updated_at": {
+						"$ref": "#/components/schemas/Timestamp"
+					}
+				}
+			},
+			"FormCaptcha": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": [
+					"provider",
+					"site_key"
+				],
+				"description": "Present when the site requires a captcha on its forms.",
+				"properties": {
+					"provider": {
+						"type": "string",
+						"enum": [
+							"turnstile"
+						]
+					},
+					"site_key": {
+						"type": "string"
+					}
+				}
+			},
+			"FormField": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": [
+					"handle",
+					"type",
+					"label"
+				],
+				"properties": {
+					"handle": {
+						"type": "string",
+						"description": "Body key of the field on submit."
+					},
+					"type": {
+						"type": "string",
+						"enum": [
+							"text",
+							"email",
+							"textarea",
+							"number",
+							"tel",
+							"url",
+							"date",
+							"select",
+							"radio",
+							"checkbox",
+							"hidden"
+						]
+					},
+					"label": {
+						"type": "string"
+					},
+					"placeholder": {
+						"type": "string"
+					},
+					"help_text": {
+						"type": "string"
+					},
+					"required": {
+						"type": "boolean",
+						"description": "Absent when false."
+					},
+					"min_length": {
+						"type": "integer"
+					},
+					"max_length": {
+						"type": "integer"
+					},
+					"min": {
+						"type": "number"
+					},
+					"max": {
+						"type": "number"
+					},
+					"pattern": {
+						"type": "string"
+					},
+					"options": {
+						"type": "array",
+						"description": "For `select`, `radio` and `checkbox`; absent when empty.",
+						"items": {
+							"$ref": "#/components/schemas/FormFieldOption"
+						}
+					}
+				}
+			},
+			"FormFieldOption": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": [
+					"value",
+					"label"
+				],
+				"properties": {
+					"value": {
+						"type": "string"
+					},
+					"label": {
+						"type": "string"
+					}
+				}
+			},
+			"FormSubmission": {
+				"type": "object",
+				"additionalProperties": true,
+				"description": "Field values keyed by `FormField.handle`; a `checkbox` takes several values (a JSON array, or the key\nrepeated). JSON scalars are read as strings. May carry `cf-turnstile-response` and the honeypot field.\n"
+			},
+			"FormSubmitResult": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": [
+					"received"
+				],
+				"properties": {
+					"received": {
+						"type": "boolean",
+						"enum": [
+							true
+						]
+					}
+				}
+			},
+			"Error": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": [
+					"error",
+					"code"
+				],
+				"properties": {
+					"error": {
+						"type": "string",
+						"description": "English message for logs; never shown to visitors."
+					},
+					"code": {
+						"$ref": "#/components/schemas/ErrorCode"
+					},
+					"params": {
+						"$ref": "#/components/schemas/ErrorParams"
+					},
+					"errors": {
+						"type": "array",
+						"description": "Present with `validation_failed`.",
+						"items": {
+							"$ref": "#/components/schemas/FieldError"
+						}
+					}
+				}
+			},
+			"ErrorCode": {
+				"type": "string",
+				"enum": [
+					"bad_request",
+					"locale_not_served",
+					"invalid_perspective",
+					"unauthorized",
+					"token_expired",
+					"forbidden",
+					"site_suspended",
+					"preview_requires_preview_token",
+					"preview_cannot_submit",
+					"not_found",
+					"not_translated",
+					"moved",
+					"method_not_allowed",
+					"payload_too_large",
+					"validation_failed",
+					"captcha_failed",
+					"rate_limited",
+					"internal_error",
+					"captcha_unavailable"
+				]
+			},
+			"ErrorParams": {
+				"type": "object",
+				"additionalProperties": false,
+				"description": "Parameters of the error, by code.",
+				"properties": {
+					"resource": {
+						"type": "string",
+						"enum": [
+							"homepage",
+							"collection",
+							"entry",
+							"tag",
+							"navigation",
+							"site_option_group",
+							"block",
+							"database",
+							"link_page",
+							"form",
+							"route"
+						],
+						"description": "`not_found`: what is missing."
+					},
+					"available": {
+						"type": "array",
+						"description": "`locale_not_served`: the site's locales. `not_translated`: the locales the resource exists in.",
+						"items": {
+							"$ref": "#/components/schemas/LocaleCode"
+						}
+					},
+					"locale": {
+						"$ref": "#/components/schemas/LocaleCode"
+					},
+					"slug": {
+						"type": "string",
+						"description": "`moved`: the entry slug to redirect to."
+					},
+					"collection_slug": {
+						"type": "string",
+						"description": "`moved`: the collection slug to redirect to."
+					},
+					"retry_after": {
+						"type": "integer",
+						"minimum": 0,
+						"description": "`rate_limited`: seconds to wait."
+					}
+				}
+			},
+			"FieldError": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": [
+					"field",
+					"code"
+				],
+				"properties": {
+					"field": {
+						"type": "string",
+						"description": "The field handle."
+					},
+					"code": {
+						"$ref": "#/components/schemas/FieldErrorCode"
+					},
+					"params": {
+						"$ref": "#/components/schemas/FieldErrorParams"
+					}
+				}
+			},
+			"FieldErrorCode": {
+				"type": "string",
+				"description": "`required`: empty required field. `invalid_option`: value outside the options (`params.value`).\n`invalid_email`, `invalid_url`, `invalid_number`: wrong format for the field type. `too_small` / `too_large`:\nnumber below `params.min` / above `params.max`. `too_short` / `too_long`: fewer than `params.min` / more than\n`params.max` characters. `invalid_format`: value does not match the field `pattern`.\n",
+				"enum": [
+					"required",
+					"invalid_option",
+					"invalid_email",
+					"invalid_url",
+					"invalid_number",
+					"too_small",
+					"too_large",
+					"too_short",
+					"too_long",
+					"invalid_format"
+				]
+			},
+			"FieldErrorParams": {
+				"type": "object",
+				"additionalProperties": false,
+				"properties": {
+					"min": {
+						"type": "number"
+					},
+					"max": {
+						"type": "number"
+					},
+					"value": {
+						"type": "string"
+					}
+				}
+			},
+			"RichText": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": [
+					"type"
+				],
+				"description": "A TipTap JSON document. Nodes follow TipTap StarterKit plus `codeBlock` (`attrs.language`), `image`\n(`attrs.src`, `attrs.alt`, `attrs.align`, `attrs.mediaId`, join with `media` by `mediaId`), `gallery`\n(`attrs.images`, `attrs.layout`, `attrs.lightbox`), the `link` mark (`attrs.href`, empty when unsafe) and\n`customBlock` (see `CustomBlockNode`).\n",
+				"properties": {
+					"type": {
+						"type": "string",
+						"enum": [
+							"doc"
+						]
+					},
+					"content": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/RichTextContent"
+						}
+					}
+				},
+				"example": {
+					"type": "doc",
+					"content": [
+						{
+							"type": "heading",
+							"attrs": {
+								"level": 2
+							},
+							"content": [
+								{
+									"type": "text",
+									"text": "Hello"
+								}
+							]
+						},
+						{
+							"type": "customBlock",
+							"attrs": {
+								"block": "call-to-action",
+								"values": {
+									"label": "Subscribe"
+								}
+							}
+						}
+					]
+				}
+			},
+			"RichTextContent": {
+				"description": "A rich-text node; `customBlock` nodes take the `CustomBlockNode` shape.",
+				"anyOf": [
+					{
+						"$ref": "#/components/schemas/CustomBlockNode"
+					},
+					{
+						"$ref": "#/components/schemas/RichTextNode"
+					}
+				]
+			},
+			"RichTextNode": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": [
+					"type"
+				],
+				"properties": {
+					"type": {
+						"type": "string",
+						"not": {
+							"enum": [
+								"customBlock"
+							]
+						},
+						"description": "Any TipTap node type except `customBlock`, which takes the `CustomBlockNode` shape.",
+						"example": "paragraph"
+					},
+					"attrs": {
+						"$ref": "#/components/schemas/FreeObject"
+					},
+					"content": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/RichTextContent"
+						}
+					},
+					"marks": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/RichTextMark"
+						}
+					},
+					"text": {
+						"type": "string"
+					}
+				}
+			},
+			"RichTextMark": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": [
+					"type"
+				],
+				"properties": {
+					"type": {
+						"type": "string",
+						"example": "link"
+					},
+					"attrs": {
+						"$ref": "#/components/schemas/FreeObject"
+					}
+				}
+			},
+			"CustomBlockNode": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": [
+					"type",
+					"attrs"
+				],
+				"description": "An inline use of a block inside rich text.",
+				"properties": {
+					"type": {
+						"type": "string",
+						"enum": [
+							"customBlock"
+						]
+					},
+					"attrs": {
+						"$ref": "#/components/schemas/CustomBlockAttrs"
+					}
+				}
+			},
+			"CustomBlockAttrs": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": [
+					"block",
+					"values"
+				],
+				"properties": {
+					"block": {
+						"type": "string",
+						"description": "Block slug."
+					},
+					"values": {
+						"$ref": "#/components/schemas/FreeObject"
+					}
+				}
+			},
+			"SiteEnvelope": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": [
+					"data"
+				],
+				"properties": {
+					"data": {
+						"$ref": "#/components/schemas/Site"
+					}
+				}
+			},
+			"HomepageEnvelope": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": [
+					"data"
+				],
+				"properties": {
+					"data": {
+						"$ref": "#/components/schemas/Homepage"
+					}
+				}
+			},
+			"CollectionListEnvelope": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": [
+					"data"
+				],
+				"properties": {
+					"data": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/Collection"
+						}
+					}
+				}
+			},
+			"CollectionEnvelope": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": [
+					"data"
+				],
+				"properties": {
+					"data": {
+						"$ref": "#/components/schemas/Collection"
+					}
+				}
+			},
+			"EntryPage": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": [
+					"data",
+					"meta"
+				],
+				"properties": {
+					"data": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/Entry"
+						}
+					},
+					"meta": {
+						"$ref": "#/components/schemas/PaginationMeta"
+					}
+				}
+			},
+			"EntryEnvelope": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": [
+					"data"
+				],
+				"properties": {
+					"data": {
+						"$ref": "#/components/schemas/Entry"
+					}
+				}
+			},
+			"TagListEnvelope": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": [
+					"data"
+				],
+				"properties": {
+					"data": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/Tag"
+						}
+					}
+				}
+			},
+			"NavigationListEnvelope": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": [
+					"data"
+				],
+				"properties": {
+					"data": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/Navigation"
+						}
+					}
+				}
+			},
+			"NavigationEnvelope": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": [
+					"data"
+				],
+				"properties": {
+					"data": {
+						"$ref": "#/components/schemas/Navigation"
+					}
+				}
+			},
+			"SiteOptionGroupListEnvelope": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": [
+					"data"
+				],
+				"properties": {
+					"data": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/SiteOptionGroup"
+						}
+					}
+				}
+			},
+			"SiteOptionGroupEnvelope": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": [
+					"data"
+				],
+				"properties": {
+					"data": {
+						"$ref": "#/components/schemas/SiteOptionGroup"
+					}
+				}
+			},
+			"BlockListEnvelope": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": [
+					"data"
+				],
+				"properties": {
+					"data": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/Block"
+						}
+					}
+				}
+			},
+			"BlockEnvelope": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": [
+					"data"
+				],
+				"properties": {
+					"data": {
+						"$ref": "#/components/schemas/Block"
+					}
+				}
+			},
+			"DatabaseListEnvelope": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": [
+					"data"
+				],
+				"properties": {
+					"data": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/Database"
+						}
+					}
+				}
+			},
+			"DatabaseDetailEnvelope": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": [
+					"data"
+				],
+				"properties": {
+					"data": {
+						"$ref": "#/components/schemas/DatabaseDetail"
+					}
+				}
+			},
+			"LinkPageListEnvelope": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": [
+					"data"
+				],
+				"properties": {
+					"data": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/LinkPage"
+						}
+					}
+				}
+			},
+			"LinkPageEnvelope": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": [
+					"data"
+				],
+				"properties": {
+					"data": {
+						"$ref": "#/components/schemas/LinkPage"
+					}
+				}
+			},
+			"FormListEnvelope": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": [
+					"data"
+				],
+				"properties": {
+					"data": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/Form"
+						}
+					}
+				}
+			},
+			"FormEnvelope": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": [
+					"data"
+				],
+				"properties": {
+					"data": {
+						"$ref": "#/components/schemas/Form"
+					}
+				}
+			},
+			"FormSubmitEnvelope": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": [
+					"data"
+				],
+				"properties": {
+					"data": {
+						"$ref": "#/components/schemas/FormSubmitResult"
+					}
+				}
+			}
+		}
+	}
+}

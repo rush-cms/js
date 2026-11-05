@@ -1,0 +1,26 @@
+{
+	"name": "create-rush-cms",
+	"version": "0.0.2",
+	"description": "Create a website powered by Rush CMS. Not released yet.",
+	"type": "module",
+	"bin": {
+		"create-rush-cms": "index.js"
+	},
+	"files": [
+		"index.js"
+	],
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/rush-cms/js.git",
+		"directory": "packages/create-rush-cms"
+	},
+	"homepage": "https://github.com/rush-cms/js",
+	"keywords": [
+		"rush-cms",
+		"astro",
+		"create",
+		"starter"
+	],
+	"author": "Rafhael Marsigli <oi@rafhael.com.br>",
+	"license": "MIT"
+}
