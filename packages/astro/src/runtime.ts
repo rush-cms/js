@@ -4,7 +4,7 @@ import type { APIContext } from 'astro'
 import type { RushSiteConfig } from './config'
 import type { RushApiSettings } from './settings'
 
-export type RushContext = Pick<APIContext, 'locals' | 'currentLocale' | 'isPrerendered'>
+export type RushContext = Pick<APIContext, 'locals' | 'currentLocale' | 'isPrerendered' | 'params'>
 
 export type RushRuntimeSettings = {
 	api: RushApiSettings
@@ -21,20 +21,18 @@ function normalized(code: string): string {
 	return toBcp47(code).toLowerCase()
 }
 
-export function resolveLocale(
-	config: RushSiteConfig,
-	currentLocale: string | undefined
-): LocaleCode {
+export function resolveLocale(config: RushSiteConfig, requested: string | undefined): LocaleCode {
 	const entries = Object.entries(config.localePaths)
-	const match =
-		currentLocale === undefined
-			? undefined
-			: entries.find(
-					([locale, prefix]) =>
-						prefix === currentLocale || normalized(locale) === normalized(currentLocale)
-				)
-	const unprefixed = entries.find(([, prefix]) => prefix === '')
-	return (match ?? unprefixed)?.[0] ?? config.defaultLocale
+	if (requested === undefined) {
+		return entries.find(([, prefix]) => prefix === '')?.[0] ?? config.defaultLocale
+	}
+	const match = entries.find(
+		([locale, prefix]) => prefix === requested || normalized(locale) === normalized(requested)
+	)
+	if (match === undefined) {
+		throw new Error(`@rushcms/astro: locale "${requested}" matches no localePaths entry`)
+	}
+	return match[0]
 }
 
 export function createRushRuntime(settings: RushRuntimeSettings): RushRuntime {
@@ -63,7 +61,7 @@ export function createRushRuntime(settings: RushRuntimeSettings): RushRuntime {
 
 	return {
 		client: (context) => {
-			const locale = resolveLocale(config, context.currentLocale)
+			const locale = resolveLocale(config, context.currentLocale ?? context.params.locale)
 			return config.memo && context.isPrerendered
 				? sharedClient(locale)
 				: create(locale, false)

@@ -1,11 +1,11 @@
 import { fileURLToPath } from 'node:url'
-import type { AstroConfig, RemotePattern } from 'astro'
+import type { AstroConfig, HookParameters, RemotePattern } from 'astro'
 
 export type RushEnv = Record<string, string>
 
 export type RushEnvSource = Pick<AstroConfig, 'root' | 'vite'>
 
-export type RushCommand = 'dev' | 'build' | 'preview' | 'sync'
+export type RushCommand = HookParameters<'astro:config:setup'>['command']
 
 export async function rushEnvSchema(): Promise<AstroConfig['env']['schema']> {
 	const { envField } = await import('astro/config')

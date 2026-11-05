@@ -6,11 +6,13 @@ import { POST, prerender } from '../src/routes/forms'
 import { SITE_PREFIX, apiError, asRequest, envelope, startStubApi } from './fixtures/api'
 import type { StubApi, StubRequest } from './fixtures/api'
 import { rushLocals } from './fixtures/runtime'
+import type { RushApiSettings } from '../src/settings'
 
 type PostOptions = {
 	body: BodyInit
 	headers?: Record<string, string>
 	clientAddress?: string | undefined
+	api?: RushApiSettings
 }
 
 const ORIGIN = 'https://site.example'
@@ -41,7 +43,7 @@ function formContext(options: PostOptions): FormContext {
 			}
 			return clientAddress
 		},
-		locals: rushLocals(stub.api),
+		locals: rushLocals(options.api ?? stub.api),
 		currentLocale: undefined,
 		isPrerendered: false
 	}
@@ -106,7 +108,7 @@ describe('POST /_rush/forms/[key]', () => {
 		expect(form.getAll('interests')).toEqual(['a', 'b'])
 		expect(response.status).toBe(303)
 		expect(response.headers.get('location')).toBe(
-			'/contact?ref=nav&rush_form=contact&status=sent'
+			`${ORIGIN}/contact?ref=nav&rush_form=contact&status=sent`
 		)
 	})
 
@@ -170,14 +172,13 @@ describe('POST /_rush/forms/[key]', () => {
 		})
 		expect(response.status).toBe(422)
 		expect(await response.json()).toEqual({
-			error: 'validation failed',
 			code: 'validation_failed',
 			params: {},
 			errors: VALIDATION.errors
 		})
 	})
 
-	it('maps unreachable API errors to 502', async () => {
+	it('maps an invalid_response from the API to 502', async () => {
 		stub.handle(() => new Response('<html>', { status: 200 }))
 		const response = await post({
 			body: '{}',
@@ -187,12 +188,27 @@ describe('POST /_rush/forms/[key]', () => {
 		expect(await response.json()).toMatchObject({ code: 'invalid_response' })
 	})
 
+	it('maps a network_error to 502 without leaking the API location', async () => {
+		const offline = await startStubApi()
+		await offline.close()
+		const response = await post({
+			body: '{}',
+			headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+			api: offline.api
+		})
+		const body = await response.text()
+		expect(response.status).toBe(502)
+		expect(JSON.parse(body)).toEqual({ code: 'network_error', params: {}, errors: [] })
+		expect(body).not.toContain(offline.api.url)
+		expect(body).not.toContain(offline.api.siteId)
+	})
+
 	it('redirects HTML posts back with status=error on API errors', async () => {
 		stub.handle(() => apiError(422, VALIDATION))
 		const response = await post(urlencoded('email=nope'))
 		expect(response.status).toBe(303)
 		expect(response.headers.get('location')).toBe(
-			'/contact?ref=nav&rush_form=contact&status=error'
+			`${ORIGIN}/contact?ref=nav&rush_form=contact&status=error`
 		)
 	})
 
@@ -204,22 +220,39 @@ describe('POST /_rush/forms/[key]', () => {
 				Referer: `${ORIGIN}/contact?rush_form=contact&status=error#form`
 			}
 		})
-		expect(response.headers.get('location')).toBe('/contact?rush_form=contact&status=sent')
+		expect(response.headers.get('location')).toBe(
+			`${ORIGIN}/contact?rush_form=contact&status=sent`
+		)
 	})
 
 	it.each([
-		['a cross-origin referrer', { Referer: 'https://evil.example/contact' }],
-		['a referrer on another port', { Referer: 'https://site.example:8443/contact' }],
-		['a malformed referrer', { Referer: 'not a url' }],
-		['no referrer', {}]
-	])('redirects to / for %s', async (_, headers: Record<string, string>) => {
-		const response = await post({
-			body: 'name=Ana',
-			headers: { 'Content-Type': 'application/x-www-form-urlencoded', ...headers }
-		})
-		expect(response.status).toBe(303)
-		expect(response.headers.get('location')).toBe('/')
-	})
+		['a cross-origin referrer', { Referer: 'https://evil.example/contact' }, '/'],
+		['a referrer on another port', { Referer: 'https://site.example:8443/contact' }, '/'],
+		['a malformed referrer', { Referer: 'not a url' }, '/'],
+		['no referrer', {}, '/'],
+		[
+			'a same-origin referrer with a // path',
+			{ Referer: `${ORIGIN}//evil.example/x` },
+			`${ORIGIN}//evil.example/x?rush_form=contact&status=sent`
+		],
+		[
+			'a same-origin referrer with a /\\ path',
+			{ Referer: `${ORIGIN}/\\evil.example` },
+			`${ORIGIN}//evil.example?rush_form=contact&status=sent`
+		]
+	])(
+		'keeps the redirect on the site origin for %s',
+		async (_, headers: Record<string, string>, location) => {
+			const response = await post({
+				body: 'name=Ana',
+				headers: { 'Content-Type': 'application/x-www-form-urlencoded', ...headers }
+			})
+			const target = response.headers.get('location') ?? ''
+			expect(response.status).toBe(303)
+			expect(target).toBe(location)
+			expect(new URL(target, ORIGIN).origin).toBe(ORIGIN)
+		}
+	)
 
 	it.each([
 		['malformed JSON', 'application/json', '{'],

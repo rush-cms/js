@@ -18,9 +18,10 @@ let stub: StubApi
 function context(
 	locals: object,
 	currentLocale: string | undefined,
-	isPrerendered: boolean
+	isPrerendered: boolean,
+	params: Record<string, string | undefined> = {}
 ): RushContext {
-	return { locals, currentLocale, isPrerendered }
+	return { locals, currentLocale, isPrerendered, params }
 }
 
 function siteRequests(): number {
@@ -62,12 +63,6 @@ describe('resolveLocale', () => {
 			expected: 'pt_BR'
 		},
 		{
-			name: 'unknown → unprefixed',
-			localePaths: { pt_BR: '', en: 'en' },
-			current: 'pt',
-			expected: 'pt_BR'
-		},
-		{
 			name: 'none → unprefixed',
 			localePaths: { en: 'en', es: '' },
 			current: undefined,
@@ -78,18 +73,19 @@ describe('resolveLocale', () => {
 			localePaths: { en: 'en', es: 'es' },
 			current: undefined,
 			expected: 'en'
-		},
-		{
-			name: 'inherited key',
-			localePaths: { en: 'en', es: 'es' },
-			current: 'constructor',
-			expected: 'en'
 		}
 	]
 
 	it.each(cases)('maps $name', ({ localePaths, current, expected }) => {
 		expect(resolveLocale(siteConfig({ localePaths, defaultLocale: 'en' }), current)).toBe(
 			expected
+		)
+	})
+
+	it.each(['pt', 'fr', 'constructor'])('throws for "%s", which matches no entry', (current) => {
+		const config = siteConfig({ localePaths: { pt_BR: '', en: 'en' } })
+		expect(() => resolveLocale(config, current)).toThrow(
+			`locale "${current}" matches no localePaths entry`
 		)
 	})
 })
@@ -102,6 +98,16 @@ describe('getRush', () => {
 		expect(stub.requests[0]?.query.get('locale')).toBe('es')
 		expect(client.routes).toEqual(config.routes)
 		expect(client.localePaths).toEqual(config.localePaths)
+	})
+
+	it('reads the locale from a [locale] param when Astro i18n is not configured', async () => {
+		const locals = rushLocals(stub.api)
+		await getRush(context(locals, undefined, false, { locale: 'es' })).collections.list()
+		await getRush(context(locals, 'en', false, { locale: 'es' })).collections.list()
+		expect(stub.requests.map((request) => request.query.get('locale'))).toEqual(['es', 'en'])
+		expect(() => getRush(context(locals, undefined, false, { locale: 'xx' }))).toThrow(
+			'matches no localePaths entry'
+		)
 	})
 
 	it('shares one memoized client per locale for prerendered builds', async () => {

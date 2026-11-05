@@ -58,8 +58,10 @@ const entry = await rush.entries.get('artigos', Astro.params.slug)
 ---
 ```
 
-`getRush(Astro)` returns a client bound to the route's locale: `Astro.currentLocale` mapped back to the CMS code
-through `localePaths` (by prefix or code), else the locale with the `''` prefix, else the site's default locale.
+`getRush(Astro)` returns a client bound to the route's locale: `Astro.currentLocale` (with Astro `i18n`) or the
+`locale` route param (a `[locale]` route without it), mapped back to the CMS code through `localePaths` by prefix or
+code. A value that matches no entry throws; without either, the locale with the `''` prefix is used, else the site's
+default locale.
 Static builds share one memoized client per locale; on-demand requests and `astro dev` never memoize.
 
 ## Forms
@@ -68,10 +70,10 @@ Static builds share one memoized client per locale; on-demand requests and `astr
 included) and `application/json`. It sends the visitor IP (`Astro.clientAddress`) as `X-Rush-Client-IP` and the
 captcha token from the `cf-turnstile-response` field or the `X-Captcha-Token` header.
 
-- Requests with `Accept: application/json` get `201 {"data": …}` or the API error (`status`, `code`, `params`,
-  `errors`).
-- HTML form posts get `303` back to the same-origin `Referer` with `rush_form=<key>&status=sent|error`; a missing or
-  cross-origin referrer redirects to `/`.
+- Requests with `Accept: application/json` get `201 {"data": …}` or `{"code", "params", "errors"}` with the API
+  status (`502` when the API cannot be reached or answers garbage). The API's log message is never echoed.
+- HTML form posts get `303` back to the same-origin `Referer` (as an absolute URL on the site's origin) with
+  `rush_form=<key>&status=sent|error`; a missing or cross-origin referrer redirects to `/`.
 
 Cross-site form posts are rejected by Astro's `security.checkOrigin` (on by default; keep it on). Astro only trusts
 the `Host` header for hosts listed in `security.allowedDomains`; without it, the request origin falls back to

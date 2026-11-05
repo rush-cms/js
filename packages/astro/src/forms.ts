@@ -15,6 +15,11 @@ type Submission = {
 	captchaToken: string | undefined
 }
 
+type SubmissionBody = {
+	data: FormSubmitData
+	captchaField: unknown
+}
+
 const CAPTCHA_FIELD = 'cf-turnstile-response'
 const FORM_TYPES = ['application/x-www-form-urlencoded', 'multipart/form-data']
 
@@ -45,27 +50,27 @@ async function parse<T>(read: () => Promise<T>): Promise<T> {
 	}
 }
 
-async function readData(request: Request): Promise<[FormSubmitData, unknown]> {
+async function readBody(request: Request): Promise<SubmissionBody> {
 	const type = mediaType(request)
 	if (type === 'application/json') {
 		const body: unknown = await parse(() => request.json())
 		if (!isRecord(body)) {
 			throw badRequest('form body must be a JSON object')
 		}
-		return [body, body[CAPTCHA_FIELD]]
+		return { data: body, captchaField: body[CAPTCHA_FIELD] }
 	}
 	if (FORM_TYPES.includes(type)) {
 		const form = await parse(() => request.formData())
-		return [form, form.get(CAPTCHA_FIELD)]
+		return { data: form, captchaField: form.get(CAPTCHA_FIELD) }
 	}
 	throw badRequest(`unsupported content type "${type}"`)
 }
 
 async function readSubmission(request: Request): Promise<Submission> {
-	const [data, field] = await readData(request)
+	const { data, captchaField } = await readBody(request)
 	return {
 		data,
-		captchaToken: text(field) ?? text(request.headers.get('x-captcha-token'))
+		captchaToken: text(captchaField) ?? text(request.headers.get('x-captcha-token'))
 	}
 }
 
@@ -95,7 +100,7 @@ function errorStatus(err: RushError): number {
 
 function errorJson(err: RushError): Response {
 	return Response.json(
-		{ error: err.message, code: err.code, params: err.params, errors: err.errors },
+		{ code: err.code, params: err.params, errors: err.errors },
 		{ status: errorStatus(err) }
 	)
 }
@@ -108,7 +113,8 @@ function redirectTarget(context: FormContext, key: string, status: FormStatus): 
 	}
 	target.searchParams.set('rush_form', key)
 	target.searchParams.set('status', status)
-	return `${target.pathname}${target.search}`
+	target.hash = ''
+	return target.href
 }
 
 function redirect(context: FormContext, key: string, status: FormStatus): Response {
