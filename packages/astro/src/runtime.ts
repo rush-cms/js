@@ -1,5 +1,5 @@
-import { createClient, toBcp47 } from '@rushcms/client'
-import type { LocaleCode, RushClient } from '@rushcms/client'
+import { createClient, createUrls, toBcp47 } from '@rushcms/client'
+import type { LocaleCode, Perspective, RushClient, RushUrls } from '@rushcms/client'
 import type { APIContext } from 'astro'
 import type { RushSiteConfig } from './config'
 import type { RushApiSettings } from './settings'
@@ -9,11 +9,15 @@ export type RushContext = Pick<APIContext, 'locals' | 'currentLocale' | 'isPrere
 export type RushRuntimeSettings = {
 	api: RushApiSettings
 	config: RushSiteConfig
+	perspective?: Perspective
 }
 
 export type RushRuntime = {
+	readonly previewMode: boolean
+	readonly urls: RushUrls
 	client(context: RushContext): RushClient
 	onDemandClient(): RushClient
+	preview(token: string): RushRuntime
 }
 
 const RUNTIME_KEY = Symbol.for('@rushcms/astro:runtime')
@@ -37,7 +41,8 @@ export function resolveLocale(config: RushSiteConfig, requested: string | undefi
 }
 
 export function createRushRuntime(settings: RushRuntimeSettings): RushRuntime {
-	const { api, config } = settings
+	const { api, config, perspective } = settings
+	const shareable = config.memo && !config.preview
 	const shared = new Map<LocaleCode, RushClient>()
 
 	function create(locale: LocaleCode, memo: boolean): RushClient {
@@ -46,7 +51,8 @@ export function createRushRuntime(settings: RushRuntimeSettings): RushRuntime {
 			locale,
 			memo,
 			routes: config.routes,
-			localePaths: config.localePaths
+			localePaths: config.localePaths,
+			...(perspective === undefined ? {} : { perspective })
 		})
 	}
 
@@ -61,13 +67,15 @@ export function createRushRuntime(settings: RushRuntimeSettings): RushRuntime {
 	}
 
 	return {
+		previewMode: config.preview,
+		urls: createUrls(config),
 		client: (context) => {
 			const locale = resolveLocale(config, context.currentLocale ?? context.params.locale)
-			return config.memo && context.isPrerendered
-				? sharedClient(locale)
-				: create(locale, false)
+			return shareable && context.isPrerendered ? sharedClient(locale) : create(locale, false)
 		},
-		onDemandClient: () => create(resolveLocale(config, undefined), false)
+		onDemandClient: () => create(resolveLocale(config, undefined), false),
+		preview: (token) =>
+			createRushRuntime({ api: { ...api, token }, config, perspective: 'draft' })
 	}
 }
 

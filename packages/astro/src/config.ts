@@ -20,6 +20,7 @@ export type RushSiteConfig = {
 	defaultLocale: LocaleCode
 	seo: Record<string, SeoFieldMap>
 	memo: boolean
+	preview: boolean
 }
 
 export type RushConfigPlugin = Plugin & {

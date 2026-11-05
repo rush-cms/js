@@ -7,7 +7,8 @@ import type {
 	AstroIntegration,
 	AstroIntegrationMiddleware,
 	HookParameters,
-	InjectedRoute
+	InjectedRoute,
+	RouteOptions
 } from 'astro'
 import { CONFIG_PLUGIN_NAME, VIRTUAL_CONFIG_ID } from '../../src/config'
 import type { RushConfigPlugin, RushSiteConfig } from '../../src/config'
@@ -92,6 +93,13 @@ export type StartHook = 'astro:build:start' | 'astro:server:setup'
 
 export async function runStartHook(integration: AstroIntegration, name: StartHook): Promise<void> {
 	await hook(integration, name)({} as HookParameters<StartHook>)
+}
+
+export async function runRouteSetup(
+	integration: AstroIntegration,
+	route: RouteOptions
+): Promise<void> {
+	await hook(integration, 'astro:route:setup')({ route } as HookParameters<'astro:route:setup'>)
 }
 
 export async function loadVirtualConfig(plugin: RushConfigPlugin): Promise<RushSiteConfig> {

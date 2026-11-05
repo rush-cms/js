@@ -7,6 +7,7 @@ export type RushSiteRequest = {
 	api: RushApiSettings
 	options: RushAstroOptions
 	memo: boolean
+	preview: boolean
 }
 
 export function assertLocales(configured: LocaleCode[], served: LocaleCode[]): void {
@@ -47,6 +48,7 @@ export async function loadSiteConfig(request: RushSiteRequest): Promise<RushSite
 		routeKeysById: routeKeysById(routes, lists.flat()),
 		defaultLocale: site.default_locale,
 		seo: options.seo ?? {},
-		memo: request.memo
+		memo: request.memo,
+		preview: request.preview
 	}
 }

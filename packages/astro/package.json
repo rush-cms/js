@@ -19,6 +19,8 @@
 		},
 		"./middleware": "./dist/middleware.js",
 		"./routes/forms": "./dist/routes/forms.js",
+		"./routes/preview": "./dist/routes/preview.js",
+		"./routes/preview-exit": "./dist/routes/preview-exit.js",
 		"./components/*.astro": "./src/components/*.astro"
 	},
 	"files": [

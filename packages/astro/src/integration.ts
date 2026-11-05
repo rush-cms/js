@@ -8,7 +8,19 @@ import { loadSiteConfig } from './site'
 
 const PACKAGE_NAME = '@rushcms/astro'
 
-const FORMS_ROUTE = '/_rush/forms/[key]'
+type RushRoute = {
+	pattern: string
+	entrypoint: string
+}
+
+const SITE_ROUTES: RushRoute[] = [
+	{ pattern: '/_rush/forms/[key]', entrypoint: `${PACKAGE_NAME}/routes/forms` }
+]
+
+const PREVIEW_ROUTES: RushRoute[] = [
+	{ pattern: '/_rush/preview', entrypoint: `${PACKAGE_NAME}/routes/preview` },
+	{ pattern: '/_rush/preview/exit', entrypoint: `${PACKAGE_NAME}/routes/preview-exit` }
+]
 
 type SiteLoader = () => Promise<RushSiteConfig>
 
@@ -21,6 +33,7 @@ function once(load: SiteLoader): SiteLoader {
 }
 
 export function rush(options: RushAstroOptions): AstroIntegration {
+	let preview = false
 	let site: SiteLoader = () =>
 		Promise.reject(new Error(`${PACKAGE_NAME}: astro:config:setup did not run`))
 
@@ -36,11 +49,13 @@ export function rush(options: RushAstroOptions): AstroIntegration {
 			}) => {
 				createUrls(options)
 				const env = await loadRushEnv(config, command)
+				preview = env.RUSH_PREVIEW === 'true'
 				site = once(() =>
 					loadSiteConfig({
 						api: readApiSettings(env),
 						options,
-						memo: command === 'build'
+						memo: command === 'build',
+						preview
 					})
 				)
 				updateConfig({
@@ -52,11 +67,14 @@ export function rush(options: RushAstroOptions): AstroIntegration {
 					}
 				})
 				addMiddleware({ order: 'pre', entrypoint: `${PACKAGE_NAME}/middleware` })
-				injectRoute({
-					pattern: FORMS_ROUTE,
-					entrypoint: `${PACKAGE_NAME}/routes/forms`,
-					prerender: false
-				})
+				for (const route of preview ? [...SITE_ROUTES, ...PREVIEW_ROUTES] : SITE_ROUTES) {
+					injectRoute({ ...route, prerender: false })
+				}
+			},
+			'astro:route:setup': ({ route }) => {
+				if (preview) {
+					route.prerender = false
+				}
 			},
 			'astro:build:start': async () => {
 				await site()

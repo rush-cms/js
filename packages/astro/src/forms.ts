@@ -2,6 +2,7 @@ import { RushError, isRecord, isRushError } from '@rushcms/client'
 import type { FormSubmitData, FormSubmitOptions } from '@rushcms/client'
 import type { APIContext } from 'astro'
 import { runtimeOf } from './runtime'
+import { sameOriginUrl } from './same-origin'
 
 export type FormContext = Pick<
 	APIContext,
@@ -106,9 +107,8 @@ function errorJson(err: RushError): Response {
 }
 
 function redirectTarget(context: FormContext, key: string, status: FormStatus): string {
-	const referer = context.request.headers.get('referer')
-	const target = referer !== null && URL.canParse(referer) ? new URL(referer) : undefined
-	if (target === undefined || target.origin !== context.url.origin) {
+	const target = sameOriginUrl(context.request.headers.get('referer'), context.url)
+	if (target === undefined) {
 		return '/'
 	}
 	target.searchParams.set('rush_form', key)

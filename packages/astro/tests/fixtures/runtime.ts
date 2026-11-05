@@ -10,6 +10,7 @@ export function siteConfig(overrides: Partial<RushSiteConfig> = {}): RushSiteCon
 		defaultLocale: 'en',
 		seo: {},
 		memo: true,
+		preview: false,
 		...overrides
 	}
 }

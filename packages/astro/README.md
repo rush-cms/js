@@ -1,7 +1,7 @@
 # @rushcms/astro
 
 Astro integration for [Rush CMS](https://github.com/rush-cms/rush-cms): environment schema, build-time site check,
-remote image host, a locale-bound API client for pages and an on-demand forms route.
+remote image host, a locale-bound API client for pages, an on-demand forms route and a preview deployment mode.
 
 Requires Astro 7.4 or later and an adapter (`@astrojs/node` in standalone mode is the documented default), because
 the forms route is rendered on demand. Pages stay static unless you opt out.
@@ -85,6 +85,28 @@ the `Host` header for hosts listed in `security.allowedDomains`; without it, the
 `localhost` and real form posts are rejected, so list your production domain. Behind a reverse proxy, Astro reads
 `X-Forwarded-For` (the visitor IP) and `X-Forwarded-Host` only for those domains; without them every visitor shares
 the proxy's IP in the API's rate limits.
+
+## Preview deployment
+
+Deploy the same site a second time with `RUSH_PREVIEW=true` (read when the site is built or the dev server starts)
+and point the CMS preview URL templates at it:
+
+```text
+https://preview.example.com/_rush/preview?token={token}&locale={locale}&collection={collection}&slug={slug}
+https://preview.example.com/_rush/preview?token={token}&locale={locale}
+```
+
+- Every route is rendered on demand and every response carries `X-Robots-Tag: noindex` and `Cache-Control: no-store`.
+- `GET /_rush/preview` checks the link with `GET /site`, looks the entry up to build its URL with the configured
+  `routes` (the homepage without `collection`/`slug`), stores the token in the `rush_preview` cookie (`HttpOnly`,
+  `SameSite=Lax`, `Path=/`, `Secure` except on `localhost`, `127.0.0.1` and `[::1]`, expiring with the link) and
+  answers `303` to that page. Bad parameters answer `400`, a rejected or expired link `401`, a missing entry `404`.
+- With the cookie, `getRush` reads the draft perspective with the link's token; without it, published content.
+- `GET /_rush/preview/exit` clears the cookie and answers `303` to `/`, or to a same-origin `return` path.
+- Outside preview mode both routes do not exist and the cookie is never read. Set `security.allowedDomains` here too:
+  the redirect and the `Secure` flag follow the request origin Astro trusts.
+- The preview link token is a draft-reading credential for one hour; it never reaches the browser's JavaScript.
+  Form posts from a preview session use it and are refused by the API (`preview_cannot_submit`).
 
 ## Rich text and images
 

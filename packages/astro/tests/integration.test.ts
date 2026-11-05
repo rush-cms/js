@@ -4,7 +4,13 @@ import rush from '../src/index'
 import type { RushAstroOptions } from '../src/index'
 import { SITE_PREFIX, envelope, siteExample, startStubApi } from './fixtures/api'
 import type { StubApi } from './fixtures/api'
-import { loadVirtualConfig, projectWithEnv, runSetup, runStartHook } from './fixtures/astro'
+import {
+	loadVirtualConfig,
+	projectWithEnv,
+	runRouteSetup,
+	runSetup,
+	runStartHook
+} from './fixtures/astro'
 import type { ProjectDir } from './fixtures/astro'
 
 const ARTICLES = '01JC3E28JT97KB6CQ643DZVMXX'
@@ -169,7 +175,8 @@ describe('site check at build and dev start', () => {
 			routeKeysById: { [ARTICLES]: 'artigos', [PAGES]: 'pages' },
 			defaultLocale: 'en',
 			seo: { artigos: { description: 'summary' } },
-			memo: true
+			memo: true,
+			preview: false
 		})
 		expect(stub.requests.map((request) => `${request.path}?${request.query}`).sort()).toEqual([
 			`${SITE_PREFIX}/collections?locale=en`,
@@ -187,5 +194,55 @@ describe('site check at build and dev start', () => {
 		const { plugin } = await runSetup(integration, useProject(apiEnv()), 'dev')
 		await runStartHook(integration, 'astro:server:setup')
 		expect((await loadVirtualConfig(plugin)).memo).toBe(false)
+	})
+})
+
+describe('preview deployment mode', () => {
+	const PAGE = 'src/pages/index.astro'
+	const PREVIEW_ROUTE = {
+		pattern: '/_rush/preview',
+		entrypoint: '@rushcms/astro/routes/preview',
+		prerender: false
+	}
+	const EXIT_ROUTE = {
+		pattern: '/_rush/preview/exit',
+		entrypoint: '@rushcms/astro/routes/preview-exit',
+		prerender: false
+	}
+
+	it.each([
+		['true', true, false],
+		['true', false, false],
+		['true', undefined, false],
+		['false', true, true],
+		['false', false, false],
+		['false', undefined, undefined]
+	])(
+		'with RUSH_PREVIEW=%s turns a route with prerender %s into prerender %s',
+		async (flag, prerender, expected) => {
+			const integration = rush(options(ALL_LOCALES))
+			await runSetup(integration, useProject(apiEnv({ RUSH_PREVIEW: flag })))
+			const route = { component: PAGE, ...(prerender === undefined ? {} : { prerender }) }
+			await runRouteSetup(integration, route)
+			expect(route.prerender).toBe(expected)
+		}
+	)
+
+	it('injects the preview routes only in preview mode', async () => {
+		const preview = await runSetup(
+			rush(options(ALL_LOCALES)),
+			useProject(apiEnv({ RUSH_PREVIEW: 'true' }))
+		)
+		expect(preview.routes.slice(1)).toEqual([PREVIEW_ROUTE, EXIT_ROUTE])
+		project?.remove()
+		const production = await runSetup(rush(options(ALL_LOCALES)), useProject(apiEnv()))
+		expect(production.routes.map((route) => route.pattern)).toEqual(['/_rush/forms/[key]'])
+	})
+
+	it('marks the site config of a preview build', async () => {
+		const integration = rush(options(ALL_LOCALES))
+		const { plugin } = await runSetup(integration, useProject(apiEnv({ RUSH_PREVIEW: 'true' })))
+		await runStartHook(integration, 'astro:build:start')
+		expect((await loadVirtualConfig(plugin)).preview).toBe(true)
 	})
 })
