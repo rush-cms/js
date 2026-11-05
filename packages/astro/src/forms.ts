@@ -1,11 +1,11 @@
 import { RushError, isRecord, isRushError } from '@rushcms/client'
 import type { FormSubmitData, FormSubmitOptions } from '@rushcms/client'
 import type { APIContext } from 'astro'
-import { getRush } from './get-rush'
+import { runtimeOf } from './runtime'
 
 export type FormContext = Pick<
 	APIContext,
-	'request' | 'params' | 'url' | 'clientAddress' | 'locals' | 'currentLocale' | 'isPrerendered'
+	'request' | 'params' | 'url' | 'clientAddress' | 'locals'
 >
 
 export type FormStatus = 'sent' | 'error'
@@ -129,11 +129,9 @@ export async function submitForm(context: FormContext): Promise<Response> {
 	const json = wantsJson(context.request)
 	try {
 		const submission = await readSubmission(context.request)
-		const result = await getRush(context).forms.submit(
-			key,
-			submission.data,
-			submitOptions(context, submission.captchaToken)
-		)
+		const result = await runtimeOf(context.locals)
+			.onDemandClient()
+			.forms.submit(key, submission.data, submitOptions(context, submission.captchaToken))
 		return json
 			? Response.json({ data: result }, { status: 201 })
 			: redirect(context, key, 'sent')

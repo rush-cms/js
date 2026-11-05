@@ -64,6 +64,11 @@ code. A value that matches no entry throws; without either, the locale with the 
 default locale.
 Static builds share one memoized client per locale; on-demand requests and `astro dev` never memoize.
 
+With Astro `i18n`, every route gets a `currentLocale`, and routes outside a locale segment get Astro's
+`defaultLocale`. Each Astro locale must therefore match a `localePaths` prefix or code: with
+`localePaths: { pt_BR: '', en: 'en' }`, declare `locales: [{ path: 'pt', codes: ['pt-BR'] }, 'en']` (or use `pt_BR` /
+`pt-BR` as the code), not a bare `pt`. The forms route does not depend on the page locale.
+
 ## Forms
 
 `POST /_rush/forms/[key]` accepts `application/x-www-form-urlencoded`, `multipart/form-data` (forwarded as is, files

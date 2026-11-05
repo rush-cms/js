@@ -15,6 +15,8 @@ type PostOptions = {
 	api?: RushApiSettings
 }
 
+type PageFormContext = FormContext & Pick<APIContext, 'currentLocale' | 'isPrerendered'>
+
 const ORIGIN = 'https://site.example'
 const VISITOR_IP = '203.0.113.7'
 const SUBMIT_PATH = `${SITE_PREFIX}/forms/contact/submit`
@@ -43,9 +45,7 @@ function formContext(options: PostOptions): FormContext {
 			}
 			return clientAddress
 		},
-		locals: rushLocals(options.api ?? stub.api),
-		currentLocale: undefined,
-		isPrerendered: false
+		locals: rushLocals(options.api ?? stub.api)
 	}
 }
 
@@ -93,6 +93,29 @@ describe('POST /_rush/forms/[key]', () => {
 		expect(response.status).toBe(303)
 		expect(submitted().headers.get('x-rush-client-ip')).toBe(VISITOR_IP)
 	})
+
+	it.each([
+		['an HTML post', {}, 303],
+		['a fetch call', { Accept: 'application/json' }, 201]
+	])(
+		'ignores a page locale missing from localePaths for %s',
+		async (_, accept: Record<string, string>, status) => {
+			const options = urlencoded('name=Ana')
+			const context: PageFormContext = {
+				...formContext({
+					...options,
+					headers: { ...options.headers, ...accept },
+					clientAddress: VISITOR_IP
+				}),
+				params: { key: 'contact', locale: 'xx' },
+				currentLocale: 'xx',
+				isPrerendered: false
+			}
+			const response = await POST(context as APIContext)
+			expect(response.status).toBe(status)
+			expect(submitted().path).toBe(SUBMIT_PATH)
+		}
+	)
 
 	it('forwards urlencoded fields, the visitor IP and the turnstile field token', async () => {
 		const response = await post(

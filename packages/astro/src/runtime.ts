@@ -13,6 +13,7 @@ export type RushRuntimeSettings = {
 
 export type RushRuntime = {
 	client(context: RushContext): RushClient
+	onDemandClient(): RushClient
 }
 
 const RUNTIME_KEY = Symbol.for('@rushcms/astro:runtime')
@@ -65,7 +66,8 @@ export function createRushRuntime(settings: RushRuntimeSettings): RushRuntime {
 			return config.memo && context.isPrerendered
 				? sharedClient(locale)
 				: create(locale, false)
-		}
+		},
+		onDemandClient: () => create(resolveLocale(config, undefined), false)
 	}
 }
 
@@ -84,5 +86,5 @@ export function runtimeOf(locals: object): RushRuntime {
 }
 
 function isRuntime(value: unknown): value is RushRuntime {
-	return typeof value === 'object' && value !== null && 'client' in value
+	return typeof value === 'object' && value !== null && 'onDemandClient' in value
 }
