@@ -9,7 +9,11 @@ const TARGET = resolve(import.meta.dirname, '../openapi/public.json')
 const { values } = parseArgs({ options: { from: { type: 'string', default: DEFAULT_SOURCE } } })
 
 const source = resolve(process.cwd(), values.from ?? DEFAULT_SOURCE)
-const document: unknown = parse(await readFile(source, 'utf8'))
+const text = await readFile(source, 'utf8').catch(() => {
+	console.error(`contract not found at ${source}; pass its location with --from <path>`)
+	process.exit(1)
+})
+const document: unknown = parse(text)
 
 await writeFile(TARGET, JSON.stringify(document, null, '\t') + '\n')
 console.log(`synced ${source} -> ${TARGET}`)

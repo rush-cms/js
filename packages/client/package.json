@@ -1,6 +1,6 @@
 {
 	"name": "@rushcms/client",
-	"version": "3.0.0",
+	"version": "2.1.0",
 	"description": "Typed client for the Rush CMS public API.",
 	"type": "module",
 	"license": "MIT",

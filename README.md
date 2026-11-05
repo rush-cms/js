@@ -39,6 +39,10 @@ provenance, no npm token). The release workflow stays inert until the owner conf
 each package (`@rushcms/client`, `@rushcms/astro`) pointing to the `release.yml` workflow of this repository. Until
 then, the workflow only opens or updates the version pull request.
 
+No push publishes anything without a changeset. `@rushcms/client` is versioned at `2.1.0`, the last published release, so
+its first changeset (a major) bumps it to `3.0.0`. `@rushcms/astro` is versioned at `0.0.0`, which the owner publishes by
+hand before enabling trusted publishing; its first changeset bumps it to `0.1.0`.
+
 ## License
 
 MIT
