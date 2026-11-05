@@ -26,8 +26,8 @@ jobs:
             - run: bun install --frozen-lockfile
             - uses: changesets/action@v2
               with:
-                  publish: bun run release
-                  version: bunx changeset version
+                  publish-script: bun run release
+                  version-script: bunx changeset version
               env:
                   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
                   NPM_CONFIG_PROVENANCE: 'true'
