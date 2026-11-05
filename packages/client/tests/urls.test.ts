@@ -158,3 +158,40 @@ describe('collection pages and id route keys', () => {
 		expect(urls.collection({ id, slug: 'blog' }, 'en')).toBe('/en/blog')
 	})
 })
+
+describe('hardening', () => {
+	it('falls through when the id key has no route', () => {
+		const entry = exampleEntry()
+		const urls = urlsFor({
+			routes: { blog: '/{locale}/posts/{slug}' },
+			routeKeysById: { [entry.collection.id]: 'missing' }
+		})
+		expect(urls.entry(entry)).toBe('/pt/posts/ola-mundo')
+	})
+
+	it('throws at creation when {slug} is not the last segment', () => {
+		expect(() => urlsFor({ routes: { blog: '/{slug}/{locale}' } })).toThrow(/"blog".*last/)
+		expect(() => urlsFor({ routes: { blog: '/{locale}/x-{slug}' } })).toThrow(/"blog"/)
+	})
+
+	it('ignores inherited keys such as constructor', () => {
+		const urls = urlsFor({ routes: { blog: '/{locale}/posts/{slug}' } })
+		expect(urls.collection({ id: 'constructor', slug: 'constructor' }, 'en')).toBe(
+			'/en/constructor'
+		)
+		expect(urls.collection({ id: 'c', slug: 'toString' }, 'en')).toBe('/en/toString')
+		expect(() => urls.homepage('constructor')).toThrow(/"constructor"/)
+	})
+
+	it('never alters slug content', () => {
+		const entry = exampleEntry()
+		const edited: Entry = {
+			...entry,
+			translations: {
+				...entry.translations,
+				pt_BR: { slug: 'a//b/', collection_slug: 'artigos' }
+			}
+		}
+		expect(urlsFor().entry(edited)).toBe('/pt/artigos/a//b/')
+	})
+})

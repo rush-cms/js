@@ -3,7 +3,7 @@ export type { Paginated } from './contract'
 export { createClient } from './create-client'
 export { toBcp47 } from './locales'
 export { alternates, createUrls } from './urls'
-export type { Alternate, RushUrls, UrlConfig } from './urls'
+export type { Alternate, CollectionRef, RushUrls, UrlConfig } from './urls'
 export { RushError, isRushError } from './errors'
 export type {
 	ClientErrorCode,
