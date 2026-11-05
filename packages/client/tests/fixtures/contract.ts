@@ -1,10 +1,11 @@
 import { readFileSync } from 'node:fs'
+import { isRecord } from '../../src/json'
 
 type MediaExample = {
 	example?: unknown
 }
 
-type ContractResponse = {
+type ContractContent = {
 	content?: Record<string, MediaExample>
 }
 
@@ -12,8 +13,15 @@ type ResponseRef = {
 	$ref?: string
 }
 
+type ParameterRef = {
+	$ref?: string
+	name?: string
+}
+
 type ContractOperation = {
-	requestBody?: ContractResponse
+	operationId?: string
+	parameters?: ParameterRef[]
+	requestBody?: ContractContent
 	responses?: Record<string, ResponseRef>
 }
 
@@ -22,11 +30,12 @@ type ContractSchema = {
 }
 
 type ContractParameter = {
+	name?: string
 	example?: unknown
 }
 
 type ContractComponents = {
-	responses: Record<string, ContractResponse>
+	responses: Record<string, ContractContent>
 	schemas: Record<string, ContractSchema>
 	parameters: Record<string, ContractParameter>
 }
@@ -34,6 +43,12 @@ type ContractComponents = {
 type ContractDocument = {
 	paths: Record<string, Record<string, ContractOperation>>
 	components: ContractComponents
+}
+
+export type OperationFixture = {
+	path: string
+	parameters: string[]
+	okExample: unknown
 }
 
 export type ErrorExample = {
@@ -53,7 +68,7 @@ function required<T>(value: T | undefined, what: string): T {
 	return value
 }
 
-function jsonExample(media: ContractResponse | undefined, what: string): unknown {
+function jsonExample(media: ContractContent | undefined, what: string): unknown {
 	return required(media?.content?.['application/json']?.example, `example for ${what}`)
 }
 
@@ -74,15 +89,47 @@ export function parameterExample(name: string): string {
 	return String(required(contract.components.parameters[name]?.example, `parameter ${name}`))
 }
 
+function refName(ref: string | undefined): string | undefined {
+	return ref?.split('/').pop()
+}
+
+function parameterName(parameter: ParameterRef): string {
+	const name =
+		parameter.name ?? contract.components.parameters[refName(parameter.$ref) ?? '']?.name
+	return required(name, `name of parameter ${parameter.$ref ?? ''}`)
+}
+
+type OperationEntry = {
+	path: string
+	operation: ContractOperation
+}
+
+function operationEntries(): OperationEntry[] {
+	return Object.entries(contract.paths).flatMap(([path, item]) =>
+		Object.values(item).map((operation) => ({ path, operation }))
+	)
+}
+
+export function operationFixture(operationId: string): OperationFixture {
+	const { path, operation } = required(
+		operationEntries().find((entry) => entry.operation.operationId === operationId),
+		`operation ${operationId}`
+	)
+	const ok = required(refName(operation.responses?.['200']?.$ref), `200 of ${operationId}`)
+	return {
+		path,
+		parameters: (operation.parameters ?? []).map(parameterName),
+		okExample: responseExample(ok)
+	}
+}
+
 function statusesByResponse(): Map<string, number> {
 	const statuses = new Map<string, number>()
-	for (const item of Object.values(contract.paths)) {
-		for (const operation of Object.values(item)) {
-			for (const [status, ref] of Object.entries(operation.responses ?? {})) {
-				const name = ref.$ref?.split('/').pop()
-				if (name !== undefined && !statuses.has(name)) {
-					statuses.set(name, Number(status))
-				}
+	for (const { operation } of operationEntries()) {
+		for (const [status, ref] of Object.entries(operation.responses ?? {})) {
+			const name = refName(ref.$ref)
+			if (name !== undefined && !statuses.has(name)) {
+				statuses.set(name, Number(status))
 			}
 		}
 	}
@@ -90,7 +137,7 @@ function statusesByResponse(): Map<string, number> {
 }
 
 function isErrorBody(value: unknown): value is Record<string, unknown> {
-	return typeof value === 'object' && value !== null && 'code' in value && 'error' in value
+	return isRecord(value) && 'code' in value && 'error' in value
 }
 
 export function errorExamples(): ErrorExample[] {

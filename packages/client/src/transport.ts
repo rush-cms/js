@@ -1,7 +1,7 @@
 import { createRequestReuse } from './dedupe'
 import { clientError, errorFromBody } from './errors'
 import { isRecord } from './json'
-import type { RushClientConfig, RushFetch } from './types'
+import type { EtagRecord, RushClientConfig, RushFetch } from './types'
 
 export type QueryValue = string | number | boolean | undefined
 
@@ -9,8 +9,10 @@ export type QueryParams = Readonly<Record<string, QueryValue>>
 
 export type RequestHeaders = Record<string, string>
 
+export type EnvelopeShape = 'data' | 'page'
+
 export type Transport = {
-	get(segments: readonly string[], query: QueryParams): Promise<unknown>
+	get(segments: readonly string[], query: QueryParams, shape: EnvelopeShape): Promise<unknown>
 	post(segments: readonly string[], body: BodyInit, headers: RequestHeaders): Promise<unknown>
 }
 
@@ -58,13 +60,31 @@ async function readJson(response: Response): Promise<unknown> {
 	}
 }
 
-async function settle(response: Response): Promise<unknown> {
+function isEnvelope(body: unknown, shape: EnvelopeShape): boolean {
+	if (!isRecord(body) || !('data' in body)) {
+		return false
+	}
+	return shape === 'data' || (Array.isArray(body.data) && isRecord(body.meta))
+}
+
+function isUsableRecord(
+	record: EtagRecord | undefined,
+	shape: EnvelopeShape
+): record is EtagRecord {
+	return isRecord(record) && typeof record.etag === 'string' && isEnvelope(record.body, shape)
+}
+
+async function settle(response: Response, shape: EnvelopeShape): Promise<unknown> {
 	const body = await readJson(response)
 	if (!response.ok) {
 		throw errorFromBody(response.status, body)
 	}
-	if (!isRecord(body) || !('data' in body)) {
-		throw clientError(response.status, 'invalid_response', 'response is not a data envelope')
+	if (!isEnvelope(body, shape)) {
+		throw clientError(
+			response.status,
+			'invalid_response',
+			`response is not a ${shape} envelope`
+		)
 	}
 	return body
 }
@@ -92,14 +112,15 @@ export function createTransport(config: RushClientConfig): Transport {
 		}
 	}
 
-	async function revalidate(url: string, key: string): Promise<unknown> {
-		const cached = store ? await store.get(key) : undefined
+	async function revalidate(url: string, key: string, shape: EnvelopeShape): Promise<unknown> {
+		const stored = store ? await store.get(key) : undefined
+		const cached = isUsableRecord(stored, shape) ? stored : undefined
 		const conditional: RequestHeaders = cached ? { 'If-None-Match': cached.etag } : {}
 		const response = await exchange(url, { method: 'GET', headers: headersOf(conditional) })
 		if (response.status === 304 && cached) {
 			return cached.body
 		}
-		const body = await settle(response)
+		const body = await settle(response, shape)
 		const etag = response.headers.get('ETag')
 		if (store && etag) {
 			await store.set(key, { etag, body })
@@ -108,15 +129,16 @@ export function createTransport(config: RushClientConfig): Transport {
 	}
 
 	return {
-		get(segments, query) {
+		get(segments, query, shape) {
 			const url = urlOf(segments, query)
 			const key = ['GET', url, String(query.perspective ?? ''), identity].join(' ')
-			return reuse.run(key, () => revalidate(url, key))
+			return reuse.run(key, () => revalidate(url, key, shape))
 		},
 		async post(segments, body, headers) {
 			const url = urlOf(segments, {})
 			return settle(
-				await exchange(url, { method: 'POST', headers: headersOf(headers), body })
+				await exchange(url, { method: 'POST', headers: headersOf(headers), body }),
+				'data'
 			)
 		}
 	}

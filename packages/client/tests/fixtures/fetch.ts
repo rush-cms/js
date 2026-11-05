@@ -19,7 +19,8 @@ export type Deferred<T> = {
 	resolve(value: T): void
 }
 
-export type TestClientOptions = Omit<RushClientConfig, 'url' | 'siteId' | 'token' | 'fetch'>
+export type TestClientOptions = Omit<RushClientConfig, 'url' | 'siteId' | 'token' | 'fetch'> &
+	Partial<Pick<RushClientConfig, 'token'>>
 
 export const API_URL = 'https://cms.example.com'
 export const TOKEN = 'delivery-token'
@@ -52,7 +53,7 @@ export function testClient(handler: FetchHandler, options: TestClientOptions = {
 		return handler(call)
 	}
 	return {
-		client: createClient({ ...options, url: API_URL, siteId: SITE_ID, token: TOKEN, fetch }),
+		client: createClient({ token: TOKEN, ...options, url: API_URL, siteId: SITE_ID, fetch }),
 		calls
 	}
 }

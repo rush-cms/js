@@ -1,10 +1,12 @@
-import type { DataOf, Envelope, OperationId, PageBody, PageOf } from '../contract'
-import { clientError } from '../errors'
-import { isRecord } from '../json'
+import type { DataOf, Envelope, OperationId, PageBody, PageOf, QueryOf } from '../contract'
 import type { QueryParams, RequestHeaders, Transport } from '../transport'
 import type { RushClientConfig } from '../types'
 
 export type LocaleScope = 'localized' | 'unlocalized'
+
+export type LocaleScopeOf<O extends OperationId> = 'locale' extends keyof QueryOf<O>
+	? 'localized'
+	: 'unlocalized'
 
 export type RequestDefaults = Pick<RushClientConfig, 'locale' | 'perspective'>
 
@@ -12,12 +14,12 @@ export type ResourceContext = {
 	data<O extends OperationId>(
 		segments: readonly string[],
 		options: QueryParams | undefined,
-		scope: LocaleScope
+		scope: LocaleScopeOf<O>
 	): Promise<DataOf<O>>
 	page<O extends OperationId>(
 		segments: readonly string[],
 		options: QueryParams | undefined,
-		scope: LocaleScope
+		scope: LocaleScopeOf<O>
 	): Promise<PageOf<O>>
 	send<O extends OperationId>(
 		segments: readonly string[],
@@ -43,22 +45,20 @@ export function createContext(transport: Transport, defaults: RequestDefaults): 
 		async data<O extends OperationId>(
 			segments: readonly string[],
 			options: QueryParams | undefined,
-			scope: LocaleScope
+			scope: LocaleScopeOf<O>
 		) {
-			return unwrap<DataOf<O>>(await transport.get(segments, resolve(options, scope)))
+			return unwrap<DataOf<O>>(await transport.get(segments, resolve(options, scope), 'data'))
 		},
 		async page<O extends OperationId>(
 			segments: readonly string[],
 			options: QueryParams | undefined,
-			scope: LocaleScope
+			scope: LocaleScopeOf<O>
 		) {
 			const body = (await transport.get(
 				segments,
-				resolve(options, scope)
+				resolve(options, scope),
+				'page'
 			)) as PageBody<unknown>
-			if (!Array.isArray(body.data) || !isRecord(body.meta)) {
-				throw clientError(200, 'invalid_response', 'response is not a paginated envelope')
-			}
 			return { items: body.data, meta: body.meta } as PageOf<O>
 		},
 		async send<O extends OperationId>(

@@ -98,12 +98,13 @@ describe('errors', () => {
 		expect(error).toMatchObject({ status, params: {}, errors: [] })
 	})
 
-	it('maps a paginated call without meta to invalid_response', async () => {
-		const { client } = testClient(() => jsonResponse({ data: [] }))
+	it('maps a paginated call without meta to invalid_response with the real status', async () => {
+		const { client } = testClient(() => jsonResponse({ data: [] }, 203))
 
 		const error = await rejection(client.entries.list('blog'))
 
 		expect(isRushError(error, 'invalid_response')).toBe(true)
+		expect(error).toMatchObject({ status: 203 })
 	})
 
 	it('recognises any RushError without a code', () => {

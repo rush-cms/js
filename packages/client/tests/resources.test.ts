@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { RushClient } from '../src/index'
-import { responseExample } from './fixtures/contract'
+import { isRecord } from '../src/json'
+import { operationFixture, responseExample } from './fixtures/contract'
 import {
 	API_URL,
 	SITE_ID,
@@ -15,131 +16,118 @@ type ResourceCase = {
 	name: string
 	call: (client: RushClient) => Promise<unknown>
 	path: string
-	example: string
-	localized: boolean
-	paginated: boolean
+	operation: string
 }
 
 function resource(
 	name: string,
 	call: ResourceCase['call'],
 	path: string,
-	example: string,
-	localized = true,
-	paginated = false
+	operation: string
 ): ResourceCase {
-	return { name, call, path, example, localized, paginated }
+	return { name, call, path, operation }
 }
 
 const cases: ResourceCase[] = [
-	resource('site.get', (c) => c.site.get(), '/site', 'SiteOk', false),
-	resource('homepage.get', (c) => c.homepage.get(), '/homepage', 'HomepageOk'),
-	resource('collections.list', (c) => c.collections.list(), '/collections', 'CollectionListOk'),
+	resource('site.get', (c) => c.site.get(), '/site', 'getSite'),
+	resource('homepage.get', (c) => c.homepage.get(), '/homepage', 'getHomepage'),
+	resource('collections.list', (c) => c.collections.list(), '/collections', 'listCollections'),
 	resource(
 		'collections.get',
 		(c) => c.collections.get('blog'),
 		'/collections/blog',
-		'CollectionOk'
+		'getCollection'
 	),
 	resource(
 		'entries.list',
 		(c) => c.entries.list('blog', { page: 2 }),
 		'/collections/blog/entries',
-		'EntryPageOk',
-		true,
-		true
+		'listEntries'
 	),
 	resource(
 		'entries.get',
 		(c) => c.entries.get('blog', 'ola-mundo'),
 		'/collections/blog/entries/ola-mundo',
-		'EntryOk'
+		'getEntry'
 	),
 	resource(
 		'entries.search',
 		(c) => c.entries.search('blog', 'hello world'),
 		'/collections/blog/search',
-		'EntryPageOk',
-		true,
-		true
+		'searchEntries'
 	),
-	resource('tags.list', (c) => c.tags.list({ type: 'category' }), '/tags', 'TagListOk'),
-	resource(
-		'tags.entries',
-		(c) => c.tags.entries('news'),
-		'/tags/news/entries',
-		'EntryPageOk',
-		true,
-		true
-	),
-	resource('navigations.list', (c) => c.navigations.list(), '/navigations', 'NavigationListOk'),
+	resource('tags.list', (c) => c.tags.list({ type: 'category' }), '/tags', 'listTags'),
+	resource('tags.entries', (c) => c.tags.entries('news'), '/tags/news/entries', 'listTagEntries'),
+	resource('navigations.list', (c) => c.navigations.list(), '/navigations', 'listNavigations'),
 	resource(
 		'navigations.get',
 		(c) => c.navigations.get('main'),
 		'/navigations/main',
-		'NavigationOk'
+		'getNavigation'
 	),
 	resource(
 		'siteOptions.list',
 		(c) => c.siteOptions.list(),
 		'/site-options',
-		'SiteOptionGroupListOk'
+		'listSiteOptionGroups'
 	),
 	resource(
 		'siteOptions.get',
 		(c) => c.siteOptions.get('branding'),
 		'/site-options/branding',
-		'SiteOptionGroupOk'
+		'getSiteOptionGroup'
 	),
-	resource('blocks.list', (c) => c.blocks.list(), '/blocks', 'BlockListOk', false),
+	resource('blocks.list', (c) => c.blocks.list(), '/blocks', 'listBlocks'),
 	resource(
 		'blocks.get',
 		(c) => c.blocks.get('call-to-action'),
 		'/blocks/call-to-action',
-		'BlockOk',
-		false
+		'getBlock'
 	),
-	resource('databases.list', (c) => c.databases.list(), '/databases', 'DatabaseListOk'),
+	resource('databases.list', (c) => c.databases.list(), '/databases', 'listDatabases'),
 	resource(
 		'databases.get',
 		(c) => c.databases.get('servicos'),
 		'/databases/servicos',
-		'DatabaseOk'
+		'getDatabase'
 	),
-	resource('linkPages.list', (c) => c.linkPages.list(), '/link-pages', 'LinkPageListOk', false),
-	resource(
-		'linkPages.get',
-		(c) => c.linkPages.get('links'),
-		'/link-pages/links',
-		'LinkPageOk',
-		false
-	),
-	resource('forms.list', (c) => c.forms.list(), '/forms', 'FormListOk'),
-	resource('forms.get', (c) => c.forms.get('contact'), '/forms/contact', 'FormOk')
+	resource('linkPages.list', (c) => c.linkPages.list(), '/link-pages', 'listLinkPages'),
+	resource('linkPages.get', (c) => c.linkPages.get('links'), '/link-pages/links', 'getLinkPage'),
+	resource('forms.list', (c) => c.forms.list(), '/forms', 'listForms'),
+	resource('forms.get', (c) => c.forms.get('contact'), '/forms/contact', 'getForm')
 ]
 
-function expectedResult(example: unknown, paginated: boolean): unknown {
-	const body = example as Record<string, unknown>
-	return paginated ? { items: body.data, meta: body.meta } : body.data
+function expectedResult(example: unknown): unknown {
+	if (!isRecord(example)) {
+		throw new Error('example is not an envelope')
+	}
+	return 'meta' in example ? { items: example.data, meta: example.meta } : example.data
+}
+
+function templatePattern(path: string): RegExp {
+	return new RegExp(`^${path.replace(/\{[^}]+\}/g, '[^/]+')}$`)
 }
 
 describe('resources', () => {
-	it.each(cases)('$name requests its path and unwraps the envelope', async (item) => {
-		const example = responseExample(item.example)
-		const { client, calls } = testClient(() => jsonResponse(example), {
+	it.each(cases)('$name requests its operation and unwraps the envelope', async (item) => {
+		const operation = operationFixture(item.operation)
+		const { client, calls } = testClient(() => jsonResponse(operation.okExample), {
 			locale: 'pt_BR',
 			perspective: 'published'
 		})
 
 		const result = await item.call(client)
 
-		expect(result).toEqual(expectedResult(example, item.paginated))
+		expect(result).toEqual(expectedResult(operation.okExample))
 		expect(calls).toHaveLength(1)
 		const [call] = calls
 		expect(call?.init.method).toBe('GET')
 		expect(call && apiPath(call)).toBe(item.path)
+		expect(call?.url.pathname).toMatch(templatePattern(operation.path))
 		expect(call?.url.searchParams.get('perspective')).toBe('published')
-		expect(call?.url.searchParams.get('locale')).toBe(item.localized ? 'pt_BR' : null)
+		expect(call?.url.searchParams.get('locale')).toBe(
+			operation.parameters.includes('locale') ? 'pt_BR' : null
+		)
 	})
 
 	it('sends the bearer token to the site path of the configured url', async () => {

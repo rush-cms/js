@@ -51,6 +51,7 @@ export type RushClientConfig = {
 
 export type RequestOptions = QueryOf<'getEntry'>
 export type PerspectiveOptions = QueryOf<'getSite'>
+export type HomepageOptions = QueryOf<'getHomepage'>
 export type EntryListOptions = QueryOf<'listEntries'>
 export type EntrySearchOptions = Omit<QueryOf<'searchEntries'>, 'q'>
 export type EntryWalkOptions = Omit<EntryListOptions, 'page' | 'per_page'>
@@ -74,7 +75,7 @@ export type SiteResource = {
 }
 
 export type HomepageResource = {
-	get(options?: RequestOptions): Promise<Homepage>
+	get(options?: HomepageOptions): Promise<Homepage>
 }
 
 export type EntriesResource = {

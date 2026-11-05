@@ -30,6 +30,7 @@ export type {
 	FormSubmitResult,
 	FormsResource,
 	Homepage,
+	HomepageOptions,
 	HomepageResource,
 	LinkPage,
 	LocaleCode,
