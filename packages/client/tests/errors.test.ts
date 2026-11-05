@@ -1,10 +1,10 @@
 import { describe, expect, expectTypeOf, it } from 'vitest'
 import { RushError, isRushError } from '../src/index'
 import type { FieldError, RushErrorCode, components } from '../src/index'
-
-type ContractErrorCode = components['schemas']['ErrorCode']
 import { errorCodes, errorExamples, responseExample } from './fixtures/contract'
 import { jsonResponse, rejection, testClient } from './fixtures/fetch'
+
+type ContractErrorCode = components['schemas']['ErrorCode']
 
 function failingWith(body: unknown, status: number): Promise<unknown> {
 	const { client } = testClient(() => jsonResponse(body, status))

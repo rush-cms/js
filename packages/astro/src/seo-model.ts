@@ -83,6 +83,12 @@ function entryImage(entry: Entry, field: string | undefined): SeoImage | undefin
 	return url === undefined ? undefined : describedImage(mediaByUrl(entry, url), url)
 }
 
+function ogAlternateLocales(source: Entry | Homepage): string[] {
+	return translatedLocales(source)
+		.filter((locale) => locale !== source.locale)
+		.map(toBcp47)
+}
+
 function withText(tags: SeoTags, title: string | undefined, description: string | undefined) {
 	if (title !== undefined) {
 		tags.title = title
@@ -106,9 +112,7 @@ export function entrySeo(entry: Entry, settings: SeoSettings): SeoTags {
 		type: 'article',
 		canonical: absoluteUrl(urls.entry(entry), site),
 		locale: toBcp47(entry.locale),
-		alternateLocales: Object.keys(entry.translations)
-			.filter((locale) => locale !== entry.locale)
-			.map(toBcp47),
+		alternateLocales: ogAlternateLocales(entry),
 		links: absoluteLinks(hreflangLinks(entry, urls, settings.defaultLocale), site)
 	}
 	withText(
@@ -126,9 +130,7 @@ export function homepageSeo(homepage: Homepage, settings: SeoSettings): SeoTags 
 		type: 'website',
 		canonical: absoluteUrl(urls.homepage(homepage.locale), site),
 		locale: toBcp47(homepage.locale),
-		alternateLocales: translatedLocales(homepage)
-			.filter((locale) => locale !== homepage.locale)
-			.map(toBcp47),
+		alternateLocales: ogAlternateLocales(homepage),
 		links: absoluteLinks(hreflangLinks(homepage, urls, settings.defaultLocale), site)
 	}
 	withText(tags, filled(meta?.title), filled(meta?.description))
