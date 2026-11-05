@@ -95,19 +95,33 @@ function problemsOf(
 	})
 }
 
+function exportProblems(manifest: PackageManifest, files: Set<string>): string[] {
+	return Object.entries(manifest.exports ?? {})
+		.filter(([key]) => !key.includes('*'))
+		.flatMap(([key, target]) =>
+			targetsOf(target, '')
+				.filter((path) => !files.has(path))
+				.map(
+					(path) =>
+						`${manifest.name}: export "${key}" target ${path} is not in the tarball`
+				)
+		)
+}
+
 function checkPackage(dir: string): string[] {
 	const manifest = manifestOf(dir)
 	if (manifest.private === true) {
 		return []
 	}
 	const files = packedFiles(dir)
-	return [...files]
+	const referenced = [...files]
 		.filter((file) => CHECKED.test(file) && existsSync(join(dir, file)))
 		.flatMap((file) =>
 			problemsOf(manifest, dir, file, files).map(
 				(problem) => `${manifest.name}: ${file}: ${problem}`
 			)
 		)
+	return [...exportProblems(manifest, files), ...referenced]
 }
 
 const dirs = readdirSync(PACKAGES_DIR).map((name) => join(PACKAGES_DIR, name))

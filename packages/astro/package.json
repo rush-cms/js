@@ -17,7 +17,10 @@
 			"types": "./dist/index.d.ts",
 			"import": "./dist/index.js"
 		},
-		"./middleware": "./dist/middleware.js",
+		"./middleware": {
+			"types": "./dist/middleware.d.ts",
+			"import": "./dist/middleware.js"
+		},
 		"./components-runtime": {
 			"types": "./dist/components-runtime.d.ts",
 			"import": "./dist/components-runtime.js"
@@ -26,9 +29,18 @@
 			"types": "./dist/form-enhance.d.ts",
 			"import": "./dist/form-enhance.js"
 		},
-		"./routes/forms": "./dist/routes/forms.js",
-		"./routes/preview": "./dist/routes/preview.js",
-		"./routes/preview-exit": "./dist/routes/preview-exit.js",
+		"./routes/forms": {
+			"types": "./dist/routes/forms.d.ts",
+			"import": "./dist/routes/forms.js"
+		},
+		"./routes/preview": {
+			"types": "./dist/routes/preview.d.ts",
+			"import": "./dist/routes/preview.js"
+		},
+		"./routes/preview-exit": {
+			"types": "./dist/routes/preview-exit.d.ts",
+			"import": "./dist/routes/preview-exit.js"
+		},
 		"./components/*.astro": "./src/components/*.astro"
 	},
 	"files": [

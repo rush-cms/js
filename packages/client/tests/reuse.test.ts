@@ -12,9 +12,10 @@ function memoryEtagStore(): MemoryEtagStore {
 	const records = new Map<string, EtagRecord>()
 	return {
 		records,
-		get: async (key) => records.get(key),
-		set: async (key, value) => {
+		get: (key) => Promise.resolve(records.get(key)),
+		set: (key, value) => {
 			records.set(key, value)
+			return Promise.resolve()
 		}
 	}
 }

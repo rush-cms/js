@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi, type Mock } from 'vitest'
 import { enhanceForms, sendForm, submitForm } from '../src/form-enhance'
 import type { FetchFunction } from '../src/form-enhance'
 
@@ -54,8 +54,8 @@ function valueOf(form: HTMLFormElement, name: string): string {
 	return controlOf(form, name).value
 }
 
-function replying(response: Response): FetchFunction & ReturnType<typeof vi.fn> {
-	return vi.fn(async () => response)
+function replying(response: Response): Mock<FetchFunction> {
+	return vi.fn<FetchFunction>(() => Promise.resolve(response))
 }
 
 function deferred(): Deferred {
@@ -167,9 +167,7 @@ describe('sendForm', () => {
 		const form = mount()
 		await sendForm(form, replying(new Response('<html>', { status: 502 })))
 		expect(text('[data-rush-status]')).toBe('Something went wrong')
-		const broken = vi.fn(async () => {
-			throw new TypeError('offline')
-		})
+		const broken = vi.fn(() => Promise.reject(new TypeError('offline')))
 		await sendForm(form, broken)
 		expect(text('[data-rush-status]')).toBe('Something went wrong')
 	})

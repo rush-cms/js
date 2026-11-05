@@ -1,10 +1,7 @@
 {
 	"extends": "./tsconfig.json",
 	"compilerOptions": {
-		"paths": {
-			"@rushcms/astro/components-runtime": ["./src/components-runtime.ts"],
-			"@rushcms/astro/form-enhance": ["./src/form-enhance.ts"]
-		}
+		"paths": null
 	},
 	"include": ["src"]
 }

@@ -24,6 +24,8 @@ bun run ci
 
 Everything that ships is linted, typechecked and built with TypeScript 7. Two devDependencies still alias `typescript` to `@typescript/typescript6`: `scripts/package.json`, because `openapi-typescript` needs the TypeScript JavaScript API that TypeScript 7 only gets in 7.1, and `packages/astro`, because `astro check` refuses TypeScript 7. Remove each alias once TypeScript 7.1 ships that API and `openapi-typescript` supports it, and once `astro check` supports TypeScript 7 (or moves to `@astrojs/ts-content-mapper`).
 
+tsdown builds the declaration files with its tsgo generator, which it flags as deprecated on TypeScript 7.0; the warning disappears with TypeScript 7.1.
+
 | Command                            | What it does                                                                                          |
 | ---------------------------------- | ----------------------------------------------------------------------------------------------------- |
 | `bun run api:sync [--from <path>]` | Copies the API contract into `openapi/public.json` (default `../rush-cms-v2/backend/api/public.yaml`) |
