@@ -90,17 +90,17 @@ describe('navigationItem', () => {
 			fallback: false,
 			collection: { id: 'c', slug: 'blog' }
 		}
-		expect(urls.navigationItem(navigationItem({ entry: summary }))).toBe(
+		expect(urls.navigationItem(navigationItem({ entry: summary }), 'en')).toBe(
 			'/en/posts/hello-world'
 		)
 	})
 
 	it('returns url targets unchanged and nothing without a target', () => {
 		const urls = urlsFor()
-		expect(urls.navigationItem(navigationItem({ url: 'https://a.test/x?y=1' }))).toBe(
+		expect(urls.navigationItem(navigationItem({ url: 'https://a.test/x?y=1' }), 'en')).toBe(
 			'https://a.test/x?y=1'
 		)
-		expect(urls.navigationItem(navigationItem())).toBeUndefined()
+		expect(urls.navigationItem(navigationItem(), 'en')).toBeUndefined()
 	})
 })
 
@@ -112,5 +112,49 @@ describe('alternates', () => {
 			{ locale: 'pt_BR', hreflang: 'pt-BR', url: '/pt/artigos/ola-mundo' },
 			{ locale: 'en', hreflang: 'en', url: '/en/blog/hello-world' }
 		])
+	})
+})
+
+describe('collection pages and id route keys', () => {
+	const routes = { blog: '/{locale}/posts/{slug}', docs: '/{locale}/{collection}/{slug}' }
+	const idKeyed = urlsFor({ routes, routeKeysById: { [exampleEntry().collection.id]: 'blog' } })
+
+	it('drops the slug segment for collection pages', () => {
+		const urls = urlsFor({ routes })
+		expect(urls.collection({ id: 'c', slug: 'blog' }, 'pt_BR')).toBe('/pt/posts')
+		expect(urls.collection({ id: 'c', slug: 'other' }, 'pt_BR')).toBe('/pt/other')
+		const root = createUrls({ localePaths: { en: '' }, routes: { blog: '/{locale}/{slug}' } })
+		expect(root.collection({ id: 'c', slug: 'blog' }, 'en')).toBe('/')
+	})
+
+	it('navigationItem builds collection targets', () => {
+		const item = navigationItem({ collection: { id: 'c', slug: 'blog' } })
+		expect(urlsFor({ routes }).navigationItem(item, 'es')).toBe('/es/posts')
+	})
+
+	it('matches by collection id for entry and translations', () => {
+		expect(idKeyed.entry(exampleEntry())).toBe('/pt/posts/ola-mundo')
+		expect(idKeyed.translation(exampleEntry(), 'es')).toBe('/es/posts/hola-mundo')
+	})
+
+	it('matches by collection id for nav entry targets and collection pages', () => {
+		const id = exampleEntry().collection.id
+		const summary: EntrySummary = {
+			id: 'e',
+			locale: 'es',
+			slug: 'hola',
+			fallback: false,
+			collection: { id, slug: 'articulos' }
+		}
+		expect(idKeyed.navigationItem(navigationItem({ entry: summary }), 'es')).toBe(
+			'/es/posts/hola'
+		)
+		expect(idKeyed.collection({ id, slug: 'articulos' }, 'es')).toBe('/es/posts')
+	})
+
+	it('prefers the id key over a slug match', () => {
+		const id = exampleEntry().collection.id
+		const urls = urlsFor({ routes, routeKeysById: { [id]: 'docs' } })
+		expect(urls.collection({ id, slug: 'blog' }, 'en')).toBe('/en/blog')
 	})
 })

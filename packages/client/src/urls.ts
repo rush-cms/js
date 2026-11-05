@@ -5,15 +5,17 @@ const DEFAULT_PATTERN = '/{locale}/{collection}/{slug}'
 
 export type UrlConfig = {
 	routes?: RushRoutes
+	routeKeysById?: Record<string, string>
 	localePaths: RushLocalePaths
 }
 
 export type RushUrls = {
-	locales: LocaleCode[]
+	readonly locales: readonly LocaleCode[]
+	collection(collection: CollectionRef, locale: LocaleCode): string
 	entry(entry: Entry): string
 	translation(entry: Entry, locale: LocaleCode): string
 	homepage(locale: LocaleCode): string
-	navigationItem(item: NavigationItem): string | undefined
+	navigationItem(item: NavigationItem, locale: LocaleCode): string | undefined
 }
 
 export type Alternate = {
@@ -21,6 +23,8 @@ export type Alternate = {
 	hreflang: string
 	url: string
 }
+
+export type CollectionRef = Entry['collection']
 
 type UrlParts = {
 	locale: LocaleCode
@@ -46,6 +50,7 @@ function assertSingleEmptyPrefix(localePaths: RushLocalePaths): void {
 export function createUrls(config: UrlConfig): RushUrls {
 	assertSingleEmptyPrefix(config.localePaths)
 	const routes = config.routes ?? {}
+	const routeKeysById = config.routeKeysById ?? {}
 	const localeOrder = Object.keys(config.localePaths)
 
 	function prefixOf(locale: LocaleCode): string {
@@ -56,8 +61,12 @@ export function createUrls(config: UrlConfig): RushUrls {
 		return prefix
 	}
 
-	function patternFor(collectionSlugs: string[]): string {
-		const key = collectionSlugs.find((slug) => slug in routes)
+	function patternFor(collectionId: string, collectionSlugs: string[]): string {
+		const idKey = routeKeysById[collectionId]
+		const key =
+			idKey !== undefined && idKey in routes
+				? idKey
+				: collectionSlugs.find((slug) => slug in routes)
 		return key === undefined ? DEFAULT_PATTERN : (routes[key] ?? DEFAULT_PATTERN)
 	}
 
@@ -82,26 +91,36 @@ export function createUrls(config: UrlConfig): RushUrls {
 		if (target === undefined) {
 			throw new Error(`entry "${entry.id}" has no translation for locale "${locale}"`)
 		}
-		return build(patternFor(collectionSlugsOf(entry)), {
+		return build(patternFor(entry.collection.id, collectionSlugsOf(entry)), {
 			locale,
 			collection: target.collection_slug,
 			slug: target.slug
 		})
 	}
 
+	function collection(ref: CollectionRef, locale: LocaleCode): string {
+		const pattern = patternFor(ref.id, [ref.slug]).replace(/\/?\{slug\}/g, '')
+		return build(pattern, { locale, collection: ref.slug, slug: '' })
+	}
+
 	return {
+		collection,
 		locales: localeOrder,
 		entry: (entry) => translation(entry, entry.locale),
 		translation,
 		homepage: (locale) => normalize(`/${prefixOf(locale)}`),
-		navigationItem: (item) => {
+		navigationItem: (item, locale) => {
 			const summary = item.target?.entry
 			if (summary !== undefined) {
-				return build(patternFor([summary.collection.slug]), {
+				return build(patternFor(summary.collection.id, [summary.collection.slug]), {
 					locale: summary.locale,
 					collection: summary.collection.slug,
 					slug: summary.slug
 				})
+			}
+			const ref = item.target?.collection
+			if (ref !== undefined) {
+				return collection(ref, locale)
 			}
 			return item.target?.url
 		}
