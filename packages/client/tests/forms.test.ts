@@ -31,7 +31,7 @@ describe('forms.submit', () => {
 		expect(call && header(call, 'X-Captcha-Token')).toBe('XXXX.DUMMY.TOKEN.XXXX')
 		expect(call && header(call, 'Content-Type')).toBe('application/json')
 		expect(call && header(call, 'Authorization')).toBe('Bearer delivery-token')
-		expect(JSON.parse(String(call?.init.body))).toEqual(submission)
+		expect(JSON.parse(call?.init.body as string)).toEqual(submission)
 	})
 
 	it('omits the optional headers when not given', async () => {

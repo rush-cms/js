@@ -25,7 +25,7 @@
 		"provenance": true
 	},
 	"scripts": {
-		"build": "tsup",
+		"build": "tsdown",
 		"typecheck": "tsc -p tsconfig.json",
 		"test": "vitest run"
 	}

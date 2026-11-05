@@ -46,7 +46,7 @@
 		"provenance": true
 	},
 	"scripts": {
-		"build": "tsup",
+		"build": "tsdown",
 		"typecheck": "tsc -p tsconfig.json && astro check",
 		"test": "vitest run"
 	},
@@ -61,6 +61,7 @@
 		"@astrojs/check": "^0.9.12",
 		"astro": "7.4.6",
 		"happy-dom": "21.0.4",
+		"typescript": "npm:@typescript/typescript6@6.0.2",
 		"vite": "8.3.6"
 	}
 }

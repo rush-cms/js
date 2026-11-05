@@ -88,8 +88,9 @@ describe('sendForm', () => {
 		expect(url).toBe('/_rush/forms/contact')
 		expect(init?.method).toBe('POST')
 		expect(new Headers(init?.headers).get('Accept')).toBe('application/json')
-		expect(init?.body).toBeInstanceOf(FormData)
-		expect((init?.body as FormData).get('email')).toBe('a@b.c')
+		const body = init?.body
+		expect(body).toBeInstanceOf(FormData)
+		expect((body as FormData).get('email')).toBe('a@b.c')
 	})
 
 	it('shows the sent status and resets the form on success', async () => {

@@ -1,4 +1,4 @@
-import { defineConfig } from 'tsup'
+import { defineConfig } from 'tsdown'
 
 export default defineConfig({
 	entry: {
@@ -11,14 +11,10 @@ export default defineConfig({
 		'routes/preview-exit': 'src/routes/preview-exit.ts'
 	},
 	format: ['esm'],
-	dts: {
-		entry: {
-			index: 'src/index.ts',
-			'components-runtime': 'src/components-runtime.ts',
-			'form-enhance': 'src/form-enhance.ts'
-		}
-	},
+	fixedExtension: false,
+	dts: true,
+	tsconfig: 'tsconfig.build.json',
 	clean: true,
 	target: 'es2023',
-	external: [/^astro:/, /^virtual:/]
+	deps: { neverBundle: [/^astro:/, /^virtual:/] }
 })

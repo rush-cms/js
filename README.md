@@ -20,7 +20,9 @@ bun install
 bun run ci
 ```
 
-`bun run ci` runs the format check, lint, typecheck, tests, build and the types drift check.
+`bun run ci` runs the format check, lint (oxlint with type-aware rules through oxlint-tsgolint), typecheck, tests, build (tsdown), the pack check and the types drift check.
+
+Everything that ships is linted, typechecked and built with TypeScript 7. Two devDependencies still alias `typescript` to `@typescript/typescript6`: `scripts/package.json`, because `openapi-typescript` needs the TypeScript JavaScript API that TypeScript 7 only gets in 7.1, and `packages/astro`, because `astro check` refuses TypeScript 7. Remove each alias once TypeScript 7.1 ships that API and `openapi-typescript` supports it, and once `astro check` supports TypeScript 7 (or moves to `@astrojs/ts-content-mapper`).
 
 | Command                            | What it does                                                                                          |
 | ---------------------------------- | ----------------------------------------------------------------------------------------------------- |
