@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url'
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
 import type { RushLocalePaths } from '@rushcms/client'
 import rush from '../src/index'
@@ -12,7 +13,11 @@ import {
 	runStartHook
 } from './fixtures/astro'
 import type { ProjectDir } from './fixtures/astro'
-import { installedPackage } from './fixtures/installed'
+import { installedPackage } from '../../../scripts/installed-package'
+
+const COLD_IMPORT_TIMEOUT_MS = 60_000
+
+const MANIFEST_PATH = fileURLToPath(new URL('../package.json', import.meta.url))
 
 const ARTICLES = '01JC3E28JT97KB6CQ643DZVMXX'
 const PAGES = '01JCQKFBF5KZNWJ47TAN9ZT24M'
@@ -61,14 +66,19 @@ function options(
 	return { localePaths, ...extra }
 }
 
+async function preloadSetupDependencies(): Promise<void> {
+	await Promise.all([import('astro/config'), import('vite')])
+}
+
 beforeAll(async () => {
+	await preloadSetupDependencies()
 	stub = await startStubApi()
 	stub.handle((request) =>
 		request.path === `${SITE_PREFIX}/site`
 			? envelope(siteExample())
 			: envelope(collectionsFor(request.query.get('locale') ?? ''))
 	)
-})
+}, COLD_IMPORT_TIMEOUT_MS)
 
 afterEach(() => {
 	stub.requests.length = 0
@@ -130,7 +140,7 @@ describe('astro:config:setup', () => {
 			rush(options(ALL_LOCALES)),
 			useProject(apiEnv({ RUSH_PREVIEW: 'true' }))
 		)
-		const installed = installedPackage()
+		const installed = installedPackage(MANIFEST_PATH)
 		try {
 			const entrypoints = [...setup.routes, ...setup.middlewares].map(
 				(injected) => injected.entrypoint
