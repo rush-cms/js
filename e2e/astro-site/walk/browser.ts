@@ -1,3 +1,4 @@
+import assert from 'node:assert/strict'
 import { mkdirSync } from 'node:fs'
 import { networkInterfaces } from 'node:os'
 import { join } from 'node:path'
@@ -16,6 +17,11 @@ export type Walker = {
 export type Hop = {
 	status: number
 	path: string
+}
+
+export type Redirect = {
+	from: string
+	to: string
 }
 
 function externalIpv4(): string | undefined {
@@ -65,4 +71,26 @@ export function hopsOf(response: HTTPResponse): Hop[] {
 		status: request.response()?.status() ?? 0,
 		path: new URL(request.url()).pathname + new URL(request.url()).search
 	}))
+}
+
+export async function redirectedOnce(
+	page: Page,
+	base: string,
+	redirect: Redirect,
+	status: number
+): Promise<string> {
+	const response = await page.goto(`${base}${redirect.from}`)
+	assert.ok(response, `no response for ${redirect.from}`)
+	assert.deepEqual(hopsOf(response), [
+		{ status, path: redirect.from },
+		{ status: 200, path: redirect.to }
+	])
+	return `${redirect.from} -${status}-> ${redirect.to}`
+}
+
+export async function openOk(page: Page, url: string): Promise<HTTPResponse> {
+	const response = await page.goto(url, { waitUntil: 'load' })
+	assert.ok(response, `no response for ${url}`)
+	assert.equal(response.status(), 200, `GET ${url}`)
+	return response
 }

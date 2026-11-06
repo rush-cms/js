@@ -2,35 +2,33 @@
 import { getRush } from '@rushcms/astro'
 import type { Collection } from '@rushcms/client'
 import { buildClient } from '../../../build-client'
-import EntryList from '../../../components/entry-list.astro'
-import Base from '../../../layouts/base.astro'
+import CollectionPage from '../../../components/collection-page.astro'
 import { unlessNotFound } from '../../../optional'
-import { localizedPaths } from '../../../static-paths'
-import { pageLocale, switcherFor } from '../../../urls'
+import { buildUrls, localizedPaths } from '../../../static-paths'
+import { hasCollectionSegment, pageLocale } from '../../../urls'
 
 type Props = {
 	collection?: Collection
 }
 
-export const getStaticPaths = () =>
-	localizedPaths(
-		(locale) => buildClient.collections.list({ locale }),
+export async function getStaticPaths() {
+	const urls = await buildUrls()
+	return localizedPaths(
+		async (locale) =>
+			(await buildClient.collections.list({ locale })).filter((collection) =>
+				hasCollectionSegment(urls.entryParams(collection, locale, ''))
+			),
 		(collection, locale) => ({ params: { locale, collection: collection.slug }, props: { collection } })
 	)
+}
 
 const locale = pageLocale(Astro.params)
-const rush = getRush(Astro)
 const collection =
 	Astro.props.collection ??
-	(await unlessNotFound(rush.collections.get(Astro.params.collection ?? '')))
+	(await unlessNotFound(getRush(Astro).collections.get(Astro.params.collection ?? '')))
 if (collection === undefined) {
 	return new Response(null, { status: 404 })
 }
-const entries = await Array.fromAsync(rush.entries.all(collection.slug))
 ---
 
-<Base locale={locale} switcher={switcherFor(locale)}>
-	<title slot="head">{collection.name}</title>
-	<h1>{collection.name}</h1>
-	<EntryList entries={entries} locale={locale} />
-</Base>
+<CollectionPage collection={collection} locale={locale} />

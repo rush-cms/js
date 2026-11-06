@@ -1,0 +1,21 @@
+---
+import { getRush, getUrls } from '@rushcms/astro'
+import type { Collection, LocaleCode } from '@rushcms/client'
+import Base from '../layouts/base.astro'
+import { switcherFor } from '../urls'
+import EntryList from './entry-list.astro'
+
+type Props = {
+	collection: Collection
+	locale: LocaleCode
+}
+
+const { collection, locale } = Astro.props
+const entries = await Array.fromAsync(getRush(Astro).entries.all(collection.slug))
+---
+
+<Base locale={locale} switcher={switcherFor(getUrls(Astro), locale)}>
+	<title slot="head">{collection.name}</title>
+	<h1>{collection.name}</h1>
+	<EntryList entries={entries} locale={locale} />
+</Base>

@@ -3,7 +3,7 @@ import type { Page } from 'puppeteer-core'
 import { entryRequestsDuring } from './api-log.ts'
 import type { LoggedRequest } from './api-log.ts'
 import type { Walker } from './browser.ts'
-import { hopsOf } from './browser.ts'
+import { openOk, redirectedOnce } from './browser.ts'
 import { PREVIEW_URL, SITE_URL } from './env.ts'
 import type { WalkEnv } from './env.ts'
 import { publicClient } from './public-api.ts'
@@ -102,11 +102,6 @@ async function featured(page: Page): Promise<RenderedImage> {
 	return { ...rendered, loaded }
 }
 
-async function open(page: Page, url: string): Promise<void> {
-	const response = await page.goto(url, { waitUntil: 'load' })
-	assert.equal(response?.status(), 200, `GET ${url}`)
-}
-
 function assertRichText(rendered: RenderedRichText, entry: LocalizedEntry): void {
 	assert.deepEqual(rendered, {
 		heading: entry.heading,
@@ -121,7 +116,7 @@ export function richTextInEachLocale(walker: Walker): Promise<string> {
 	return walker.withPage(async (page) => {
 		const shots: string[] = []
 		for (const entry of HELLO) {
-			await open(page, `${SITE_URL}${entry.path}`)
+			await openOk(page, `${SITE_URL}${entry.path}`)
 			assertRichText(await richText(page), entry)
 			shots.push(await walker.shot(page, `15-rich-text-${entry.locale}`))
 		}
@@ -144,7 +139,7 @@ export function featuredImage(walker: Walker, env: WalkEnv): Promise<string> {
 		const type = master.headers.get('content-type') ?? ''
 		await master.body?.cancel()
 		assert.ok(type.startsWith('image/'), `media content type ${type}`)
-		await open(page, `${SITE_URL}${MOVED_TO}`)
+		await openOk(page, `${SITE_URL}${MOVED_TO}`)
 		const rendered = await featured(page)
 		assert.ok(rendered.src.startsWith('/_astro/'), `optimized src ${rendered.src}`)
 		assert.deepEqual(
@@ -166,8 +161,7 @@ export function previewOnDemand(walker: Walker): Promise<string> {
 	return walker.withPage(async (page) => {
 		const [entry] = HELLO
 		assert.ok(entry)
-		const response = await page.goto(`${PREVIEW_URL}${entry.path}`, { waitUntil: 'load' })
-		assert.equal(response?.status(), 200)
+		const response = await openOk(page, `${PREVIEW_URL}${entry.path}`)
 		assert.equal(response.headers()['x-robots-tag'], 'noindex')
 		assert.equal(await page.$('[data-rush-preview]'), null)
 		assertRichText(await richText(page), entry)
@@ -186,26 +180,23 @@ async function movedOn(
 	walker: Walker,
 	env: WalkEnv,
 	base: string,
+	status: number,
 	expected: LoggedRequest[]
 ): Promise<string> {
 	return walker.withPage(async (page) => {
+		let hop = ''
 		const requests = await entryRequestsDuring(env, async () => {
-			const response = await page.goto(`${base}${MOVED_FROM}`)
-			assert.ok(response, `no response for ${MOVED_FROM}`)
-			assert.deepEqual(hopsOf(response), [
-				{ status: 301, path: MOVED_FROM },
-				{ status: 200, path: MOVED_TO }
-			])
+			hop = await redirectedOnce(page, base, { from: MOVED_FROM, to: MOVED_TO }, status)
 		})
 		assert.deepEqual(requests, expected)
-		return `${base}${MOVED_FROM} -301-> ${MOVED_TO}; API entry requests: ${describeRequests(requests)}`
+		return `${base}${hop}; API entry requests: ${describeRequests(requests)}`
 	})
 }
 
 export async function movedWithoutRefetch(walker: Walker, env: WalkEnv): Promise<string> {
 	const moved: LoggedRequest = { path: entryPathOf(env, 'artigos', 'hello-world'), status: 404 }
 	const target: LoggedRequest = { path: entryPathOf(env, 'artigos', 'ola-mundo'), status: 200 }
-	const site = await movedOn(walker, env, SITE_URL, [moved])
-	const preview = await movedOn(walker, env, PREVIEW_URL, [moved, target])
+	const site = await movedOn(walker, env, SITE_URL, 301, [moved])
+	const preview = await movedOn(walker, env, PREVIEW_URL, 302, [moved, target])
 	return `static catch-all: ${site}; preview page: ${preview} (the 200 is the target page render, no lookup of the moved target)`
 }

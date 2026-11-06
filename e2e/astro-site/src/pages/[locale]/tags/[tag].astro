@@ -1,5 +1,5 @@
 ---
-import { getRush } from '@rushcms/astro'
+import { getRush, getUrls } from '@rushcms/astro'
 import type { Tag } from '@rushcms/client'
 import { buildClient } from '../../../build-client'
 import EntryList from '../../../components/entry-list.astro'
@@ -27,7 +27,7 @@ if (tag === undefined) {
 const tagged = await rush.tags.entries(tag.slug)
 ---
 
-<Base locale={locale} switcher={switcherFor(locale)}>
+<Base locale={locale} switcher={switcherFor(getUrls(Astro), locale)}>
 	<title slot="head">{tag.name}</title>
 	<h1>{tag.name}</h1>
 	<EntryList entries={tagged.items} locale={locale} />

@@ -1,6 +1,6 @@
 ---
+import { getUrls } from '@rushcms/astro'
 import type { Entry, LocaleCode } from '@rushcms/client'
-import { urls } from '../urls'
 
 type Props = {
 	entries: Entry[]
@@ -8,13 +8,14 @@ type Props = {
 }
 
 const { entries, locale } = Astro.props
+const urls = getUrls(Astro)
 ---
 
 <ol data-entries>
 	{
 		entries.map((entry) => (
 			<li data-slug={entry.slug} data-fallback={String(entry.fallback)}>
-				<a href={urls.entryPathIn(entry, locale)}>{entry.title}</a>
+				<a href={urls.servedPath(entry, locale)}>{entry.title}</a>
 			</li>
 		))
 	}

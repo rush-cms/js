@@ -1,9 +1,9 @@
 ---
-import { getRush } from '@rushcms/astro'
+import { getRush, getUrls } from '@rushcms/astro'
 import Seo from '@rushcms/astro/components/seo.astro'
 import Base from '../../layouts/base.astro'
 import { unlessNotFound } from '../../optional'
-import { contactPath, localeParams, pageLocale, switcherFor, tagPath, urls } from '../../urls'
+import { contactPath, localeParams, pageLocale, switcherFor, tagPath } from '../../urls'
 
 export const getStaticPaths = localeParams
 
@@ -14,7 +14,7 @@ const collections = await rush.collections.list()
 const tags = await rush.tags.list()
 ---
 
-<Base locale={locale} switcher={switcherFor(locale, homepage)}>
+<Base locale={locale} switcher={switcherFor(getUrls(Astro), locale, homepage)}>
 	{homepage && <Seo slot="head" homepage={homepage} />}
 	<h1>{homepage?.meta?.title}</h1>
 	{homepage?.content.map((section) => <section data-block={section.block} />)}
@@ -22,7 +22,7 @@ const tags = await rush.tags.list()
 		{
 			collections.map((collection) => (
 				<li>
-					<a href={urls.collection(collection, locale)}>{collection.name}</a>
+					<a href={getUrls(Astro).collection(collection, locale)}>{collection.name}</a>
 				</li>
 			))
 		}

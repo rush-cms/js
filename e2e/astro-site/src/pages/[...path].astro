@@ -1,10 +1,12 @@
 ---
 import { resolveEntry } from '@rushcms/astro'
 import { redirectOrNotFound } from '../entry-response'
+import { SOLUTIONS_KEY, SOLUTIONS_SEGMENT } from '../site-config'
 
 export const prerender = false
 
-const [locale, collection, slug, ...rest] = (Astro.params.path ?? '').split('/')
+const [locale, segment, slug, ...rest] = (Astro.params.path ?? '').split('/')
+const collection = segment === SOLUTIONS_SEGMENT ? SOLUTIONS_KEY : segment
 const resolved =
 	rest.length === 0 ? await resolveEntry(Astro, { locale, collection, slug }) : undefined
 return redirectOrNotFound(resolved)

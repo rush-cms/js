@@ -1,13 +1,10 @@
 ---
 import { entryPaths, resolveEntry } from '@rushcms/astro'
-import Seo from '@rushcms/astro/components/seo.astro'
-import RushImage from '@rushcms/astro/components/rush-image.astro'
 import type { EntryRouteProps } from '@rushcms/astro'
 import { buildClient } from '../../../build-client'
-import EntryField from '../../../components/entry-field.astro'
+import EntryPage from '../../../components/entry-page.astro'
 import { redirectOrNotFound } from '../../../entry-response'
-import Base from '../../../layouts/base.astro'
-import { switcherFor, tagPath } from '../../../urls'
+import { hasCollectionSegment } from '../../../urls'
 
 type Props = EntryRouteProps
 
@@ -16,41 +13,13 @@ export async function getStaticPaths() {
 	const groups = await Promise.all(
 		collections.map((collection) => entryPaths(collection.slug))
 	)
-	return groups.flat()
+	return groups.flat().filter((path) => hasCollectionSegment(path.params))
 }
 
 const resolved = await resolveEntry(Astro)
 if (resolved.kind !== 'found') {
 	return redirectOrNotFound(resolved)
 }
-const { entry, locale } = resolved
 ---
 
-<Base locale={locale} switcher={switcherFor(locale, entry)}>
-	<Seo slot="head" entry={entry} />
-	<article data-entry={entry.id} data-locale={entry.locale} data-fallback={String(entry.fallback)}>
-		<h1>{entry.title}</h1>
-		{
-			entry.featured_image && (
-				<figure data-featured>
-					<RushImage media={entry.featured_image} />
-				</figure>
-			)
-		}
-		{entry.excerpt && <p data-excerpt>{entry.excerpt}</p>}
-		{
-			Object.entries(entry.data).map(([name, value]) => (
-				<EntryField name={name} value={value} media={entry.media} />
-			))
-		}
-		<ul data-entry-tags>
-			{
-				entry.tags.map((tag) => (
-					<li>
-						<a href={tagPath(locale, tag.slug)}>{tag.name}</a>
-					</li>
-				))
-			}
-		</ul>
-	</article>
-</Base>
+<EntryPage entry={resolved.entry} locale={resolved.locale} />

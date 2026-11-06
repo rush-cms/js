@@ -1,5 +1,5 @@
 import { alternates, createUrls, toBcp47 } from '@rushcms/client'
-import type { Entry, Homepage, LocaleCode, RouteParams } from '@rushcms/client'
+import type { Entry, Homepage, LocaleCode, RouteParams, RushUrls } from '@rushcms/client'
 import { siteConfig } from './site-config'
 
 export type SwitcherLink = {
@@ -14,14 +14,14 @@ export type LocaleParams = {
 	params: { locale: string | undefined }
 }
 
-export const urls = createUrls(siteConfig)
+export const localeUrls = createUrls({ localePaths: siteConfig.localePaths })
 
 export function hasUnknownLocale(params: RouteParams): boolean {
-	return Object.hasOwn(params, 'locale') && urls.localeOf(params.locale) === undefined
+	return Object.hasOwn(params, 'locale') && localeUrls.localeOf(params.locale) === undefined
 }
 
 export function pageLocale(params: RouteParams): LocaleCode {
-	const locale = urls.localeOf(params.locale)
+	const locale = localeUrls.localeOf(params.locale)
 	if (locale === undefined) {
 		throw new Error(`no locale for the route segment "${params.locale}"`)
 	}
@@ -29,18 +29,28 @@ export function pageLocale(params: RouteParams): LocaleCode {
 }
 
 export function localeParams(): LocaleParams[] {
-	return urls.locales.map((locale) => ({ params: { locale: urls.localeParam(locale) } }))
+	return localeUrls.locales.map((locale) => ({
+		params: { locale: localeUrls.localeParam(locale) }
+	}))
+}
+
+export function hasCollectionSegment(params: RouteParams): boolean {
+	return params['collection'] !== undefined
 }
 
 export function tagPath(locale: LocaleCode, slug: string): string {
-	return `${urls.homepage(locale)}/tags/${slug}`
+	return `${localeUrls.homepage(locale)}/tags/${slug}`
 }
 
 export function contactPath(locale: LocaleCode): string {
-	return `${urls.homepage(locale)}/contact`
+	return `${localeUrls.homepage(locale)}/contact`
 }
 
-export function switcherFor(current: LocaleCode, source?: Entry | Homepage): SwitcherLink[] {
+export function switcherFor(
+	urls: RushUrls,
+	current: LocaleCode,
+	source?: Entry | Homepage
+): SwitcherLink[] {
 	const translated = source === undefined ? [] : alternates(source, urls)
 	return urls.locales.map((locale) => ({
 		locale,

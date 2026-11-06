@@ -12,6 +12,7 @@ import {
 	richTextInEachLocale
 } from './content-checks.ts'
 import { readWalkEnv } from './env.ts'
+import { fixedRouteOnPreview, fixedRouteOnSite } from './fixed-route-checks.ts'
 import type { WalkEnv } from './env.ts'
 import {
 	formWithScript,
@@ -54,6 +55,10 @@ const GROUPS: Record<Group, GroupPlan> = {
 			{ name: 'fallback page + canonical', run: ({ walker }) => fallbackCanonical(walker) },
 			{ name: '301 from moved slugs/segments', run: ({ walker }) => movedRedirects(walker) },
 			{ name: 'services order + tag page', run: ({ walker }) => servicesOrder(walker) },
+			{
+				name: 'fixed-collection route in pt/en/es',
+				run: ({ walker }) => fixedRouteOnSite(walker)
+			},
 			{ name: 'rich text in each locale', run: ({ walker }) => richTextInEachLocale(walker) },
 			{
 				name: 'featured image via RushImage',
@@ -80,6 +85,10 @@ const GROUPS: Record<Group, GroupPlan> = {
 	preview: {
 		checks: [
 			{ name: 'preview deployment on demand', run: ({ walker }) => previewOnDemand(walker) },
+			{
+				name: 'fixed-collection route on demand (en, 302)',
+				run: ({ walker }) => fixedRouteOnPreview(walker)
+			},
 			{
 				name: 'moved redirect without refetch',
 				run: ({ walker, env }) => movedWithoutRefetch(walker, env)

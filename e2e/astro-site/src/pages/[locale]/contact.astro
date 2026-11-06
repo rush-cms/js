@@ -1,5 +1,5 @@
 ---
-import { getRush } from '@rushcms/astro'
+import { getRush, getUrls } from '@rushcms/astro'
 import Form from '@rushcms/astro/components/form.astro'
 import Base from '../../layouts/base.astro'
 import { pageLocale, switcherFor } from '../../urls'
@@ -10,7 +10,7 @@ const locale = pageLocale(Astro.params)
 const form = await getRush(Astro).forms.get('contact')
 ---
 
-<Base locale={locale} switcher={switcherFor(locale)}>
+<Base locale={locale} switcher={switcherFor(getUrls(Astro), locale)}>
 	<title slot="head">{form.name}</title>
 	<h1>{form.name}</h1>
 	<Form

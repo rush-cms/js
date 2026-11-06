@@ -1,13 +1,8 @@
 import assert from 'node:assert/strict'
 import type { Page } from 'puppeteer-core'
-import type { Walker } from './browser.ts'
-import { hopsOf } from './browser.ts'
+import type { Redirect, Walker } from './browser.ts'
+import { openOk, redirectedOnce } from './browser.ts'
 import { SITE_URL } from './env.ts'
-
-type Redirect = {
-	from: string
-	to: string
-}
 
 const REDIRECTS: Redirect[] = [
 	{ from: '/pt/artigos/guia-antigo', to: '/pt/artigos/guia-novo' },
@@ -34,8 +29,7 @@ async function entrySlugs(page: Page): Promise<(string | null)[]> {
 }
 
 async function goto(page: Page, path: string): Promise<void> {
-	const response = await page.goto(`${SITE_URL}${path}`)
-	assert.equal(response?.status(), 200, `GET ${path}`)
+	await openOk(page, `${SITE_URL}${path}`)
 }
 
 export function languageSwitcher(walker: Walker): Promise<string> {
@@ -81,28 +75,32 @@ export function movedRedirects(walker: Walker): Promise<string> {
 	return walker.withPage(async (page) => {
 		const seen: string[] = []
 		for (const redirect of REDIRECTS) {
-			const response = await page.goto(`${SITE_URL}${redirect.from}`)
-			assert.ok(response, `no response for ${redirect.from}`)
-			assert.deepEqual(hopsOf(response), [
-				{ status: 301, path: redirect.from },
-				{ status: 200, path: redirect.to }
-			])
-			seen.push(`${redirect.from} -301-> ${redirect.to}`)
+			seen.push(await redirectedOnce(page, SITE_URL, redirect, 301))
 		}
 		const shot = await walker.shot(page, '04-moved-landing')
 		return `${seen.join('; ')} [${shot}]`
 	})
 }
 
+async function entryLinks(page: Page): Promise<(string | null)[]> {
+	return page.$$eval('[data-entries] a', (links) =>
+		links.map((link) => link.getAttribute('href'))
+	)
+}
+
 export function servicesOrder(walker: Walker): Promise<string> {
 	return walker.withPage(async (page) => {
-		await goto(page, '/en/services')
+		await goto(page, '/en/solutions')
 		const slugs = await entrySlugs(page)
 		assert.deepEqual(slugs, ['technical-support', 'web-development', 'seo-optimization'])
+		assert.deepEqual(
+			await entryLinks(page),
+			slugs.map((slug) => `/en/solutions/${slug}`)
+		)
 		await goto(page, '/pt/tags/destaque-0')
 		const tagged = await entrySlugs(page)
 		assert.equal(tagged.length, 2)
 		const shot = await walker.shot(page, '05-tag-page')
-		return `services in seeded order ${slugs.join(', ')}; tag destaque-0 lists ${tagged.join(', ')} [${shot}]`
+		return `/en/solutions (fixed route) lists services in seeded order ${slugs.join(', ')} linking /en/solutions/<slug>; tag destaque-0 lists ${tagged.join(', ')} [${shot}]`
 	})
 }

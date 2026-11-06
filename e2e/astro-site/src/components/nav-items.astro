@@ -1,6 +1,6 @@
 ---
+import { getUrls } from '@rushcms/astro'
 import type { LocaleCode, NavigationItem } from '@rushcms/client'
-import { urls } from '../urls'
 
 type Props = {
 	items: NavigationItem[]
@@ -8,6 +8,7 @@ type Props = {
 }
 
 const { items, locale } = Astro.props
+const urls = getUrls(Astro)
 ---
 
 <ul>

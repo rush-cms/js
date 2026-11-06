@@ -1,0 +1,45 @@
+---
+import { getUrls } from '@rushcms/astro'
+import Seo from '@rushcms/astro/components/seo.astro'
+import RushImage from '@rushcms/astro/components/rush-image.astro'
+import type { Entry, LocaleCode } from '@rushcms/client'
+import Base from '../layouts/base.astro'
+import { switcherFor, tagPath } from '../urls'
+import EntryField from './entry-field.astro'
+
+type Props = {
+	entry: Entry
+	locale: LocaleCode
+}
+
+const { entry, locale } = Astro.props
+---
+
+<Base locale={locale} switcher={switcherFor(getUrls(Astro), locale, entry)}>
+	<Seo slot="head" entry={entry} />
+	<article data-entry={entry.id} data-locale={entry.locale} data-fallback={String(entry.fallback)}>
+		<h1>{entry.title}</h1>
+		{
+			entry.featured_image && (
+				<figure data-featured>
+					<RushImage media={entry.featured_image} />
+				</figure>
+			)
+		}
+		{entry.excerpt && <p data-excerpt>{entry.excerpt}</p>}
+		{
+			Object.entries(entry.data).map(([name, value]) => (
+				<EntryField name={name} value={value} media={entry.media} />
+			))
+		}
+		<ul data-entry-tags>
+			{
+				entry.tags.map((tag) => (
+					<li>
+						<a href={tagPath(locale, tag.slug)}>{tag.name}</a>
+					</li>
+				))
+			}
+		</ul>
+	</article>
+</Base>
