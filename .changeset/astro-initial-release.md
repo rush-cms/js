@@ -3,10 +3,10 @@
 ---
 
 First release of `@rushcms/astro`, the Astro integration for Rush CMS v2, built on `@rushcms/client` 3. It needs
-Astro 7.4 or later and an adapter for the on-demand routes (`@astrojs/node` in standalone mode is the documented
-default); pages stay static unless you opt out.
+Astro 7.4 or later and the Node adapter (`@astrojs/node`) for the on-demand routes; pages stay static unless you opt
+out.
 
-- `rush({ localePaths, routes?, seo?, trustedProxies? })` declares the `astro:env` schema (`RUSH_API_URL`,
+- `rush({ localePaths, trustedProxies, routes?, seo? })` declares the `astro:env` schema (`RUSH_API_URL`,
   `RUSH_SITE_ID`, `RUSH_API_TOKEN` as a secret that never reaches the client bundle or the build output,
   `RUSH_MEDIA_URL`, `RUSH_PREVIEW`), allows the media host for `astro:assets`, and at build and dev start checks that
   `localePaths` lists exactly the site's locales and loads the collections of every locale.
@@ -23,7 +23,10 @@ default); pages stay static unless you opt out.
   (fields from the public form schema, Turnstile, per-field errors, works without JavaScript) and `<PreviewBanner>`.
 - `POST /_rush/forms/[key]` forwards urlencoded, multipart and JSON posts with the captcha token, answers JSON to
   `fetch` and `303` to plain form posts, and sends the visitor IP for the API rate limits without ever trusting an
-  address the visitor chose (`trustedProxies` counts the reverse proxies in front of the server).
+  address the visitor chose. `trustedProxies` is required and has no default: `0` when visitors reach the Node server
+  directly, `n` behind `n` reverse proxies that append to `X-Forwarded-For`; config setup fails without it, and a form
+  post whose `X-Forwarded-For` does not fit the count logs a warning once per process. The README lists the values
+  for Coolify, nginx and Cloudflare and the lockdown each hop needs.
 - Preview deployment: the same site built with `RUSH_PREVIEW=true` renders every route on demand with
   `X-Robots-Tag: noindex`, turns CMS preview links (`/_rush/preview`) into an `HttpOnly` cookie session that reads
   drafts, and exits through `/_rush/preview/exit`.

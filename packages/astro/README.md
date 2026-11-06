@@ -3,8 +3,9 @@
 Astro integration for [Rush CMS](https://github.com/rush-cms/rush-cms): environment schema, build-time site check,
 remote image host, a locale-bound API client for pages, an on-demand forms route and a preview deployment mode.
 
-Requires Astro 7.4 or later and an adapter (`@astrojs/node` in standalone mode is the documented default), because
-the forms route is rendered on demand. Pages stay static unless you opt out.
+Requires Astro 7.4 or later and the Node adapter (`@astrojs/node`, standalone mode documented here), because the
+forms route is rendered on demand and resolves the visitor IP from what that adapter reads (see
+[Visitor IP](#visitor-ip)). Pages stay static unless you opt out.
 
 ## Setup
 
@@ -20,7 +21,8 @@ export default defineConfig({
 		rush({
 			localePaths: { pt_BR: '', en: 'en' },
 			routes: { artigos: '/{locale}/blog/{slug}' },
-			seo: { artigos: { title: 'headline', description: 'summary', image: 'cover' } }
+			seo: { artigos: { title: 'headline', description: 'summary', image: 'cover' } },
+			trustedProxies: 1
 		})
 	]
 })
@@ -28,10 +30,10 @@ export default defineConfig({
 
 | Option           | Description                                                                                  |
 | ---------------- | -------------------------------------------------------------------------------------------- |
-| `localePaths`    | CMS locale code → URL prefix; at most one `''`. Must list exactly the site's active locales. |
+| `localePaths`    | Required. CMS locale code → URL prefix; at most one `''`; exactly the site's active locales. |
 | `routes`         | Collection id or slug (any locale) → URL pattern with `{locale}`, `{collection}`, `{slug}`.  |
 | `seo`            | Per collection, the data fields used for title, description and image.                       |
-| `trustedProxies` | Reverse proxies in front of the server that append to `X-Forwarded-For` (default `0`).       |
+| `trustedProxies` | Required. Reverse proxies in front of the server that append to `X-Forwarded-For`.           |
 
 ## Environment
 
@@ -93,24 +95,53 @@ the `Host` header for hosts listed in `security.allowedDomains`; without it, the
 ### Visitor IP
 
 The API rate-limits form posts per visitor IP (5 per minute per form) and per site, and stores the IP with the
-submission. The forms route never forwards an address the visitor chose:
+submission. The forms route never forwards an address the visitor chose. Which address is the visitor's depends on how
+requests reach the server, so `trustedProxies` has no default; without a non-negative integer, `rush()` fails when
+Astro loads the config:
 
-- `trustedProxies: 0` (default), the server is reached directly. The route sends `Astro.clientAddress` only when it
-  is not one of the request's `X-Forwarded-For` entries. For a host in `allowedDomains`, Astro copies the leftmost
+```text
+@rushcms/astro: trustedProxies is required and must be a non-negative integer, got undefined. Use 0 when visitors
+reach the Astro Node server directly, or n when every request reaches it through n reverse proxies that each append
+to X-Forwarded-For.
+```
+
+- `trustedProxies: 0`, visitors reach the Node server directly. The route sends `Astro.clientAddress` only when it is
+  not one of the request's `X-Forwarded-For` entries. For a host in `allowedDomains`, Astro copies the leftmost
   `X-Forwarded-For` entry, which any client can set, into `clientAddress`, and the raw socket address is no longer
-  readable; such a request is sent without `X-Rush-Client-IP`, so the API counts it against the server's own address
-  (shared by every request in that case) and stores that address.
+  readable; such a post is sent without `X-Rush-Client-IP`, so the API counts it against the server's own address and
+  stores that address. Every visitor that sends the header, on purpose or through a forward proxy that adds it, lands
+  in that one shared bucket: a second budget of 5 posts per minute per form, which those visitors can also use up for
+  each other. The first post that carries `X-Forwarded-For` logs a warning through Astro's logger, once per process.
 - `trustedProxies: n`, the server is reached only through `n` reverse proxies, each appending the address it was
   connected from to `X-Forwarded-For`. The route sends the `n`-th entry from the right (the address the outermost
-  proxy saw) and ignores `clientAddress` and every entry to its left. When the header has fewer than `n` entries or
-  that entry is not a bare IPv4/IPv6 address (no port), no IP is sent.
+  proxy saw) and ignores `clientAddress` and every entry to its left. When that entry is not a bare IPv4/IPv6 address
+  (no port), no IP is sent. When the header has fewer than `n` entries, no IP is sent and a warning is logged once per
+  process.
 
-For `trustedProxies` above `0`, the server must accept connections only from the innermost proxy (bind it to a
-private interface or firewall it): a client that reaches it directly can write the whole header. Every proxy must
-append the address it was connected from (nginx `proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for`); the
-outermost one may instead replace the header with it (`$remote_addr`). A CDN in front of a proxy counts as one more
-hop. With a count lower than the real chain, every visitor gets a proxy's address; with a higher one, the visitor can
-choose the address.
+Only `X-Forwarded-For` is read; `Forwarded`, `X-Real-IP` and `CF-Connecting-IP` are ignored. These guarantees hold for
+`@astrojs/node`, the only adapter the forms route supports.
+
+#### Behind reverse proxies
+
+| Topology                             | `trustedProxies` | Also required                                                     |
+| ------------------------------------ | ---------------- | ----------------------------------------------------------------- |
+| Node server reached directly         | `0`              | nothing                                                           |
+| Coolify (Traefik) → Node             | `1`              | The app port not published on the host (no Coolify port mapping)  |
+| nginx → Node                         | `1`              | `proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for`     |
+| Cloudflare → Traefik or nginx → Node | `2`              | Traefik `forwardedHeaders.trustedIPs` and origin lockdown (below) |
+
+- Every hop is locked down, not only the last one. The Node server accepts connections only from the innermost proxy
+  (bind it to a private interface or firewall it), and each proxy accepts connections only from the next one out.
+  Otherwise a client that connects to an inner hop directly writes the entries the route trusts: with Cloudflare in
+  front of Traefik and `trustedProxies: 2`, a header forged in a request sent straight to Traefik is picked. Firewall
+  the origin proxy to Cloudflare's published IP ranges, or require Cloudflare Authenticated Origin Pulls.
+- Every proxy must append the address it was connected from (nginx `$proxy_add_x_forwarded_for`); the outermost one
+  may instead replace the header with it (`$remote_addr`).
+- Traefik drops the `X-Forwarded-*` headers it receives and starts a new `X-Forwarded-For` unless the sender is listed
+  in the entry point's `forwardedHeaders.trustedIPs`. That is what makes it a safe outermost proxy; behind Cloudflare,
+  list Cloudflare's IP ranges there, or the header arrives one entry short and no IP is sent.
+- A CDN in front of a proxy counts as one more hop. With a count lower than the real chain, every visitor gets a
+  proxy's address; with a higher one, the visitor can choose the address.
 
 ## Preview deployment
 
