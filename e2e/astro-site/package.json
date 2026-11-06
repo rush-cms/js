@@ -1,0 +1,32 @@
+{
+	"name": "rush-cms-e2e-astro-site",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"sdk:pack": "node scripts/pack-sdk.ts",
+		"check": "node --env-file=.env.site node_modules/astro/bin/astro.mjs check && tsc -p tsconfig.json && ../../node_modules/.bin/oxlint --type-aware && node scripts/check-dts.ts",
+		"build": "node --env-file=.env.site node_modules/astro/bin/astro.mjs build",
+		"build:preview": "RUSH_PREVIEW=true node --env-file=.env.site node_modules/astro/bin/astro.mjs build --outDir dist-preview",
+		"build:captcha": "node --env-file=.env.captcha node_modules/astro/bin/astro.mjs build --outDir dist-captcha",
+		"start": "node --env-file=.env.site dist/server/entry.mjs",
+		"start:preview": "PORT=4322 node --env-file=.env.site dist-preview/server/entry.mjs",
+		"start:captcha": "PORT=4323 node --env-file=.env.captcha dist-captcha/server/entry.mjs",
+		"walk": "node --env-file=.env.walk walk/run.ts"
+	},
+	"dependencies": {
+		"@astrojs/node": "11.1.10",
+		"@rushcms/astro": "file:.packs/rushcms-astro.tgz",
+		"@rushcms/client": "file:.packs/rushcms-client.tgz",
+		"astro": "7.4.6"
+	},
+	"overrides": {
+		"@rushcms/client": "file:.packs/rushcms-client.tgz"
+	},
+	"devDependencies": {
+		"@astrojs/check": "0.9.12",
+		"@types/node": "26.6.6",
+		"puppeteer-core": "25.16.0",
+		"typescript": "npm:@typescript/typescript6@6.0.2",
+		"typescript7": "npm:typescript@7.0.2"
+	}
+}

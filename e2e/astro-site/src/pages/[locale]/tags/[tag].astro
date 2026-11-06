@@ -1,0 +1,37 @@
+---
+import { getRush } from '@rushcms/astro'
+import type { Tag } from '@rushcms/client'
+import { buildClient } from '../../../build-client'
+import EntryList from '../../../components/entry-list.astro'
+import Base from '../../../layouts/base.astro'
+import { localizedPaths } from '../../../static-paths'
+import { localeOf, switcherFor } from '../../../urls'
+
+type Props = {
+	tag?: Tag
+}
+
+export const getStaticPaths = () =>
+	localizedPaths(
+		(locale) => buildClient.tags.list({ locale }),
+		(tag, locale) => ({ params: { locale, tag: tag.slug }, props: { tag } })
+	)
+
+const locale = localeOf(Astro.params.locale)
+if (locale === undefined) {
+	return new Response(null, { status: 404 })
+}
+const rush = getRush(Astro)
+const tag =
+	Astro.props.tag ?? (await rush.tags.list()).find((item) => item.slug === Astro.params.tag)
+if (tag === undefined) {
+	return new Response(null, { status: 404 })
+}
+const tagged = await rush.tags.entries(tag.slug)
+---
+
+<Base locale={locale} switcher={switcherFor(locale)}>
+	<title slot="head">{tag.name}</title>
+	<h1>{tag.name}</h1>
+	<EntryList entries={tagged.items} locale={locale} />
+</Base>

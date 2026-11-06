@@ -1,0 +1,39 @@
+---
+import { getRush } from '@rushcms/astro'
+import type { Collection } from '@rushcms/client'
+import { buildClient } from '../../../build-client'
+import EntryList from '../../../components/entry-list.astro'
+import Base from '../../../layouts/base.astro'
+import { unlessNotFound } from '../../../optional'
+import { localizedPaths } from '../../../static-paths'
+import { localeOf, switcherFor } from '../../../urls'
+
+type Props = {
+	collection?: Collection
+}
+
+export const getStaticPaths = () =>
+	localizedPaths(
+		(locale) => buildClient.collections.list({ locale }),
+		(collection, locale) => ({ params: { locale, collection: collection.slug }, props: { collection } })
+	)
+
+const locale = localeOf(Astro.params.locale)
+if (locale === undefined) {
+	return new Response(null, { status: 404 })
+}
+const rush = getRush(Astro)
+const collection =
+	Astro.props.collection ??
+	(await unlessNotFound(rush.collections.get(Astro.params.collection ?? '')))
+if (collection === undefined) {
+	return new Response(null, { status: 404 })
+}
+const entries = await Array.fromAsync(rush.entries.all(collection.slug))
+---
+
+<Base locale={locale} switcher={switcherFor(locale)}>
+	<title slot="head">{collection.name}</title>
+	<h1>{collection.name}</h1>
+	<EntryList entries={entries} locale={locale} />
+</Base>

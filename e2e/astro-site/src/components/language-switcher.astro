@@ -1,0 +1,26 @@
+---
+import type { SwitcherLink } from '../urls'
+
+type Props = {
+	links: SwitcherLink[]
+}
+
+const { links } = Astro.props
+---
+
+<ul data-language-switcher>
+	{
+		links.map((link) => (
+			<li>
+				<a
+					href={link.url}
+					hreflang={link.hreflang}
+					data-locale={link.locale}
+					aria-current={link.current ? 'page' : undefined}
+				>
+					{link.label}
+				</a>
+			</li>
+		))
+	}
+</ul>

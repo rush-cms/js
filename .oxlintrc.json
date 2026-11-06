@@ -7,7 +7,8 @@
 		"**/dist/**",
 		"**/node_modules/**",
 		"**/.astro/**",
-		"packages/client/src/generated/**"
+		"packages/client/src/generated/**",
+		"e2e/**"
 	],
 	"rules": {
 		"typescript/no-floating-promises": "error",

@@ -1,0 +1,11 @@
+{
+	"extends": "./tsconfig.json",
+	"compilerOptions": {
+		"skipLibCheck": false
+	},
+	"include": [
+		"node_modules/@rushcms/client/dist/**/*.d.ts",
+		"node_modules/@rushcms/astro/dist/**/*.d.ts"
+	],
+	"exclude": []
+}

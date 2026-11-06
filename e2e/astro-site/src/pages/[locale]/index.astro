@@ -1,0 +1,45 @@
+---
+import { getRush } from '@rushcms/astro'
+import Seo from '@rushcms/astro/components/seo.astro'
+import Base from '../../layouts/base.astro'
+import { unlessNotFound } from '../../optional'
+import { contactPath, localeOf, localeParams, switcherFor, tagPath, urls } from '../../urls'
+
+export const getStaticPaths = localeParams
+
+const locale = localeOf(Astro.params.locale)
+if (locale === undefined) {
+	return new Response(null, { status: 404 })
+}
+const rush = getRush(Astro)
+const homepage = await unlessNotFound(rush.homepage.get())
+const collections = await rush.collections.list()
+const tags = await rush.tags.list()
+---
+
+<Base locale={locale} switcher={switcherFor(locale, homepage)}>
+	{homepage && <Seo slot="head" homepage={homepage} />}
+	<h1>{homepage?.meta?.title}</h1>
+	{homepage?.content.map((section) => <section data-block={section.block} />)}
+	<ul data-collections>
+		{
+			collections.map((collection) => (
+				<li>
+					<a href={urls.collection(collection, locale)}>{collection.name}</a>
+				</li>
+			))
+		}
+	</ul>
+	<ul data-tags>
+		{
+			tags.map((tag) => (
+				<li>
+					<a href={tagPath(locale, tag.slug)}>
+						{tag.name} ({tag.entry_count})
+					</a>
+				</li>
+			))
+		}
+	</ul>
+	<a href={contactPath(locale)}>Contact</a>
+</Base>

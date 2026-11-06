@@ -1,0 +1,31 @@
+---
+import { getRush } from '@rushcms/astro'
+import Form from '@rushcms/astro/components/form.astro'
+import Base from '../../layouts/base.astro'
+import { localeOf, switcherFor } from '../../urls'
+
+export const prerender = false
+
+const locale = localeOf(Astro.params.locale)
+if (locale === undefined) {
+	return new Response(null, { status: 404 })
+}
+const form = await getRush(Astro).forms.get('contact')
+---
+
+<Base locale={locale} switcher={switcherFor(locale)}>
+	<title slot="head">{form.name}</title>
+	<h1>{form.name}</h1>
+	<Form
+		form={form}
+		submitLabel="Enviar"
+		messages={{
+			sent: 'Mensagem enviada',
+			error: 'Não foi possível enviar',
+			required: 'Campo obrigatório',
+			invalid_email: 'E-mail inválido',
+			rate_limited: 'Muitas tentativas, tente em {retry_after}s',
+			captcha_failed: 'Captcha inválido'
+		}}
+	/>
+</Base>

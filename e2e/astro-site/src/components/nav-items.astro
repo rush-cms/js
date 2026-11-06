@@ -1,0 +1,24 @@
+---
+import type { LocaleCode, NavigationItem } from '@rushcms/client'
+import { urls } from '../urls'
+
+type Props = {
+	items: NavigationItem[]
+	locale: LocaleCode
+}
+
+const { items, locale } = Astro.props
+---
+
+<ul>
+	{
+		items.map((item) => (
+			<li>
+				<a href={urls.navigationItem(item, locale)} target={item.link_target}>
+					{item.label}
+				</a>
+				{item.children.length > 0 && <Astro.self items={item.children} locale={locale} />}
+			</li>
+		))
+	}
+</ul>
