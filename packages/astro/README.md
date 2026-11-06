@@ -114,21 +114,21 @@ to X-Forwarded-For.
   each other. The first post that carries `X-Forwarded-For` logs a warning through Astro's logger, once per process.
 - `trustedProxies: n`, the server is reached only through `n` reverse proxies, each appending the address it was
   connected from to `X-Forwarded-For`. The route sends the `n`-th entry from the right (the address the outermost
-  proxy saw) and ignores `clientAddress` and every entry to its left. When that entry is not a bare IPv4/IPv6 address
-  (no port), no IP is sent. When the header has fewer than `n` entries, no IP is sent and a warning is logged once per
-  process.
+  proxy saw) and ignores `clientAddress` and every entry to its left. When the header has fewer than `n` entries or
+  that entry is not a bare IPv4/IPv6 address (no port), no IP is sent and a warning is logged once per process.
 
 Only `X-Forwarded-For` is read; `Forwarded`, `X-Real-IP` and `CF-Connecting-IP` are ignored. These guarantees hold for
 `@astrojs/node`, the only adapter the forms route supports.
 
 #### Behind reverse proxies
 
-| Topology                             | `trustedProxies` | Also required                                                     |
-| ------------------------------------ | ---------------- | ----------------------------------------------------------------- |
-| Node server reached directly         | `0`              | nothing                                                           |
-| Coolify (Traefik) → Node             | `1`              | The app port not published on the host (no Coolify port mapping)  |
-| nginx → Node                         | `1`              | `proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for`     |
-| Cloudflare → Traefik or nginx → Node | `2`              | Traefik `forwardedHeaders.trustedIPs` and origin lockdown (below) |
+| Topology                                         | `trustedProxies` | Also required                                                                   |
+| ------------------------------------------------ | ---------------- | ------------------------------------------------------------------------------- |
+| Node server reached directly                     | `0`              | nothing                                                                         |
+| Coolify (Traefik) → Node                         | `1`              | The app port not published on the host (no Coolify port mapping)                |
+| nginx → Node                                     | `1`              | `proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for`                   |
+| Cloudflare → Traefik or nginx → Node             | `2`              | Traefik `forwardedHeaders.trustedIPs` and origin lockdown (below)               |
+| Cloudflare Tunnel (cloudflared → Traefik) → Node | check, see below | Traefik `forwardedHeaders.trustedIPs` listing the cloudflared container network |
 
 - Every hop is locked down, not only the last one. The Node server accepts connections only from the innermost proxy
   (bind it to a private interface or firewall it), and each proxy accepts connections only from the next one out.
@@ -140,6 +140,9 @@ Only `X-Forwarded-For` is read; `Forwarded`, `X-Real-IP` and `CF-Connecting-IP` 
 - Traefik drops the `X-Forwarded-*` headers it receives and starts a new `X-Forwarded-For` unless the sender is listed
   in the entry point's `forwardedHeaders.trustedIPs`. That is what makes it a safe outermost proxy; behind Cloudflare,
   list Cloudflare's IP ranges there, or the header arrives one entry short and no IP is sent.
+- Cloudflare Tunnel: Traefik must list the network cloudflared connects from in `forwardedHeaders.trustedIPs`, or it
+  drops the header. Set `trustedProxies` by checking which `X-Forwarded-For` entries reach the server, and calibrate
+  with the warning: it fires when the entry at that position is missing or not a bare IP.
 - A CDN in front of a proxy counts as one more hop. With a count lower than the real chain, every visitor gets a
   proxy's address; with a higher one, the visitor can choose the address.
 
