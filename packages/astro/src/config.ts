@@ -11,6 +11,7 @@ export type RushAstroOptions = {
 	routes?: RushRoutes
 	localePaths: RushLocalePaths
 	seo?: Record<string, SeoFieldMap>
+	trustedProxies?: number
 }
 
 export type RushSiteConfig = {
@@ -21,6 +22,7 @@ export type RushSiteConfig = {
 	seo: Record<string, SeoFieldMap>
 	memo: boolean
 	preview: boolean
+	trustedProxies: number
 }
 
 export type RushConfigPlugin = Plugin & {

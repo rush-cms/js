@@ -4,6 +4,7 @@ import type { APIContext } from 'astro'
 import { seeOther } from './http'
 import { runtimeOf } from './runtime'
 import { sameOriginUrl } from './same-origin'
+import { FORWARDED_FOR_HEADER, visitorIp } from './visitor-ip'
 
 export type FormContext = Pick<
 	APIContext,
@@ -76,16 +77,24 @@ async function readSubmission(request: Request): Promise<Submission> {
 	}
 }
 
-function clientIp(context: FormContext): string | undefined {
+function clientAddress(context: FormContext): string | undefined {
 	try {
-		return text(context.clientAddress)
+		return context.clientAddress
 	} catch {
 		return undefined
 	}
 }
 
-function submitOptions(context: FormContext, captchaToken: string | undefined): FormSubmitOptions {
-	const ip = clientIp(context)
+function submitOptions(
+	context: FormContext,
+	trustedProxies: number,
+	captchaToken: string | undefined
+): FormSubmitOptions {
+	const ip = visitorIp({
+		forwardedFor: context.request.headers.get(FORWARDED_FOR_HEADER),
+		clientAddress: clientAddress(context),
+		trustedProxies
+	})
 	return {
 		...(ip === undefined ? {} : { clientIp: ip }),
 		...(captchaToken === undefined ? {} : { captchaToken })
@@ -127,9 +136,14 @@ export async function submitForm(context: FormContext): Promise<Response> {
 	const json = wantsJson(context.request)
 	try {
 		const submission = await readSubmission(context.request)
-		const result = await runtimeOf(context.locals)
+		const runtime = runtimeOf(context.locals)
+		const result = await runtime
 			.onDemandClient()
-			.forms.submit(key, submission.data, submitOptions(context, submission.captchaToken))
+			.forms.submit(
+				key,
+				submission.data,
+				submitOptions(context, runtime.trustedProxies, submission.captchaToken)
+			)
 		return json
 			? Response.json({ data: result }, { status: 201 })
 			: redirect(context, key, 'sent')

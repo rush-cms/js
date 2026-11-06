@@ -35,6 +35,7 @@ export function siteConfig(overrides: Partial<RushSiteConfig> = {}): RushSiteCon
 		seo: {},
 		memo: true,
 		preview: false,
+		trustedProxies: 0,
 		...overrides
 	}
 }

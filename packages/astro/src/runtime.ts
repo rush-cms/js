@@ -20,6 +20,7 @@ export type RushRuntime = {
 	readonly previewMode: boolean
 	readonly previewActive: boolean
 	readonly defaultLocale: LocaleCode
+	readonly trustedProxies: number
 	readonly seo: Readonly<Record<string, SeoFieldMap>>
 	readonly urls: RushUrls
 	client(context: RushContext): RushClient
@@ -122,6 +123,7 @@ export function createRushRuntime(settings: RushRuntimeSettings): RushRuntime {
 			return config.preview && perspective === 'draft' && session?.expired !== true
 		},
 		defaultLocale: config.defaultLocale,
+		trustedProxies: config.trustedProxies,
 		seo: config.seo,
 		urls,
 		client: (context) =>

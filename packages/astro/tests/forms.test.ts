@@ -5,7 +5,7 @@ import type { FormContext } from '../src/forms'
 import { POST, prerender } from '../src/routes/forms'
 import { SITE_PREFIX, apiError, asRequest, envelope, startStubApi } from './fixtures/api'
 import type { StubApi, StubRequest } from './fixtures/api'
-import { rushLocals } from './fixtures/runtime'
+import { rushLocals, siteConfig } from './fixtures/runtime'
 import type { RushApiSettings } from '../src/settings'
 
 type PostOptions = {
@@ -13,6 +13,7 @@ type PostOptions = {
 	headers?: Record<string, string>
 	clientAddress?: string | undefined
 	api?: RushApiSettings
+	trustedProxies?: number
 }
 
 type PageFormContext = FormContext & Pick<APIContext, 'currentLocale' | 'isPrerendered'>
@@ -45,7 +46,10 @@ function formContext(options: PostOptions): FormContext {
 			}
 			return clientAddress
 		},
-		locals: rushLocals(options.api ?? stub.api)
+		locals: rushLocals(
+			options.api ?? stub.api,
+			siteConfig({ trustedProxies: options.trustedProxies ?? 0 })
+		)
 	}
 }
 
@@ -185,6 +189,39 @@ describe('POST /_rush/forms/[key]', () => {
 		expect(response.status).toBe(303)
 		expect(submitted().headers.has('x-rush-client-ip')).toBe(false)
 		expect(submitted().headers.has('x-captcha-token')).toBe(false)
+	})
+
+	it('never forwards a forged X-Forwarded-For without trusted proxies', async () => {
+		const options = urlencoded('name=Ana')
+		await post({
+			...options,
+			headers: { ...options.headers, 'X-Forwarded-For': '198.51.100.1, 198.51.100.2' },
+			clientAddress: '198.51.100.1'
+		})
+		expect(submitted().headers.has('x-rush-client-ip')).toBe(false)
+	})
+
+	it('forwards the socket address when Astro did not read X-Forwarded-For', async () => {
+		const options = urlencoded('name=Ana')
+		await post({
+			...options,
+			headers: { ...options.headers, 'X-Forwarded-For': '198.51.100.1' }
+		})
+		expect(submitted().headers.get('x-rush-client-ip')).toBe(VISITOR_IP)
+	})
+
+	it('forwards the address the trusted proxy appended', async () => {
+		const options = urlencoded('name=Ana')
+		await post({
+			...options,
+			headers: {
+				...options.headers,
+				'X-Forwarded-For': `198.51.100.1, ${VISITOR_IP}, 10.0.0.1`
+			},
+			clientAddress: '198.51.100.1',
+			trustedProxies: 2
+		})
+		expect(submitted().headers.get('x-rush-client-ip')).toBe(VISITOR_IP)
 	})
 
 	it('passes API errors through as JSON', async () => {

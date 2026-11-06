@@ -2,6 +2,7 @@ import { createClient, listCollectionsByLocale } from '@rushcms/client'
 import type { LocaleCode } from '@rushcms/client'
 import type { RushAstroOptions, RushSiteConfig } from './config'
 import type { RushApiSettings } from './settings'
+import { trustedProxyCount } from './visitor-ip'
 
 export type RushSiteRequest = {
 	api: RushApiSettings
@@ -34,6 +35,7 @@ export async function loadSiteConfig(request: RushSiteRequest): Promise<RushSite
 		defaultLocale: site.default_locale,
 		seo: options.seo ?? {},
 		memo: request.memo,
-		preview: request.preview
+		preview: request.preview,
+		trustedProxies: trustedProxyCount(options)
 	}
 }

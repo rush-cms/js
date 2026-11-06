@@ -5,6 +5,7 @@ import type { RushAstroOptions, RushSiteConfig } from './config'
 import { loadRushEnv, mediaPatterns, rushEnvSchema } from './env'
 import { readApiSettings } from './settings'
 import { loadSiteConfig } from './site'
+import { trustedProxyCount } from './visitor-ip'
 
 const PACKAGE_NAME = '@rushcms/astro'
 
@@ -48,6 +49,7 @@ export function rush(options: RushAstroOptions): AstroIntegration {
 				injectRoute
 			}) => {
 				createUrls(options)
+				trustedProxyCount(options)
 				const env = await loadRushEnv(config, command)
 				preview = env.RUSH_PREVIEW === 'true'
 				site = once(() =>

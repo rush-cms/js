@@ -164,6 +164,23 @@ describe('astro:config:setup', () => {
 	})
 })
 
+describe('trustedProxies', () => {
+	it('rejects a negative hop count before touching the API', async () => {
+		const integration = rush(options(ALL_LOCALES, { trustedProxies: -1 }))
+		await expect(runSetup(integration, useProject(apiEnv()))).rejects.toThrow(
+			'trustedProxies must be a non-negative integer'
+		)
+		expect(stub.requests).toEqual([])
+	})
+
+	it('carries the hop count into the site config', async () => {
+		const integration = rush(options(ALL_LOCALES, { trustedProxies: 2 }))
+		const { plugin } = await runSetup(integration, useProject(apiEnv()))
+		await runStartHook(integration, 'astro:build:start')
+		expect((await loadVirtualConfig(plugin)).trustedProxies).toBe(2)
+	})
+})
+
 describe('site check at build and dev start', () => {
 	it('fails the build when localePaths misses a site locale, listing both sets', async () => {
 		const integration = rush(options({ pt_BR: '', en: 'en' }))
@@ -221,7 +238,8 @@ describe('site check at build and dev start', () => {
 			defaultLocale: 'en',
 			seo: { artigos: { description: 'summary' } },
 			memo: true,
-			preview: false
+			preview: false,
+			trustedProxies: 0
 		})
 		expect(stub.requests.map((request) => `${request.path}?${request.query}`).sort()).toEqual([
 			`${SITE_PREFIX}/collections?locale=en`,

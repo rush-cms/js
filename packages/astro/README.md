@@ -26,11 +26,12 @@ export default defineConfig({
 })
 ```
 
-| Option        | Description                                                                                  |
-| ------------- | -------------------------------------------------------------------------------------------- |
-| `localePaths` | CMS locale code → URL prefix; at most one `''`. Must list exactly the site's active locales. |
-| `routes`      | Collection id or slug (any locale) → URL pattern with `{locale}`, `{collection}`, `{slug}`.  |
-| `seo`         | Per collection, the data fields used for title, description and image.                       |
+| Option           | Description                                                                                  |
+| ---------------- | -------------------------------------------------------------------------------------------- |
+| `localePaths`    | CMS locale code → URL prefix; at most one `''`. Must list exactly the site's active locales. |
+| `routes`         | Collection id or slug (any locale) → URL pattern with `{locale}`, `{collection}`, `{slug}`.  |
+| `seo`            | Per collection, the data fields used for title, description and image.                       |
+| `trustedProxies` | Reverse proxies in front of the server that append to `X-Forwarded-For` (default `0`).       |
 
 ## Environment
 
@@ -77,8 +78,8 @@ With Astro `i18n`, every route gets a `currentLocale`, and routes outside a loca
 ## Forms
 
 `POST /_rush/forms/[key]` accepts `application/x-www-form-urlencoded`, `multipart/form-data` (forwarded as is, files
-included) and `application/json`. It sends the visitor IP (`Astro.clientAddress`) as `X-Rush-Client-IP` and the
-captcha token from the `cf-turnstile-response` field or the `X-Captcha-Token` header.
+included) and `application/json`. It sends the visitor IP as `X-Rush-Client-IP` (see below) and the captcha token from
+the `cf-turnstile-response` field or the `X-Captcha-Token` header.
 
 - Requests with `Accept: application/json` get `201 {"data": …}` or `{"code", "params", "errors"}` with the API
   status (`502` when the API cannot be reached or answers garbage). The API's log message is never echoed.
@@ -87,9 +88,29 @@ captcha token from the `cf-turnstile-response` field or the `X-Captcha-Token` he
 
 Cross-site form posts are rejected by Astro's `security.checkOrigin` (on by default; keep it on). Astro only trusts
 the `Host` header for hosts listed in `security.allowedDomains`; without it, the request origin falls back to
-`localhost` and real form posts are rejected, so list your production domain. Behind a reverse proxy, Astro reads
-`X-Forwarded-For` (the visitor IP) and `X-Forwarded-Host` only for those domains; without them every visitor shares
-the proxy's IP in the API's rate limits.
+`localhost` and real form posts are rejected, so list your production domain.
+
+### Visitor IP
+
+The API rate-limits form posts per visitor IP (5 per minute per form) and per site, and stores the IP with the
+submission. The forms route never forwards an address the visitor chose:
+
+- `trustedProxies: 0` (default), the server is reached directly. The route sends `Astro.clientAddress` only when it
+  is not one of the request's `X-Forwarded-For` entries. For a host in `allowedDomains`, Astro copies the leftmost
+  `X-Forwarded-For` entry, which any client can set, into `clientAddress`, and the raw socket address is no longer
+  readable; such a request is sent without `X-Rush-Client-IP`, so the API counts it against the server's own address
+  (shared by every request in that case) and stores that address.
+- `trustedProxies: n`, the server is reached only through `n` reverse proxies, each appending the address it was
+  connected from to `X-Forwarded-For`. The route sends the `n`-th entry from the right (the address the outermost
+  proxy saw) and ignores `clientAddress` and every entry to its left. When the header has fewer than `n` entries or
+  that entry is not a bare IPv4/IPv6 address (no port), no IP is sent.
+
+For `trustedProxies` above `0`, the server must accept connections only from the innermost proxy (bind it to a
+private interface or firewall it): a client that reaches it directly can write the whole header. Every proxy must
+append the address it was connected from (nginx `proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for`); the
+outermost one may instead replace the header with it (`$remote_addr`). A CDN in front of a proxy counts as one more
+hop. With a count lower than the real chain, every visitor gets a proxy's address; with a higher one, the visitor can
+choose the address.
 
 ## Preview deployment
 
