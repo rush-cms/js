@@ -4,13 +4,13 @@
 	"type": "module",
 	"scripts": {
 		"sdk:pack": "node scripts/pack-sdk.ts",
-		"check": "node --env-file=.env.site node_modules/astro/bin/astro.mjs check && tsc -p tsconfig.json && ../../node_modules/.bin/oxlint --type-aware && node scripts/check-dts.ts",
+		"check": "node --env-file=.env.site node_modules/astro/bin/astro.mjs check && node node_modules/typescript7/bin/tsc -p tsconfig.json && ../../node_modules/.bin/oxlint --type-aware && node scripts/check-dts.ts",
 		"build": "node --env-file=.env.site node_modules/astro/bin/astro.mjs build",
 		"build:preview": "RUSH_PREVIEW=true node --env-file=.env.site node_modules/astro/bin/astro.mjs build --outDir dist-preview",
 		"build:captcha": "node --env-file=.env.captcha node_modules/astro/bin/astro.mjs build --outDir dist-captcha",
-		"start": "node --env-file=.env.site dist/server/entry.mjs",
-		"start:preview": "PORT=4322 node --env-file=.env.site dist-preview/server/entry.mjs",
-		"start:captcha": "PORT=4323 node --env-file=.env.captcha dist-captcha/server/entry.mjs",
+		"start": "node --env-file=.env.site scripts/serve.ts site",
+		"start:preview": "node --env-file=.env.site scripts/serve.ts preview",
+		"start:captcha": "node --env-file=.env.captcha scripts/serve.ts captcha",
 		"walk": "node --env-file=.env.walk walk/run.ts"
 	},
 	"dependencies": {

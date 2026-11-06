@@ -10,7 +10,12 @@ export type ProxyTarget = {
 	port: number
 }
 
-function forward(target: ProxyTarget, incoming: IncomingMessage, outgoing: ServerResponse): void {
+function forward(
+	target: ProxyTarget,
+	forwardedFor: string | undefined,
+	incoming: IncomingMessage,
+	outgoing: ServerResponse
+): void {
 	const upstream = request(
 		{
 			host: target.host,
@@ -19,7 +24,7 @@ function forward(target: ProxyTarget, incoming: IncomingMessage, outgoing: Serve
 			path: incoming.url,
 			headers: {
 				...incoming.headers,
-				'x-forwarded-for': incoming.socket.remoteAddress ?? '',
+				'x-forwarded-for': forwardedFor ?? incoming.socket.remoteAddress ?? '',
 				'x-forwarded-proto': 'http'
 			}
 		},
@@ -35,8 +40,14 @@ function forward(target: ProxyTarget, incoming: IncomingMessage, outgoing: Serve
 	incoming.pipe(upstream)
 }
 
-export function startProxy(listenPort: number, target: ProxyTarget): Promise<Proxy> {
-	const server = createServer((incoming, outgoing) => forward(target, incoming, outgoing))
+export function startProxy(
+	listenPort: number,
+	target: ProxyTarget,
+	forwardedFor?: string
+): Promise<Proxy> {
+	const server = createServer((incoming, outgoing) =>
+		forward(target, forwardedFor, incoming, outgoing)
+	)
 	return new Promise((resolve) => {
 		server.listen(listenPort, '0.0.0.0', () => {
 			resolve({

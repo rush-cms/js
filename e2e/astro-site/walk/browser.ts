@@ -8,7 +8,7 @@ import { PROXY_HOST } from './env.ts'
 export type Walker = {
 	browser: Browser
 	visitorIp: string | undefined
-	page(): Promise<Page>
+	withPage<T>(use: (page: Page) => Promise<T>): Promise<T>
 	shot(page: Page, name: string): Promise<string>
 	close(): Promise<void>
 }
@@ -34,14 +34,22 @@ export async function launchWalker(chromePath: string, shotsDir: string): Promis
 		args: ['--no-first-run', '--no-default-browser-check', ...rules]
 	})
 	mkdirSync(shotsDir, { recursive: true })
+	async function openPage(): Promise<Page> {
+		const page = await browser.newPage()
+		await page.setViewport({ width: 1100, height: 800 })
+		await page.setCacheEnabled(false)
+		return page
+	}
 	return {
 		browser,
 		visitorIp,
-		page: async () => {
-			const page = await browser.newPage()
-			await page.setViewport({ width: 1100, height: 800 })
-			await page.setCacheEnabled(false)
-			return page
+		withPage: async (use) => {
+			const page = await openPage()
+			try {
+				return await use(page)
+			} finally {
+				await page.close().catch(() => undefined)
+			}
 		},
 		shot: async (page, name) => {
 			const path = join(shotsDir, `${name}.png`)

@@ -4,13 +4,18 @@ export type WalkEnv = {
 	captchaSiteId: string
 	adminEmail: string
 	adminPassword: string
+	apiToken: string
 	chromePath: string
 	shotsDir: string
 }
 
-export const SITE_URL = 'http://localhost:4321'
-export const PREVIEW_URL = 'http://localhost:4322'
-export const CAPTCHA_URL = 'http://localhost:4323'
+export type Instance = 'site' | 'preview' | 'captcha'
+
+export const PORTS: Record<Instance, number> = { site: 4321, preview: 4322, captcha: 4323 }
+
+export const SITE_URL = `http://localhost:${PORTS.site}`
+export const PREVIEW_URL = `http://localhost:${PORTS.preview}`
+export const CAPTCHA_URL = `http://localhost:${PORTS.captcha}`
 export const ADMIN_URL = 'http://localhost:5174'
 export const PROXY_HOST = 'visitor.test'
 export const PROXY_PORT = 4400
@@ -30,6 +35,7 @@ export function readWalkEnv(): WalkEnv {
 		captchaSiteId: required('RUSH_CAPTCHA_SITE_ID'),
 		adminEmail: required('ADMIN_EMAIL'),
 		adminPassword: required('ADMIN_PASSWORD'),
+		apiToken: required('RUSH_API_TOKEN'),
 		chromePath: required('CHROME_PATH'),
 		shotsDir: required('E2E_SHOTS_DIR')
 	}

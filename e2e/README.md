@@ -64,6 +64,7 @@ RUSH_SITE_ID=<sdk-e2e site id>
 RUSH_CAPTCHA_SITE_ID=<sdk-e2e-captcha site id>
 ADMIN_EMAIL=<admin email>
 ADMIN_PASSWORD=<admin password>
+RUSH_API_TOKEN=<sdk-e2e site API token>
 CHROME_PATH=/usr/bin/google-chrome
 E2E_SHOTS_DIR=<directory for screenshots and results>
 ```
@@ -114,4 +115,10 @@ Notes:
   lists `visitor.test` in `security.allowedDomains`. Without such an interface the check is `BLOCKED`.
 - The Turnstile checks need the browser and the API to reach `challenges.cloudflare.com`; without it they are
   `BLOCKED`.
-- The visitor limit is 5 posts per minute; the `429` check posts until it gets one (at most six times).
+- The visitor limit is 5 posts per minute. The `429` check forwards a fresh random visitor IP through the proxy on
+  every run, so its window is new by construction: exactly 5 posts are accepted, the 6th is `429` with
+  `params.retry_after` in the page message, and a direct API post for the same visitor (`RUSH_API_TOKEN`) returns the
+  `Retry-After` header.
+- `bun run check` calls `node_modules/typescript7/bin/tsc` explicitly: both `typescript` (6, for `astro check`) and
+  `typescript7` install a `tsc` binary and `.bin/tsc` points at whichever was linked last.
+- Ports live in `walk/env.ts` (`PORTS`); `scripts/serve.ts` starts each instance from them.

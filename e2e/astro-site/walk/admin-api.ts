@@ -34,6 +34,15 @@ function isSubmission(value: unknown): value is Submission {
 	return isRecord(value) && typeof value['id'] === 'string' && isRecord(value['data'])
 }
 
+async function bodyOf(response: Response): Promise<unknown> {
+	const text = await response.text()
+	try {
+		return JSON.parse(text)
+	} catch {
+		return text
+	}
+}
+
 async function call(
 	apiUrl: string,
 	session: Session,
@@ -47,7 +56,7 @@ async function call(
 			Authorization: `Bearer ${session.token}`
 		}
 	})
-	const body: unknown = await response.json()
+	const body = await bodyOf(response)
 	if (!response.ok) {
 		throw new Error(
 			`${init.method ?? 'GET'} ${path}: ${response.status} ${JSON.stringify(body)}`
@@ -84,17 +93,21 @@ export async function adminLogin(
 		headers: { 'Content-Type': 'application/json' },
 		body: JSON.stringify({ email, password })
 	})
-	const session: Session = { token: tokenOf(await response.json()), siteId: undefined }
+	const body = await bodyOf(response)
+	if (!response.ok) {
+		throw new Error(`POST /auth/login: ${response.status} ${JSON.stringify(body)}`)
+	}
+	const session: Session = { token: tokenOf(body), siteId: undefined }
 
 	async function useSite(siteId: string): Promise<void> {
 		if (session.siteId === siteId) {
 			return
 		}
-		const body = await call(apiUrl, session, '/auth/switch-site', {
+		const switched = await call(apiUrl, session, '/auth/switch-site', {
 			method: 'POST',
 			body: JSON.stringify({ site_id: siteId })
 		})
-		session.token = tokenOf(body)
+		session.token = tokenOf(switched)
 		session.siteId = siteId
 	}
 
