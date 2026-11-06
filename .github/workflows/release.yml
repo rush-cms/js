@@ -27,7 +27,7 @@ jobs:
             - uses: changesets/action@v2
               with:
                   publish-script: bun run release
-                  version-script: bunx changeset version && bun install --lockfile-only
+                  version-script: bun run version-packages
               env:
                   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
                   NPM_CONFIG_PROVENANCE: 'true'

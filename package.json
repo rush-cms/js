@@ -23,6 +23,7 @@
 		"types:drift": "bun run api:types && git diff --exit-code -- packages/client/src/generated/api.ts",
 		"changeset": "changeset",
 		"release": "bun run build && changeset publish",
+		"version-packages": "changeset version && bun install --lockfile-only",
 		"ci": "bun run format:check && bun run lint && bun run typecheck && bun run test && bun run build && bun run pack:check && bun run types:drift"
 	},
 	"devDependencies": {
