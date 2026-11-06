@@ -12,11 +12,10 @@ Migration: sites on the v1 API stay on 2.x. For v2, create the client with `crea
 failures as `RushError` with the contract `code` (`isRushError(err, 'moved')`).
 
 URL helpers: `createUrls({ routes, localePaths, collections })`. `routes` keys are a collection id or any locale's
-collection slug; `collections` (each locale's `collections.list({ locale })`, types `RushCollections` and
-`CollectionSlug`) lets every helper find a route keyed by another locale's slug. Entry resolution helpers:
+collection slug; `collections` (type `RushCollections`, built by `listCollectionsByLocale(client, locales)`) lets every helper find a route keyed by another locale's slug. Entry resolution helpers:
 `urls.localeOf(param)` (exact prefix), `urls.localeParam(locale)`, `urls.servedPath(entry, requestedLocale)` (the
 URL that answers for an entry as fetched for a locale, fallback pages included; throws for an entry not fetched for
-that locale), `urls.collectionRef(key, locale)`, `urls.collectionSlug(key, locale)`, `urls.collectionKeys(entry)`
+that locale), `urls.collectionRef(key, locale)`, `urls.hasCollectionSegment(collection)`, `urls.collectionKeys(entry)`
 and `urls.moved(params)`, which builds the redirect target from `moved` error params alone, picking the route by
 `collection_id`. `moved` params include `collection_id` (type `MovedParams`) from the API release that adds slug
 history; without it `urls.moved` routes by `collection_slug`.

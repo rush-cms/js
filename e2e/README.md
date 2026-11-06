@@ -18,9 +18,10 @@
 - Entry pages follow the `@rushcms/astro` README pattern: `resolveEntry(Astro)` takes the `getStaticPaths` props when
   prerendered and fetches by route params on demand (the preview deployment, where every route is on demand). An
   on-demand catch-all route calls `resolveEntry` with the path segments and turns `moved` into a redirect for URLs
-  that were not prerendered: `301`, or `302` on the preview instance (`permanent` is `false` there). Locale segments
-  map back through `localeOf`; `src/middleware.ts` answers `404` for an unknown one, so pages read their locale with
-  `pageLocale`.
+  that were not prerendered: `301`, or `302` on the preview instance (`permanent` is `false` there). A `found` entry
+  reached through a route key (`/en/servicos/web-development`) redirects to `urls.servedPath(entry, locale)`, and
+  answers `404` only when that is the requested path. Locale segments map back through `localeOf`; the integration
+  middleware answers `404` for a `locale` param that is no prefix, so pages read their locale with `pageLocale`.
 - The services collection has a fixed route, `routes: { servicos: '/{locale}/solutions/{slug}' }`, keyed by its
   `pt_BR` slug: `src/pages/[locale]/solutions/` serves it in every locale (`resolveEntry(Astro, { collection:
 'servicos' })` maps the key to `services`/`servicios`), the catch-all maps the `solutions` segment to the key, and
@@ -117,11 +118,13 @@ bun run walk captcha
 
 - `site`: language switcher and hreflang; fallback page and canonical; `301` from a retired slug, from another
   locale's slug and from a wrong collection segment; services order (on the fixed route) and tag page; the fixed
-  route in `pt`, `en` and `es` (`200` at the canonical URL, one `301` hop from another locale's slug); form with and without JavaScript
+  route in `pt`, `en` and `es` (`200` at the canonical URL, one `301` hop from another locale's slug, and from the
+  route key segment through the catch-all); form with and without JavaScript
   (`303`); visitor IP behind a forwarding proxy; `429` after the visitor limit; rich text (heading, link, list, image,
   callout block) in each locale; featured image through `RushImage`, and its media URL answers `200`.
 - `preview`: an entry page on the preview instance without a cookie (on demand, no props); the fixed route on demand
-  in `en` (`200`, and one `302` hop from the `pt` and `es` slugs); a `moved` redirect on both instances (`301` on the
+  in `en` (`200`, and one `302` hop from the `pt` and `es` slugs and from the route key segment); `/pt_BR/` and
+  `/PT/` answer `404`; a `moved` redirect on both instances (`301` on the
   site, `302` on the preview instance) with the API's entry requests counted between two sentinel requests in `API_LOG` (the redirect
   costs only the `moved` answer, no lookup of its target); saves a draft excerpt in the admin, follows the admin
   Preview button to `:4322`, exits the preview and restores the excerpt.
