@@ -1,5 +1,5 @@
 import { isRecord, isRushError } from '@rushcms/client'
-import type { LocaleCode, RushClient, RushUrls } from '@rushcms/client'
+import type { LocaleCode, RouteParams, RushClient, RushUrls } from '@rushcms/client'
 import type { APIContext } from 'astro'
 import { seeOther } from './http'
 import type { PreviewSession } from './preview-session'
@@ -21,7 +21,7 @@ export type CookieContext = {
 
 export type PreviewContext = Pick<APIContext, 'url' | 'locals' | 'request'>
 
-export type RushMiddlewareContext = PreviewContext & CookieContext
+export type RushMiddlewareContext = PreviewContext & CookieContext & Pick<APIContext, 'params'>
 
 export type RushMiddleware = (
 	context: RushMiddlewareContext,
@@ -79,7 +79,7 @@ function isPreviewToken(value: string): boolean {
 	return TOKEN_PATTERN.test(value)
 }
 
-export function createRushMiddleware(runtime: RushRuntime): RushMiddleware {
+function runtimeMiddleware(runtime: RushRuntime): RushMiddleware {
 	if (!runtime.previewMode) {
 		return (context, next) => {
 			attachRuntime(context.locals, runtime)
@@ -101,6 +101,20 @@ export function createRushMiddleware(runtime: RushRuntime): RushMiddleware {
 		}
 		return response
 	}
+}
+
+function hasUnknownLocale(urls: RushUrls, params: RouteParams): boolean {
+	return params.locale !== undefined && urls.localeOf(params.locale) === undefined
+}
+
+export function createRushMiddleware(runtime: RushRuntime): RushMiddleware {
+	const handle = runtimeMiddleware(runtime)
+	return (context, next) =>
+		handle(context, () =>
+			hasUnknownLocale(runtime.urls, context.params)
+				? Promise.resolve(new Response(null, { status: 404 }))
+				: next()
+		)
 }
 
 function isLoopback(host: string): boolean {

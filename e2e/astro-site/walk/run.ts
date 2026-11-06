@@ -20,7 +20,7 @@ import {
 	visitorIpBehindProxy,
 	visitorRateLimit
 } from './form-checks.ts'
-import { previewFromAdmin } from './preview-checks.ts'
+import { previewFromAdmin, unknownLocaleOnPreview } from './preview-checks.ts'
 import type { CheckResult } from './results.ts'
 import { runCheck } from './results.ts'
 import {
@@ -88,6 +88,10 @@ const GROUPS: Record<Group, GroupPlan> = {
 			{
 				name: 'fixed-collection route on demand (en, 302)',
 				run: ({ walker }) => fixedRouteOnPreview(walker)
+			},
+			{
+				name: 'locale param that is no prefix answers 404',
+				run: ({ walker }) => unknownLocaleOnPreview(walker)
 			},
 			{
 				name: 'moved redirect without refetch',

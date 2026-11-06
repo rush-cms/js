@@ -64,6 +64,20 @@ async function previewCookie(walker: Walker): Promise<Cookie | undefined> {
 	return (await walker.browser.cookies()).find((cookie) => cookie.name === PREVIEW_COOKIE)
 }
 
+const NON_PREFIX_LOCALES = ['pt_BR', 'PT']
+
+export function unknownLocaleOnPreview(walker: Walker): Promise<string> {
+	return walker.withPage(async (page) => {
+		const seen: string[] = []
+		for (const locale of NON_PREFIX_LOCALES) {
+			const response = await page.goto(`${PREVIEW_URL}/${locale}/`)
+			assert.equal(response?.status(), 404, `GET /${locale}/`)
+			seen.push(`/${locale}/ ${response.status()}`)
+		}
+		return seen.join('; ')
+	})
+}
+
 export function previewFromAdmin(walker: Walker, env: WalkEnv): Promise<string> {
 	return walker.withPage(async (admin) => {
 		await openEntryEditor(admin, env)

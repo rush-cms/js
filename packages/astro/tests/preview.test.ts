@@ -1,5 +1,5 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Entry } from '@rushcms/client'
+import type { Entry, RouteParams } from '@rushcms/client'
 import { entryExample } from '../../client/tests/fixtures/contract'
 import { getRush } from '../src/index'
 import { PREVIEW_COOKIE, createRushMiddleware, exitPreview, startPreview } from '../src/preview'
@@ -306,6 +306,7 @@ describe('middleware', () => {
 	type PassOptions = {
 		page?: Response
 		reads?: number
+		params?: RouteParams
 	}
 
 	async function pass(
@@ -320,6 +321,7 @@ describe('middleware', () => {
 		const context: RushMiddlewareContext = {
 			url,
 			request: hostRequest(url, {}),
+			params: options.params ?? {},
 			locals: {},
 			cookies: { get }
 		}
@@ -394,6 +396,31 @@ describe('middleware', () => {
 		expect(response.headers.get('location')).toBe(`${ORIGIN}/en`)
 		expect(response.headers.get('x-robots-tag')).toBe('noindex')
 	})
+
+	it.each([true, false])(
+		'answers 404 without rendering when the locale param matches no prefix (preview %s)',
+		async (preview) => {
+			for (const locale of ['pt_BR', 'PT', 'xx', 'pt-BR', 'pt']) {
+				const { response, lines } = await pass(previewConfig({ preview }), undefined, {
+					params: { locale, slug: 'x' },
+					reads: 0
+				})
+				expect(response.status).toBe(404)
+				expect(lines).toEqual([])
+				expect(response.headers.get('x-robots-tag')).toBe(preview ? 'noindex' : null)
+			}
+		}
+	)
+
+	it.each([true, false])(
+		'renders pages whose locale param is a prefix or absent (preview %s)',
+		async (preview) => {
+			for (const params of [{ locale: 'en' }, { locale: 'es', slug: 'x' }, {}]) {
+				const { response } = await pass(previewConfig({ preview }), undefined, { params })
+				expect(response.status).toBe(200)
+			}
+		}
+	)
 
 	it('builds a fresh client per request in preview mode', async () => {
 		const { context } = await pass(previewConfig({ memo: true }), TOKEN)
