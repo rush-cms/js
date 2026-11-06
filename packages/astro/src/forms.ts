@@ -3,12 +3,14 @@ import type { FormSubmitData, FormSubmitOptions } from '@rushcms/client'
 import type { APIContext } from 'astro'
 import { seeOther } from './http'
 import { runtimeOf } from './runtime'
+import type { RushRuntime } from './runtime'
 import { sameOriginUrl } from './same-origin'
-import { FORWARDED_FOR_HEADER, visitorIp } from './visitor-ip'
+import { FORWARDED_FOR_HEADER, visitorIp, visitorIpWarning } from './visitor-ip'
+import type { VisitorIpSource } from './visitor-ip'
 
 export type FormContext = Pick<
 	APIContext,
-	'request' | 'params' | 'url' | 'clientAddress' | 'locals'
+	'request' | 'params' | 'url' | 'clientAddress' | 'locals' | 'logger'
 >
 
 export type FormStatus = 'sent' | 'error'
@@ -87,14 +89,19 @@ function clientAddress(context: FormContext): string | undefined {
 
 function submitOptions(
 	context: FormContext,
-	trustedProxies: number,
+	runtime: RushRuntime,
 	captchaToken: string | undefined
 ): FormSubmitOptions {
-	const ip = visitorIp({
+	const source: VisitorIpSource = {
 		forwardedFor: context.request.headers.get(FORWARDED_FOR_HEADER),
 		clientAddress: clientAddress(context),
-		trustedProxies
-	})
+		trustedProxies: runtime.trustedProxies
+	}
+	const warning = visitorIpWarning(source)
+	if (warning !== undefined) {
+		runtime.warnOnce(context.logger, warning)
+	}
+	const ip = visitorIp(source)
 	return {
 		...(ip === undefined ? {} : { clientIp: ip }),
 		...(captchaToken === undefined ? {} : { captchaToken })
@@ -142,7 +149,7 @@ export async function submitForm(context: FormContext): Promise<Response> {
 			.forms.submit(
 				key,
 				submission.data,
-				submitOptions(context, runtime.trustedProxies, submission.captchaToken)
+				submitOptions(context, runtime, submission.captchaToken)
 			)
 		return json
 			? Response.json({ data: result }, { status: 201 })

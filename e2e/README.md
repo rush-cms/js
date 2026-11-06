@@ -26,8 +26,9 @@
   `pt_BR` slug: `src/pages/[locale]/solutions/` serves it in every locale (`resolveEntry(Astro, { collection:
 'servicos' })` maps the key to `services`/`servicios`), the catch-all maps the `solutions` segment to the key, and
   the `[collection]` pages skip collections whose pattern has no `{collection}`.
-- The site and captcha builds set `trustedProxies: 1`, because the walker reaches the forms route of the site through
-  its proxy; the preview build keeps the default `0` and is only reached directly.
+- `trustedProxies` is required, so `astro.config.ts` sets it per build: `1` for the site and captcha builds, because
+  the walker reaches the forms route of the site through its proxy, and `0` for the preview build, which is only
+  reached directly. `src/site-config.ts` holds only the URL options (`UrlConfig`) shared with the pages.
 - Links use `getUrls(Astro)` (`urls.servedPath` for list items, fallback pages included); `getStaticPaths` builds the
   same helpers with `createUrls({ ...siteConfig, collections })`.
 - The seeded `body` rich text renders through `<RichText>` with a `callout` block component, the featured image

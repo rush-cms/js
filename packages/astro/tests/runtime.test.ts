@@ -1,11 +1,17 @@
 import { createUrls } from '@rushcms/client'
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { getRush } from '../src/index'
-import { resolveLocale } from '../src/runtime'
+import { createRushRuntime, resolveLocale } from '../src/runtime'
 import type { LocaleRequest } from '../src/runtime'
 import { SITE_PREFIX, envelope, siteExample, startStubApi } from './fixtures/api'
 import type { StubApi } from './fixtures/api'
-import { routeContext, rushLocals, siteConfig } from './fixtures/runtime'
+import {
+	OFFLINE_API,
+	recordingLogger,
+	routeContext,
+	rushLocals,
+	siteConfig
+} from './fixtures/runtime'
 
 type LocaleCase = {
 	name: string
@@ -182,5 +188,18 @@ describe('getRush', () => {
 		expect(() =>
 			getRush(routeContext({ locals: {}, currentLocale: 'en', isPrerendered: true }))
 		).toThrow('middleware did not run')
+	})
+})
+
+describe('warnOnce', () => {
+	it('logs each message once per runtime, preview runtimes included', () => {
+		const runtime = createRushRuntime({ api: OFFLINE_API, config: siteConfig() })
+		const logger = recordingLogger()
+		runtime.warnOnce(logger, 'first')
+		runtime.preview('preview-token').warnOnce(logger, 'first')
+		runtime.preview('preview-token').warnOnce(logger, 'second')
+		runtime.warnOnce(logger, 'second')
+		createRushRuntime({ api: OFFLINE_API, config: siteConfig() }).warnOnce(logger, 'first')
+		expect(logger.warnings).toEqual(['first', 'second', 'first'])
 	})
 })

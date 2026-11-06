@@ -1,9 +1,20 @@
 import { describe, expect, it } from 'vitest'
-import type { RushAstroOptions } from '../src/config'
-import { trustedProxyCount, visitorIp } from '../src/visitor-ip'
+import {
+	FORWARDED_WITHOUT_PROXIES_WARNING,
+	SHORT_PROXY_CHAIN_WARNING,
+	visitorIp,
+	visitorIpWarning
+} from '../src/visitor-ip'
+import type { VisitorIpSource } from '../src/visitor-ip'
 
 type ForwardedCase = {
 	name: string
+	forwardedFor: string | null
+	trustedProxies: number
+	expected: string | undefined
+}
+
+type WarningCase = {
 	forwardedFor: string | null
 	trustedProxies: number
 	expected: string | undefined
@@ -43,8 +54,6 @@ const FORGED_PREFIXES: string[][] = [
 
 const SEPARATORS = [',', ', ', ' , ', ',   ']
 
-const LOCALE_PATHS = { pt_BR: '' }
-
 function forwardedFor(entries: string[], separator: string): string | null {
 	return entries.length === 0 ? null : entries.join(separator)
 }
@@ -75,12 +84,6 @@ function directRequests(): DirectRequest[] {
 function astroClientAddress(request: DirectRequest): string {
 	const leftmost = request.forged[0]?.trim()
 	return request.hostTrusted && leftmost !== undefined && leftmost !== '' ? leftmost : SOCKET
-}
-
-function withProxies(trustedProxies: number | undefined): RushAstroOptions {
-	return trustedProxies === undefined
-		? { localePaths: LOCALE_PATHS }
-		: { localePaths: LOCALE_PATHS, trustedProxies }
 }
 
 const FORWARDED_CASES: ForwardedCase[] = [
@@ -141,6 +144,21 @@ const FORWARDED_CASES: ForwardedCase[] = [
 		trustedProxies: 3,
 		expected: undefined
 	}
+]
+
+const WARNING_CASES: WarningCase[] = [
+	{ forwardedFor: null, trustedProxies: 0, expected: undefined },
+	{ forwardedFor: '', trustedProxies: 0, expected: FORWARDED_WITHOUT_PROXIES_WARNING },
+	{
+		forwardedFor: '198.51.100.1',
+		trustedProxies: 0,
+		expected: FORWARDED_WITHOUT_PROXIES_WARNING
+	},
+	{ forwardedFor: null, trustedProxies: 1, expected: SHORT_PROXY_CHAIN_WARNING },
+	{ forwardedFor: '203.0.113.7', trustedProxies: 1, expected: undefined },
+	{ forwardedFor: '203.0.113.7', trustedProxies: 2, expected: SHORT_PROXY_CHAIN_WARNING },
+	{ forwardedFor: '203.0.113.7, 10.0.0.1', trustedProxies: 2, expected: undefined },
+	{ forwardedFor: 'a, b, c', trustedProxies: 2, expected: undefined }
 ]
 
 describe('visitorIp behind trusted proxies', () => {
@@ -215,19 +233,12 @@ describe('visitorIp without trusted proxies', () => {
 	})
 })
 
-describe('trustedProxyCount', () => {
-	it.each([
-		[undefined, 0],
-		[0, 0],
-		[1, 1],
-		[3, 3]
-	])('accepts %j as %i', (trustedProxies, count) => {
-		expect(trustedProxyCount(withProxies(trustedProxies))).toBe(count)
-	})
-
-	it.each([-1, 1.5, Number.NaN, Number.POSITIVE_INFINITY])('rejects %j', (trustedProxies) => {
-		expect(() => trustedProxyCount(withProxies(trustedProxies))).toThrow(
-			'trustedProxies must be a non-negative integer'
-		)
-	})
+describe('visitorIpWarning', () => {
+	it.each(WARNING_CASES)(
+		'X-Forwarded-For $forwardedFor with trustedProxies $trustedProxies',
+		({ forwardedFor, trustedProxies, expected }) => {
+			const source: VisitorIpSource = { forwardedFor, clientAddress: SOCKET, trustedProxies }
+			expect(visitorIpWarning(source)).toBe(expected)
+		}
+	)
 })

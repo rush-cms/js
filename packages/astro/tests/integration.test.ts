@@ -63,7 +63,13 @@ function options(
 	localePaths: RushLocalePaths,
 	extra: Partial<RushAstroOptions> = {}
 ): RushAstroOptions {
-	return { localePaths, ...extra }
+	return { localePaths, trustedProxies: 0, ...extra }
+}
+
+function untypedOptions(localePaths: RushLocalePaths, trustedProxies: unknown): RushAstroOptions {
+	const fields: object =
+		trustedProxies === undefined ? { localePaths } : { localePaths, trustedProxies }
+	return fields as RushAstroOptions
 }
 
 async function preloadSetupDependencies(): Promise<void> {
@@ -165,13 +171,23 @@ describe('astro:config:setup', () => {
 })
 
 describe('trustedProxies', () => {
-	it('rejects a negative hop count before touching the API', async () => {
-		const integration = rush(options(ALL_LOCALES, { trustedProxies: -1 }))
-		await expect(runSetup(integration, useProject(apiEnv()))).rejects.toThrow(
-			'trustedProxies must be a non-negative integer'
-		)
-		expect(stub.requests).toEqual([])
-	})
+	it.each([undefined, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY, '1'])(
+		'rejects %j at config setup, naming both topologies, before touching the API',
+		async (trustedProxies) => {
+			const integration = rush(untypedOptions(ALL_LOCALES, trustedProxies))
+			const setup = runSetup(integration, useProject(apiEnv()))
+			await expect(setup).rejects.toThrow(
+				`trustedProxies is required and must be a non-negative integer, got ${String(trustedProxies)}.`
+			)
+			await expect(setup).rejects.toThrow(
+				'0 when visitors reach the Astro Node server directly'
+			)
+			await expect(setup).rejects.toThrow(
+				'n reverse proxies that each append to X-Forwarded-For'
+			)
+			expect(stub.requests).toEqual([])
+		}
+	)
 
 	it('carries the hop count into the site config', async () => {
 		const integration = rush(options(ALL_LOCALES, { trustedProxies: 2 }))

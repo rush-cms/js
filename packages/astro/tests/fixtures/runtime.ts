@@ -1,4 +1,5 @@
 import type { RouteParams, RushCollections } from '@rushcms/client'
+import type { AstroRuntimeLogger } from 'astro'
 import type { RushSiteConfig } from '../../src/config'
 import type { EntryRouteContext, EntryRouteProps } from '../../src/entry-route'
 import { attachRuntime, createRushRuntime } from '../../src/runtime'
@@ -10,6 +11,10 @@ export type RouteContextInit = {
 	isPrerendered?: boolean
 	params?: RouteParams
 	props?: EntryRouteProps
+}
+
+export type RecordingLogger = AstroRuntimeLogger & {
+	readonly warnings: string[]
 }
 
 export const LOCALE_PATHS = { pt_BR: 'pt', en: 'en', es: 'es' }
@@ -37,6 +42,19 @@ export function siteConfig(overrides: Partial<RushSiteConfig> = {}): RushSiteCon
 		preview: false,
 		trustedProxies: 0,
 		...overrides
+	}
+}
+
+export function recordingLogger(): RecordingLogger {
+	const warnings: string[] = []
+	const ignore = (): void => undefined
+	return {
+		warnings,
+		info: ignore,
+		warn: (message) => {
+			warnings.push(message)
+		},
+		error: ignore
 	}
 }
 

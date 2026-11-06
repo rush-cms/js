@@ -3,9 +3,11 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from
 import { submitForm } from '../src/forms'
 import type { FormContext } from '../src/forms'
 import { POST, prerender } from '../src/routes/forms'
+import { FORWARDED_WITHOUT_PROXIES_WARNING, SHORT_PROXY_CHAIN_WARNING } from '../src/visitor-ip'
 import { SITE_PREFIX, apiError, asRequest, envelope, startStubApi } from './fixtures/api'
 import type { StubApi, StubRequest } from './fixtures/api'
-import { rushLocals, siteConfig } from './fixtures/runtime'
+import { recordingLogger, rushLocals, siteConfig } from './fixtures/runtime'
+import type { RecordingLogger } from './fixtures/runtime'
 import type { RushApiSettings } from '../src/settings'
 
 type PostOptions = {
@@ -14,6 +16,15 @@ type PostOptions = {
 	clientAddress?: string | undefined
 	api?: RushApiSettings
 	trustedProxies?: number
+	locals?: object
+	logger?: RecordingLogger
+}
+
+type WarnedPosts = {
+	name: string
+	trustedProxies: number
+	forwardedFor: (string | null)[]
+	expected: string[]
 }
 
 type PageFormContext = FormContext & Pick<APIContext, 'currentLocale' | 'isPrerendered'>
@@ -26,6 +37,33 @@ const VALIDATION = {
 	code: 'validation_failed',
 	errors: [{ field: 'email', code: 'invalid_email' }]
 }
+
+const WARNED_POSTS: WarnedPosts[] = [
+	{
+		name: 'warns once per runtime when X-Forwarded-For arrives without trusted proxies',
+		trustedProxies: 0,
+		forwardedFor: [null, '198.51.100.1', '198.51.100.2, 198.51.100.3', ''],
+		expected: [FORWARDED_WITHOUT_PROXIES_WARNING]
+	},
+	{
+		name: 'does not warn without trusted proxies when no X-Forwarded-For arrives',
+		trustedProxies: 0,
+		forwardedFor: [null, null],
+		expected: []
+	},
+	{
+		name: 'warns once per runtime when the chain is shorter than the trusted proxies',
+		trustedProxies: 2,
+		forwardedFor: [`${VISITOR_IP}, 10.0.0.1`, VISITOR_IP, null, '10.0.0.1'],
+		expected: [SHORT_PROXY_CHAIN_WARNING]
+	},
+	{
+		name: 'does not warn when every trusted proxy appended its entry',
+		trustedProxies: 2,
+		forwardedFor: [`198.51.100.1, ${VISITOR_IP}, 10.0.0.1`, `${VISITOR_IP}, 10.0.0.1`],
+		expected: []
+	}
+]
 
 let stub: StubApi
 
@@ -46,10 +84,13 @@ function formContext(options: PostOptions): FormContext {
 			}
 			return clientAddress
 		},
-		locals: rushLocals(
-			options.api ?? stub.api,
-			siteConfig({ trustedProxies: options.trustedProxies ?? 0 })
-		)
+		locals:
+			options.locals ??
+			rushLocals(
+				options.api ?? stub.api,
+				siteConfig({ trustedProxies: options.trustedProxies ?? 0 })
+			),
+		logger: options.logger ?? recordingLogger()
 	}
 }
 
@@ -222,6 +263,22 @@ describe('POST /_rush/forms/[key]', () => {
 			trustedProxies: 2
 		})
 		expect(submitted().headers.get('x-rush-client-ip')).toBe(VISITOR_IP)
+	})
+
+	it.each(WARNED_POSTS)('$name', async ({ trustedProxies, forwardedFor, expected }) => {
+		const locals = rushLocals(stub.api, siteConfig({ trustedProxies }))
+		const logger = recordingLogger()
+		const options = urlencoded('name=Ana')
+		for (const header of forwardedFor) {
+			const forwarded = header === null ? {} : { 'X-Forwarded-For': header }
+			await post({
+				...options,
+				headers: { ...options.headers, ...forwarded },
+				locals,
+				logger
+			})
+		}
+		expect(logger.warnings).toEqual(expected)
 	})
 
 	it('passes API errors through as JSON', async () => {

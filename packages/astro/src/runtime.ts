@@ -1,6 +1,6 @@
 import { createClient, createUrls, toBcp47 } from '@rushcms/client'
 import type { LocaleCode, Perspective, RushClient, RushFetch, RushUrls } from '@rushcms/client'
-import type { APIContext } from 'astro'
+import type { APIContext, AstroRuntimeLogger } from 'astro'
 import type { RushSiteConfig, SeoFieldMap } from './config'
 import { fallbackFetch } from './preview-session'
 import type { PreviewSession } from './preview-session'
@@ -14,6 +14,7 @@ export type RushRuntimeSettings = {
 	perspective?: Perspective
 	fetch?: RushFetch
 	session?: PreviewSession
+	warned?: Set<string>
 }
 
 export type RushRuntime = {
@@ -27,6 +28,7 @@ export type RushRuntime = {
 	clientIn(context: RushContext, locale: LocaleCode): RushClient
 	onDemandClient(): RushClient
 	preview(token: string, fallback?: PreviewSession): RushRuntime
+	warnOnce(logger: AstroRuntimeLogger, message: string): void
 }
 
 const RUNTIME_KEY = Symbol.for('@rushcms/astro:runtime')
@@ -86,6 +88,7 @@ export function resolveLocale(
 
 export function createRushRuntime(settings: RushRuntimeSettings): RushRuntime {
 	const { api, config, perspective, fetch, session } = settings
+	const warned = settings.warned ?? new Set<string>()
 	const shareable = config.memo && !config.preview
 	const shared = new Map<LocaleCode, RushClient>()
 
@@ -135,10 +138,17 @@ export function createRushRuntime(settings: RushRuntimeSettings): RushRuntime {
 				api: { ...api, token },
 				config,
 				perspective: 'draft',
+				warned,
 				...(fallback === undefined
 					? {}
 					: { fetch: fallbackFetch(api.token, fallback), session: fallback })
-			})
+			}),
+		warnOnce: (logger, message) => {
+			if (!warned.has(message)) {
+				warned.add(message)
+				logger.warn(message)
+			}
+		}
 	}
 }
 
