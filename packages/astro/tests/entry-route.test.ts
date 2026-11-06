@@ -60,6 +60,10 @@ function serveEntryAt(path: string): StubHandler {
 	return (request) => (request.path === path ? envelope(servedEntry(request)) : entryNotFound())
 }
 
+function echoingSlug(request: StubRequest): Response {
+	return envelope({ ...servedEntry(request), slug: request.path.split('/').at(-1) })
+}
+
 function requestLines(): string[] {
 	return stub.requests.map(
 		(request) => `${request.path}?${request.query} ${request.headers.get('authorization')}`
@@ -114,6 +118,8 @@ afterAll(() => stub.close())
 
 const BLOG_PARAMS = { locale: 'en', collection: 'blog', slug: 'hello-world' }
 
+const UNROUTED_CONFIG: RushSiteConfig = siteConfig({ ...CONFIG, routes: {} })
+
 describe('resolveEntry with getStaticPaths props', () => {
 	it('returns the prerendered entry without calling the API', async () => {
 		const entry = entryExample()
@@ -131,7 +137,7 @@ describe('resolveEntry on demand', () => {
 	it('fetches the entry by the route params in the param locale', async () => {
 		serving(serveEntryAt(ENTRY_ROUTE))
 		const resolved = await resolveIn({
-			locals: rushLocals(stub.api, CONFIG),
+			locals: rushLocals(stub.api, UNROUTED_CONFIG),
 			params: BLOG_PARAMS
 		})
 		expect(resolved.kind === 'found' && resolved.entry.locale).toBe('en')
@@ -142,7 +148,7 @@ describe('resolveEntry on demand', () => {
 	it('reads drafts with the preview token in a preview deployment without props', async () => {
 		serving(serveEntryAt(ENTRY_ROUTE))
 		const resolved = await resolveIn({
-			locals: rushLocals(stub.api, CONFIG, PREVIEW_TOKEN),
+			locals: rushLocals(stub.api, UNROUTED_CONFIG, PREVIEW_TOKEN),
 			params: BLOG_PARAMS
 		})
 		expect(resolved.kind).toBe('found')
@@ -259,9 +265,8 @@ describe('resolveEntry route overrides and locales', () => {
 
 	it('keeps a collection segment of a {collection} route unmapped so the API corrects it', async () => {
 		serving(resolvingSlugs)
-		const config = siteConfig({ ...CONFIG, routes: {} })
 		const resolved = await resolveIn({
-			locals: rushLocals(stub.api, config),
+			locals: rushLocals(stub.api, UNROUTED_CONFIG),
 			params: { locale: 'en', collection: 'artigos', slug: 'hello-world' }
 		})
 		expect(resolved).toEqual({
@@ -301,12 +306,57 @@ describe('resolveEntry route overrides and locales', () => {
 
 	it('uses the empty prefix locale when the route has no locale segment', async () => {
 		serving(resolvingSlugs)
-		const resolved = await resolveIn({
-			locals: rushLocals(stub.api, CONFIG),
-			params: { collection: 'blog', slug: 'ola-mundo' }
-		})
+		const resolved = await resolveIn(
+			{
+				locals: rushLocals(stub.api, CONFIG),
+				params: { collection: 'artigos', slug: 'ola-mundo' }
+			},
+			FIXED_ROUTE
+		)
 		expect(resolved.kind === 'found' && resolved.locale).toBe('pt_BR')
 		expect(stub.requests[0]?.path).toBe(`${SITE_PREFIX}/collections/artigos/entries/ola-mundo`)
+	})
+
+	const segmentCases: FixedRouteCase[] = Object.keys(CONFIG.localePaths).map((locale) => ({
+		locale,
+		requested: COLLECTION_SLUGS[locale] ?? ''
+	}))
+
+	it.each(segmentCases)(
+		'redirects a fixed collection reached through the $requested param in $locale to its fixed route in one hop',
+		async ({ locale, requested }) => {
+			serving(echoingSlug)
+			const locals = rushLocals(stub.api, CONFIG)
+			const slug = ENTRY_SLUGS[locale] ?? ''
+			const params = { locale: CONFIG.localePaths[locale] || undefined, slug }
+			const resolved = await resolveIn({
+				locals,
+				params: { ...params, collection: requested }
+			})
+			expect(resolved).toEqual({
+				kind: 'moved',
+				location: fixedPath(locale, slug),
+				permanent: true
+			})
+			expect(stub.requests.map((request) => request.path)).toEqual([
+				`${SITE_PREFIX}/collections/${requested}/entries/${slug}`
+			])
+			const landed = await resolveIn({ locals, params }, FIXED_ROUTE)
+			expect(landed.kind).toBe('found')
+		}
+	)
+
+	it('marks the redirect to a fixed route temporary in a preview deployment', async () => {
+		serving(echoingSlug)
+		const resolved = await resolveIn({
+			locals: rushLocals(stub.api, siteConfig({ ...CONFIG, preview: true })),
+			params: { locale: 'en', collection: 'blog', slug: 'hello-world' }
+		})
+		expect(resolved).toEqual({
+			kind: 'moved',
+			location: '/en/posts/hello-world',
+			permanent: false
+		})
 	})
 
 	it('maps an Astro i18n locale code when the route has no locale param', async () => {

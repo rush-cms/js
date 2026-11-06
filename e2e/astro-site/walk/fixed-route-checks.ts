@@ -18,6 +18,10 @@ const SOLUTIONS: FixedEntry[] = [
 
 const [PT, EN, ES] = SOLUTIONS
 
+function fromRouteKey(entry: FixedEntry): Redirect {
+	return { from: `/${entry.locale}/servicos/${slugOf(entry)}`, to: entry.path }
+}
+
 function slugOf(entry: FixedEntry): string {
 	return entry.path.split('/').at(-1) ?? ''
 }
@@ -53,7 +57,8 @@ export function fixedRouteOnSite(walker: Walker): Promise<string> {
 			seen.push(await redirectedOnce(page, SITE_URL, fromOtherLocale(entry, other), 301))
 			shots.push(await walker.shot(page, `18-fixed-route-${entry.locale}`))
 		}
-		return `${seen.join('; ')} (one hop each) [${shots.join(', ')}]`
+		const fromKey = await redirectedOnce(page, SITE_URL, fromRouteKey(required(EN)), 301)
+		return `${seen.join('; ')} (one hop each); ${fromKey} (catch-all) [${shots.join(', ')}]`
 	})
 }
 
@@ -73,7 +78,8 @@ export function fixedRouteOnPreview(walker: Walker): Promise<string> {
 			fromOtherLocale(entry, required(ES)),
 			302
 		)
+		const fromKey = await redirectedOnce(page, PREVIEW_URL, fromRouteKey(entry), 302)
 		const shot = await walker.shot(page, '19-preview-fixed-route-en')
-		return `${PREVIEW_URL}${entry.path} 200 on demand (route key servicos mapped to services); ${moved}; ${fromEs} [${shot}]`
+		return `${PREVIEW_URL}${entry.path} 200 on demand (route key servicos mapped to services); ${moved}; ${fromEs}; ${fromKey} [${shot}]`
 	})
 }

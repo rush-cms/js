@@ -1,5 +1,5 @@
 import { isRushError } from '@rushcms/client'
-import type { Entry, LocaleCode, RushUrls } from '@rushcms/client'
+import type { CollectionRef, Entry, LocaleCode, RushUrls } from '@rushcms/client'
 import type { EntryStaticPath } from './paths'
 import { findLocale, localeRequest, runtimeOf } from './runtime'
 import type { RushContext, RushRuntime } from './runtime'
@@ -38,11 +38,20 @@ const MISSING: EntryMissing = { kind: 'missing' }
 
 const MISSING_CODES = ['not_found', 'not_translated', 'locale_not_served'] as const
 
-function requestedCollection(urls: RushUrls, key: string, locale: LocaleCode): string {
+type EntryRequest = {
+	locale: LocaleCode
+	collection: string
+	slug: string
+	segmentParam: boolean
+}
+
+function fixedCollection(
+	urls: RushUrls,
+	key: string,
+	locale: LocaleCode
+): CollectionRef | undefined {
 	const ref = urls.collectionRef(key, locale)
-	const fixed =
-		ref !== undefined && !Object.hasOwn(urls.entryParams(ref, locale, ''), 'collection')
-	return fixed ? ref.slug : key
+	return ref !== undefined && !urls.hasCollectionSegment(ref) ? ref : undefined
 }
 
 function isMissing(err: unknown): boolean {
@@ -52,22 +61,21 @@ function isMissing(err: unknown): boolean {
 async function fetchEntry(
 	runtime: RushRuntime,
 	context: RushContext,
-	locale: LocaleCode,
-	collection: string,
-	slug: string
+	request: EntryRequest
 ): Promise<EntryResolution> {
+	const { locale, slug } = request
+	const permanent = !runtime.previewMode
+	const fixed = fixedCollection(runtime.urls, request.collection, locale)
 	try {
 		const entry = await runtime
 			.clientIn(context, locale)
-			.entries.get(requestedCollection(runtime.urls, collection, locale), slug, { locale })
-		return { kind: 'found', entry, locale }
+			.entries.get(fixed?.slug ?? request.collection, slug, { locale })
+		return fixed !== undefined && request.segmentParam
+			? { kind: 'moved', location: runtime.urls.servedPath(entry, locale), permanent }
+			: { kind: 'found', entry, locale }
 	} catch (err) {
 		if (isRushError(err, 'moved')) {
-			return {
-				kind: 'moved',
-				location: runtime.urls.moved(err.params),
-				permanent: !runtime.previewMode
-			}
+			return { kind: 'moved', location: runtime.urls.moved(err.params), permanent }
 		}
 		if (isMissing(err)) {
 			return MISSING
@@ -98,5 +106,10 @@ export async function resolveEntry(
 	if (!collection || !slug) {
 		return MISSING
 	}
-	return fetchEntry(runtime, context, locale, collection, slug)
+	return fetchEntry(runtime, context, {
+		locale,
+		collection,
+		slug,
+		segmentParam: route.collection === undefined
+	})
 }

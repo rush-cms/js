@@ -1,6 +1,6 @@
 ---
-import { resolveEntry } from '@rushcms/astro'
-import { redirectOrNotFound } from '../entry-response'
+import { getUrls, resolveEntry } from '@rushcms/astro'
+import { redirectToServedPath } from '../entry-response'
 import { SOLUTIONS_KEY, SOLUTIONS_SEGMENT } from '../site-config'
 
 export const prerender = false
@@ -9,5 +9,5 @@ const [locale, segment, slug, ...rest] = (Astro.params.path ?? '').split('/')
 const collection = segment === SOLUTIONS_SEGMENT ? SOLUTIONS_KEY : segment
 const resolved =
 	rest.length === 0 ? await resolveEntry(Astro, { locale, collection, slug }) : undefined
-return redirectOrNotFound(resolved)
+return redirectToServedPath(resolved, getUrls(Astro), Astro.url.pathname)
 ---
