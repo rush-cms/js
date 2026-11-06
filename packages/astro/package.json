@@ -15,31 +15,31 @@
 	"exports": {
 		".": {
 			"types": "./dist/index.d.ts",
-			"import": "./dist/index.js"
+			"default": "./dist/index.js"
 		},
 		"./middleware": {
 			"types": "./dist/middleware.d.ts",
-			"import": "./dist/middleware.js"
+			"default": "./dist/middleware.js"
 		},
 		"./components-runtime": {
 			"types": "./dist/components-runtime.d.ts",
-			"import": "./dist/components-runtime.js"
+			"default": "./dist/components-runtime.js"
 		},
 		"./form-enhance": {
 			"types": "./dist/form-enhance.d.ts",
-			"import": "./dist/form-enhance.js"
+			"default": "./dist/form-enhance.js"
 		},
 		"./routes/forms": {
 			"types": "./dist/routes/forms.d.ts",
-			"import": "./dist/routes/forms.js"
+			"default": "./dist/routes/forms.js"
 		},
 		"./routes/preview": {
 			"types": "./dist/routes/preview.d.ts",
-			"import": "./dist/routes/preview.js"
+			"default": "./dist/routes/preview.js"
 		},
 		"./routes/preview-exit": {
 			"types": "./dist/routes/preview-exit.d.ts",
-			"import": "./dist/routes/preview-exit.js"
+			"default": "./dist/routes/preview-exit.js"
 		},
 		"./components/*.astro": "./src/components/*.astro"
 	},

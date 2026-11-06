@@ -12,6 +12,7 @@ import {
 	runStartHook
 } from './fixtures/astro'
 import type { ProjectDir } from './fixtures/astro'
+import { installedPackage } from './fixtures/installed'
 
 const ARTICLES = '01JC3E28JT97KB6CQ643DZVMXX'
 const PAGES = '01JCQKFBF5KZNWJ47TAN9ZT24M'
@@ -122,6 +123,27 @@ describe('astro:config:setup', () => {
 			{ order: 'pre', entrypoint: '@rushcms/astro/middleware' }
 		])
 		expect(stub.requests).toEqual([])
+	})
+
+	it('injects entrypoints that an installed copy resolves through require.resolve', async () => {
+		const setup = await runSetup(
+			rush(options(ALL_LOCALES)),
+			useProject(apiEnv({ RUSH_PREVIEW: 'true' }))
+		)
+		const installed = installedPackage()
+		try {
+			const entrypoints = [...setup.routes, ...setup.middlewares].map(
+				(injected) => injected.entrypoint
+			)
+			expect(entrypoints.map((entrypoint) => installed.resolve(String(entrypoint)))).toEqual([
+				'dist/routes/forms.js',
+				'dist/routes/preview.js',
+				'dist/routes/preview-exit.js',
+				'dist/middleware.js'
+			])
+		} finally {
+			installed.remove()
+		}
 	})
 
 	it('rejects invalid url options before touching the API', async () => {
