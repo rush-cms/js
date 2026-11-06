@@ -12,11 +12,23 @@ type Props = Omit<HTMLAttributes<'img'>, 'src' | 'width' | 'height' | 'alt'> & {
 }
 
 const { media, alt, ...rest } = Astro.props
+const { quality, format, ...attributes } = rest
 const url = media?.url
+const text = alt ?? media?.alt ?? ''
+const plain = { loading: 'lazy' as const, decoding: 'async' as const, ...attributes }
 ---
 
 {
-	url && media.width && media.height && (
-		<Image {...rest} src={url} width={media.width} height={media.height} alt={alt ?? media.alt ?? ''} />
-	)
+	url &&
+		(media.width && media.height ? (
+			<Image
+				{...rest}
+				src={url}
+				width={media.width}
+				height={media.height}
+				alt={text}
+			/>
+		) : (
+			<img {...plain} src={url} alt={text} />
+		))
 }

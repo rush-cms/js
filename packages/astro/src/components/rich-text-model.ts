@@ -20,11 +20,9 @@ export type RichTextContext = {
 	depth: number
 }
 
-export type ResolvedImage = {
-	src: string
+export type ResolvedImage = RichTextMedia & {
+	url: string
 	alt: string
-	width?: number | undefined
-	height?: number | undefined
 }
 
 export type ImageReference = {
@@ -133,15 +131,16 @@ export function resolveImage(
 ): ResolvedImage | undefined {
 	const mediaId = text(reference.mediaId)
 	const entry = mediaId === '' ? undefined : media[mediaId]
-	const src = text(entry?.url) || text(reference.src)
-	if (src === '') {
+	const url = text(entry?.url) || text(reference.src)
+	if (url === '') {
 		return undefined
 	}
+	const width = positive(entry?.width)
+	const height = positive(entry?.height)
 	return {
-		src,
+		url,
 		alt: text(reference.alt) || text(entry?.alt),
-		width: positive(entry?.width),
-		height: positive(entry?.height)
+		...(width === undefined || height === undefined ? {} : { width, height })
 	}
 }
 

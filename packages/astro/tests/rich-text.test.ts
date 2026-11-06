@@ -238,7 +238,7 @@ describe('rich text images', () => {
 		const html = await render(
 			doc({ type: 'image', attrs: { src: '/local.png', alt: 'Local', mediaId: MEDIA_ID } })
 		)
-		expect(html).toContain('<img src="/local.png" alt="Local" loading="lazy">')
+		expect(html).toContain('<img loading="lazy" decoding="async" src="/local.png" alt="Local">')
 		expect(html).not.toContain('width=')
 	})
 
@@ -267,7 +267,7 @@ describe('rich text images', () => {
 		expect(html).toContain('data-lightbox="true"')
 		expect(html).toContain('src="https://cdn.example.com/site/media/master"')
 		expect(html).toContain('<figcaption>First</figcaption>')
-		expect(html).toContain('<img src="/b.png" alt="B" loading="lazy">')
+		expect(html).toContain('<img loading="lazy" decoding="async" src="/b.png" alt="B">')
 		expect(html.match(/<figcaption>/g)).toHaveLength(1)
 	})
 })

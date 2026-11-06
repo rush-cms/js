@@ -24,9 +24,20 @@ describe('RushImage', () => {
 		expect(await render({ media, alt: 'Override' })).toContain('alt="Override"')
 	})
 
-	it('renders nothing without a usable media entry', async () => {
+	it('renders nothing without a media url', async () => {
 		expect(await render({ media: undefined })).toBe('')
 		expect(await render({ media: { width: 1, height: 1 } })).toBe('')
-		expect(await render({ media: { url: 'https://x.test/a' } })).toBe('')
+	})
+
+	it('falls back to a plain img when the media has no dimensions', async () => {
+		const pending = { url: 'https://x.test/a', alt: 'Pending' }
+		expect(await render({ media: pending })).toBe(
+			'<img loading="lazy" decoding="async" src="https://x.test/a" alt="Pending">'
+		)
+		expect(
+			await render({ media: { ...pending, width: 640 }, loading: 'eager', class: 'hero' })
+		).toBe(
+			'<img loading="eager" decoding="async" class="hero" src="https://x.test/a" alt="Pending">'
+		)
 	})
 })

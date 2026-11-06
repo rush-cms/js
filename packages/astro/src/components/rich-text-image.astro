@@ -9,12 +9,6 @@ type Props = {
 }
 
 const { reference, media } = Astro.props
-const image = resolveImage(reference, media)
-const sized =
-	image && image.width !== undefined && image.height !== undefined
-		? { url: image.src, width: image.width, height: image.height }
-		: undefined
 ---
 
-{sized && image && <RushImage media={sized} alt={image.alt} loading="lazy" />}
-{!sized && image && <img src={image.src} alt={image.alt} loading="lazy" />}
+<RushImage media={resolveImage(reference, media)} loading="lazy" />
