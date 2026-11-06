@@ -1,3 +1,4 @@
+import { createUrls } from '@rushcms/client'
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { getRush } from '../src/index'
 import { resolveLocale } from '../src/runtime'
@@ -77,14 +78,13 @@ describe('resolveLocale', () => {
 	]
 
 	it.each(cases)('maps $name', ({ localePaths, current, expected }) => {
-		expect(resolveLocale(siteConfig({ localePaths, defaultLocale: 'en' }), current)).toBe(
-			expected
-		)
+		const config = siteConfig({ localePaths, defaultLocale: 'en' })
+		expect(resolveLocale(config, createUrls(config), current)).toBe(expected)
 	})
 
 	it.each(['pt', 'fr', 'constructor'])('throws for "%s", which matches no entry', (current) => {
 		const config = siteConfig({ localePaths: { pt_BR: '', en: 'en' } })
-		expect(() => resolveLocale(config, current)).toThrow(
+		expect(() => resolveLocale(config, createUrls(config), current)).toThrow(
 			`locale "${current}" matches no localePaths entry`
 		)
 	})

@@ -1,3 +1,4 @@
+import type { MovedParams } from './errors'
 import { toBcp47 } from './locales'
 import type {
 	Entry,
@@ -18,9 +19,13 @@ export type UrlConfig = {
 
 export type RushUrls = {
 	readonly locales: readonly LocaleCode[]
+	localeOf(param: string | undefined): LocaleCode | undefined
+	localeParam(locale: LocaleCode): string | undefined
 	collection(collection: CollectionRef, locale: LocaleCode): string
 	entry(entry: Entry): string
+	entryPathIn(entry: Entry, locale: LocaleCode): string
 	translation(entry: Entry, locale: LocaleCode): string
+	moved(params: MovedParams): string
 	entryParams(collection: CollectionRef, locale: LocaleCode, slug: string): RouteParams
 	homepage(locale: LocaleCode): string
 	navigationItem(item: NavigationItem, locale: LocaleCode): string | undefined
@@ -133,6 +138,17 @@ export function createUrls(config: UrlConfig): RushUrls {
 		return build(segmentsFor(target.collection.id, target.collectionSlugs), target.parts)
 	}
 
+	function entryPath(entry: Entry, parts: UrlParts): string {
+		return buildEntry({
+			collection: entry.collection,
+			collectionSlugs: [
+				entry.collection.slug,
+				...Object.values(entry.translations).map((item) => item.collection_slug)
+			],
+			parts
+		})
+	}
+
 	function translation(entry: Entry, locale: LocaleCode): string {
 		const target = Object.hasOwn(entry.translations, locale)
 			? entry.translations[locale]
@@ -140,13 +156,20 @@ export function createUrls(config: UrlConfig): RushUrls {
 		if (target === undefined) {
 			throw new Error(`entry "${entry.id}" has no translation for locale "${locale}"`)
 		}
+		return entryPath(entry, { locale, collection: target.collection_slug, slug: target.slug })
+	}
+
+	function entryPathIn(entry: Entry, locale: LocaleCode): string {
+		return Object.hasOwn(entry.translations, locale)
+			? translation(entry, locale)
+			: entryPath(entry, { locale, collection: entry.collection.slug, slug: entry.slug })
+	}
+
+	function pathIn(ref: CollectionRef, locale: LocaleCode, slug: string): string {
 		return buildEntry({
-			collection: entry.collection,
-			collectionSlugs: [
-				entry.collection.slug,
-				...Object.values(entry.translations).map((item) => item.collection_slug)
-			],
-			parts: { locale, collection: target.collection_slug, slug: target.slug }
+			collection: ref,
+			collectionSlugs: [ref.slug],
+			parts: { locale, collection: ref.slug, slug }
 		})
 	}
 
@@ -170,21 +193,23 @@ export function createUrls(config: UrlConfig): RushUrls {
 		collection,
 		entryParams,
 		locales: localeOrder,
+		localeOf: (param) =>
+			localeOrder.find((locale) => config.localePaths[locale] === (param ?? '')),
+		localeParam: (locale) => prefixOf(locale) || undefined,
 		entry: (entry) => translation(entry, entry.locale),
+		entryPathIn,
 		translation,
+		moved: (params) =>
+			pathIn(
+				{ id: params.collection_id, slug: params.collection_slug },
+				params.locale,
+				params.slug
+			),
 		homepage: (locale) => build(['{locale}'], { locale, collection: '', slug: '' }),
 		navigationItem: (item, locale) => {
 			const summary = item.target?.entry
 			if (summary !== undefined) {
-				return buildEntry({
-					collection: summary.collection,
-					collectionSlugs: [summary.collection.slug],
-					parts: {
-						locale: summary.locale,
-						collection: summary.collection.slug,
-						slug: summary.slug
-					}
-				})
+				return pathIn(summary.collection, summary.locale, summary.slug)
 			}
 			const ref = item.target?.collection
 			if (ref !== undefined) {

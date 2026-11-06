@@ -10,6 +10,7 @@ export type {
 	ClientErrorCode,
 	ContractErrorCode,
 	FieldError,
+	MovedParams,
 	RushErrorCode,
 	RushErrorParams,
 	RushErrorParamsByCode

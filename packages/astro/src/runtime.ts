@@ -23,6 +23,7 @@ export type RushRuntime = {
 	readonly seo: Readonly<Record<string, SeoFieldMap>>
 	readonly urls: RushUrls
 	client(context: RushContext): RushClient
+	clientIn(context: RushContext, locale: LocaleCode): RushClient
 	onDemandClient(): RushClient
 	preview(token: string, fallback?: PreviewSession): RushRuntime
 }
@@ -33,18 +34,26 @@ function normalized(code: string): string {
 	return toBcp47(code).toLowerCase()
 }
 
-export function resolveLocale(config: RushSiteConfig, requested: string | undefined): LocaleCode {
-	const entries = Object.entries(config.localePaths)
-	if (requested === undefined) {
-		return entries.find(([, prefix]) => prefix === '')?.[0] ?? config.defaultLocale
-	}
-	const match = entries.find(
-		([locale, prefix]) => prefix === requested || normalized(locale) === normalized(requested)
+export function matchLocale(urls: RushUrls, requested: string): LocaleCode | undefined {
+	return (
+		urls.localeOf(requested) ??
+		urls.locales.find((locale) => normalized(locale) === normalized(requested))
 	)
+}
+
+export function resolveLocale(
+	config: RushSiteConfig,
+	urls: RushUrls,
+	requested: string | undefined
+): LocaleCode {
+	if (requested === undefined) {
+		return urls.localeOf(undefined) ?? config.defaultLocale
+	}
+	const match = matchLocale(urls, requested)
 	if (match === undefined) {
 		throw new Error(`@rushcms/astro: locale "${requested}" matches no localePaths entry`)
 	}
-	return match[0]
+	return match
 }
 
 export function createRushRuntime(settings: RushRuntimeSettings): RushRuntime {
@@ -74,6 +83,12 @@ export function createRushRuntime(settings: RushRuntimeSettings): RushRuntime {
 		return client
 	}
 
+	const urls = createUrls(config)
+
+	function clientIn(context: RushContext, locale: LocaleCode): RushClient {
+		return shareable && context.isPrerendered ? sharedClient(locale) : create(locale, false)
+	}
+
 	return {
 		previewMode: config.preview,
 		get previewActive() {
@@ -81,12 +96,14 @@ export function createRushRuntime(settings: RushRuntimeSettings): RushRuntime {
 		},
 		defaultLocale: config.defaultLocale,
 		seo: config.seo,
-		urls: createUrls(config),
-		client: (context) => {
-			const locale = resolveLocale(config, context.currentLocale ?? context.params.locale)
-			return shareable && context.isPrerendered ? sharedClient(locale) : create(locale, false)
-		},
-		onDemandClient: () => create(resolveLocale(config, undefined), false),
+		urls,
+		client: (context) =>
+			clientIn(
+				context,
+				resolveLocale(config, urls, context.currentLocale ?? context.params.locale)
+			),
+		clientIn,
+		onDemandClient: () => create(resolveLocale(config, urls, undefined), false),
 		preview: (token, fallback) =>
 			createRushRuntime({
 				api: { ...api, token },

@@ -190,21 +190,69 @@ const form = await getRush(Astro).forms.get('contact')
 preview cookie session is active, with a link to `/_rush/preview/exit` that returns to the current page. `label` and
 `exitLabel` props set its texts.
 
-## Static paths and sitemap
+## Entry pages
+
+One page file serves a collection both prerendered (production) and on demand (the preview deployment, where every
+route is rendered on demand and `getStaticPaths` props never arrive). With the setup above
+(`routes: { artigos: '/{locale}/blog/{slug}' }`, `pt_BR` without prefix), `src/pages/[...locale]/blog/[slug].astro`:
 
 ```astro
 ---
-import { entryPaths } from '@rushcms/astro'
+import { entryPaths, resolveEntry } from '@rushcms/astro'
+import type { EntryRouteProps } from '@rushcms/astro'
+
+type Props = EntryRouteProps
 
 export const getStaticPaths = () => entryPaths('artigos')
-const { entry } = Astro.props
+
+const resolved = await resolveEntry(Astro, { collection: 'artigos' })
+if (resolved.kind === 'moved') {
+	return Astro.redirect(resolved.location, 301)
+}
+if (resolved.kind === 'missing') {
+	return new Response(null, { status: 404 })
+}
+const { entry, locale } = resolved
 ---
 ```
+
+`resolveEntry(Astro, route?)` returns one of:
+
+- `{ kind: 'found', entry, locale }`: the `entry` prop from `getStaticPaths` when present, otherwise the entry fetched
+  with `getRush` (drafts in a preview session) by the route's `collection` and `slug` params in the route's locale.
+- `{ kind: 'moved', location }`: the API answered `moved` (retired slug, another locale's slug, wrong collection
+  segment); `location` is built from the error params alone, without a second request.
+- `{ kind: 'missing' }`: `not_found`, `not_translated`, `locale_not_served`, a locale segment that is not a
+  `localePaths` prefix (codes such as `pt_BR` do not match), or a missing collection or slug.
+
+The locale comes from the `locale` param, mapped back by exact prefix (`urls.localeOf`); without that param, from
+`Astro.currentLocale` (prefix or code), else the locale with the `''` prefix, else the site's default locale.
+`route` overrides the `locale`, `collection` and `slug` params, for routes with a fixed collection segment (as above)
+or a catch-all route that splits the path itself. Other API errors are thrown.
 
 `entryPaths(collection, rush?)` walks the collection in every `localePaths` locale and returns
 `{ params, props: { entry } }`; `params` holds the `locale` (undefined for the empty prefix), `collection` and `slug`
 of the route pattern that applies to the collection. Entries served as a fallback produce a page under the requested
 locale too. Pass a client as `rush` to override the default one.
+
+A static build only answers the paths it generated, so old URLs (retired slugs, another locale's slug) get Astro's
+not-found page. To redirect them, add an on-demand catch-all route (`export const prerender = false`) that splits the
+path into the same segments and calls `resolveEntry(Astro, { locale, collection, slug })`, redirecting on `moved`
+and answering `404` otherwise.
+
+Links come from the URL helpers of `@rushcms/client` (`createUrls({ routes, localePaths })`, with the options passed
+to `rush()`):
+
+| Helper                     | Returns                                                                              |
+| -------------------------- | ------------------------------------------------------------------------------------ |
+| `urls.entry(entry)`        | The canonical URL (the served translation's own locale).                             |
+| `urls.entryPathIn(e, l)`   | The URL that answers `200` for `e` in locale `l`, including fallback pages.          |
+| `urls.translation(e, l)`   | The URL of `e`'s translation in `l` (throws when there is none).                     |
+| `urls.moved(params)`       | The URL from `moved` error params, routed by `collection_id` then `collection_slug`. |
+| `urls.localeOf(param)`     | The locale whose prefix equals a URL segment (`undefined` → the `''` prefix locale). |
+| `urls.localeParam(locale)` | The `locale` route param of a locale (`undefined` for the `''` prefix).              |
+
+## Sitemap
 
 ```ts
 import { sitemapResponse } from '@rushcms/astro'

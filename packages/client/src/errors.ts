@@ -11,11 +11,15 @@ export type ErrorParams = Schemas['ErrorParams']
 
 export type FieldError = Schemas['FieldError']
 
+export type MovedParams = Required<
+	Pick<ErrorParams, 'locale' | 'slug' | 'collection_id' | 'collection_slug'>
+>
+
 export type RushErrorParamsByCode = {
 	locale_not_served: Required<Pick<ErrorParams, 'available'>>
 	not_translated: Required<Pick<ErrorParams, 'available'>>
 	not_found: Required<Pick<ErrorParams, 'resource'>>
-	moved: Required<Pick<ErrorParams, 'locale' | 'slug' | 'collection_slug'>>
+	moved: MovedParams
 	rate_limited: Required<Pick<ErrorParams, 'retry_after'>>
 }
 

@@ -71,6 +71,7 @@ describe('errors', () => {
 		expectTypeOf(error.params).toEqualTypeOf<{
 			locale: string
 			slug: string
+			collection_id: string
 			collection_slug: string
 		}>()
 		expectTypeOf(error.errors).toEqualTypeOf<FieldError[]>()

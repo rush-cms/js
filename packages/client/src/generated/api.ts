@@ -233,7 +233,7 @@ export interface paths {
 		 *     4. Else a retired slug (slug history) in any locale finds E; the most recent retirement wins. Current slugs
 		 *        always win over history.
 		 *     5. For E found in 3 or 4: T exists and `T.slug == {entry}` → 200; T exists with another slug → `404 moved`
-		 *        with `params {locale, slug, collection_slug}`; no T → `404 not_translated` with `params.available`.
+		 *        with `params {locale, slug, collection_id, collection_slug}`; no T → `404 not_translated` with `params.available`.
 		 *     6. Nothing found → `404 not_found` (`params.resource: entry`).
 		 *     7. `{collection}` resolves through the collection slug of any locale, but a 200 also requires it to equal the
 		 *        collection slug in L; otherwise the answer is `moved`, carrying both corrections at once.
@@ -1131,6 +1131,8 @@ export interface components {
 			locale?: components['schemas']['LocaleCode']
 			/** @description `moved`: the entry slug to redirect to. */
 			slug?: string
+			/** @description `moved`: the id of the collection the entry belongs to. */
+			collection_id?: string
 			/** @description `moved`: the collection slug to redirect to. */
 			collection_slug?: string
 			/** @description `rate_limited`: seconds to wait. */
@@ -2414,7 +2416,7 @@ export interface components {
 			}
 		}
 		/**
-		 * @description `moved` (`params.locale`, `params.slug`, `params.collection_slug`): the entry lives at another URL for L;
+		 * @description `moved` (`params.locale`, `params.slug`, `params.collection_id`, `params.collection_slug`): the entry lives at another URL for L;
 		 *     redirect there. `not_translated` (`params.available`): the entry exists but has no served translation for L.
 		 *     `not_found` (`params.resource`: `collection` or `entry`).
 		 */
@@ -2430,6 +2432,7 @@ export interface components {
 				 *       "params": {
 				 *         "locale": "pt_BR",
 				 *         "slug": "ola-mundo",
+				 *         "collection_id": "01JC3E28JT97KB6CQ643DZVMXX",
 				 *         "collection_slug": "artigos"
 				 *       }
 				 *     }
