@@ -1,5 +1,9 @@
+import { IncomingMessage } from 'node:http'
+import { Socket } from 'node:net'
+import { createRequestFromNodeRequest } from 'astro/app/node'
 import { describe, expect, it } from 'vitest'
 import {
+	FORWARDED_FOR_HEADER,
 	FORWARDED_WITHOUT_PROXIES_WARNING,
 	SHORT_PROXY_CHAIN_WARNING,
 	visitorIp,
@@ -27,13 +31,21 @@ type ProxyChain = {
 	separator: string
 }
 
-type DirectRequest = {
-	forged: string[]
-	hostTrusted: boolean
-	separator: string
+type NodeRequest = {
+	socketAddress: string
+	host: string
+	forwardedFor: string | null
 }
 
 const SOCKET = '192.0.2.10'
+
+const INNERMOST_PROXY = '10.0.0.9'
+
+const TRUSTED_HOST = 'site.example'
+
+const HOSTS = [TRUSTED_HOST, 'other.example']
+
+const ASTRO_CLIENT_ADDRESS = Symbol.for('astro.clientAddress')
 
 const CLIENTS = ['203.0.113.7', '2001:db8::7', '::ffff:203.0.113.7']
 
@@ -73,17 +85,30 @@ function chains(): ProxyChain[] {
 	)
 }
 
-function directRequests(): DirectRequest[] {
-	return FORGED_PREFIXES.flatMap((forged) =>
-		[true, false].flatMap((hostTrusted) =>
-			SEPARATORS.map((separator) => ({ forged, hostTrusted, separator }))
-		)
-	)
+function incomingMessage(request: NodeRequest): IncomingMessage {
+	const socket = new Socket()
+	Object.defineProperty(socket, 'remoteAddress', { value: request.socketAddress })
+	const message = new IncomingMessage(socket)
+	message.method = 'POST'
+	message.url = '/_rush/forms/contact'
+	message.headers =
+		request.forwardedFor === null
+			? { host: request.host }
+			: { host: request.host, [FORWARDED_FOR_HEADER]: request.forwardedFor }
+	return message
 }
 
-function astroClientAddress(request: DirectRequest): string {
-	const leftmost = request.forged[0]?.trim()
-	return request.hostTrusted && leftmost !== undefined && leftmost !== '' ? leftmost : SOCKET
+function throughAstro(request: NodeRequest, trustedProxies: number): string | undefined {
+	const astroRequest = createRequestFromNodeRequest(incomingMessage(request), {
+		skipBody: true,
+		allowedDomains: [{ protocol: 'http', hostname: TRUSTED_HOST }]
+	})
+	const clientAddress: unknown = Reflect.get(astroRequest, ASTRO_CLIENT_ADDRESS)
+	return visitorIp({
+		forwardedFor: astroRequest.headers.get(FORWARDED_FOR_HEADER),
+		clientAddress: typeof clientAddress === 'string' ? clientAddress : undefined,
+		trustedProxies
+	})
 }
 
 const FORWARDED_CASES: ForwardedCase[] = [
@@ -161,25 +186,48 @@ const WARNING_CASES: WarningCase[] = [
 	{ forwardedFor: 'a, b, c', trustedProxies: 2, expected: undefined }
 ]
 
-describe('visitorIp behind trusted proxies', () => {
-	it.each(FORWARDED_CASES)('$name', ({ forwardedFor, trustedProxies, expected }) => {
-		expect(visitorIp({ forwardedFor, clientAddress: SOCKET, trustedProxies })).toBe(expected)
+describe('visitorIp through Astro createRequestFromNodeRequest', () => {
+	it('never forwards a client-supplied X-Forwarded-For entry without trusted proxies', () => {
+		let checked = 0
+		for (const host of HOSTS) {
+			for (const forged of FORGED_PREFIXES) {
+				for (const separator of SEPARATORS) {
+					const header = forwardedFor(forged, separator)
+					const ip = throughAstro(
+						{ socketAddress: SOCKET, host, forwardedFor: header },
+						0
+					)
+					const label = `${String(header)} for host ${host}`
+					expect([SOCKET, undefined], label).toContain(ip)
+					if (host !== TRUSTED_HOST && !forged.includes(SOCKET)) {
+						expect(ip, label).toBe(SOCKET)
+					}
+					checked += 1
+				}
+			}
+		}
+		expect(checked).toBe(80)
 	})
 
 	it('picks the address the outermost trusted proxy saw for every forged prefix and hop count', () => {
-		const all = chains()
-		for (const chain of all) {
-			const header = chainHeader(chain)
-			for (const clientAddress of [SOCKET, header.split(',')[0]?.trim(), undefined]) {
-				const ip = visitorIp({
-					forwardedFor: header,
-					clientAddress,
-					trustedProxies: chain.hops
-				})
-				expect(ip, `${header} with ${chain.hops} hops`).toBe(chain.client)
+		let checked = 0
+		for (const host of HOSTS) {
+			for (const chain of chains()) {
+				const header = chainHeader(chain)
+				const request = { socketAddress: INNERMOST_PROXY, host, forwardedFor: header }
+				expect(throughAstro(request, chain.hops), `${header} with ${chain.hops} hops`).toBe(
+					chain.client
+				)
+				checked += 1
 			}
 		}
-		expect(all.length).toBe(360)
+		expect(checked).toBe(720)
+	})
+})
+
+describe('visitorIp behind trusted proxies', () => {
+	it.each(FORWARDED_CASES)('$name', ({ forwardedFor, trustedProxies, expected }) => {
+		expect(visitorIp({ forwardedFor, clientAddress: SOCKET, trustedProxies })).toBe(expected)
 	})
 
 	it('never returns an address when the chain is shorter than the hop count', () => {
@@ -213,24 +261,6 @@ describe('visitorIp without trusted proxies', () => {
 			).toBeUndefined()
 		}
 	)
-
-	it('never forwards a client-supplied X-Forwarded-For value, whatever Astro resolved', () => {
-		const all = directRequests()
-		for (const request of all) {
-			const header = forwardedFor(request.forged, request.separator)
-			const clientAddress = astroClientAddress(request)
-			const ip = visitorIp({ forwardedFor: header, clientAddress, trustedProxies: 0 })
-			const forged = request.forged.map((entry) => entry.trim())
-			const fromSocket = clientAddress === SOCKET && !forged.includes(SOCKET)
-			const label = `${String(header)} trusted host ${request.hostTrusted}`
-			expect(ip, label).toBe(fromSocket ? SOCKET : undefined)
-			expect(
-				forged.filter((entry) => entry !== SOCKET),
-				label
-			).not.toContain(ip)
-		}
-		expect(all.length).toBe(80)
-	})
 })
 
 describe('visitorIpWarning', () => {
