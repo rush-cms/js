@@ -18,10 +18,15 @@ npm install @rushcms/client
 ```ts
 import { createClient } from '@rushcms/client'
 
+const token = process.env.RUSH_API_TOKEN
+if (token === undefined) {
+	throw new Error('RUSH_API_TOKEN is not set')
+}
+
 const rush = createClient({
 	url: 'https://cms.example.com',
 	siteId: '01JC3E28JT97KB6CQ643DZVMXX',
-	token: process.env.RUSH_API_TOKEN,
+	token,
 	locale: 'pt_BR'
 })
 
@@ -151,8 +156,10 @@ const etagStore: EtagStore = {
 | `hasCollectionSegment(collection)`                     | Whether the collection's pattern has a `{collection}` segment                  |
 
 `alternates(entry | homepage, urls)` returns `{ locale, hreflang, url }` for every translation, in `localePaths`
-order, and `toBcp47(code)` turns `pt_BR` into `pt-BR`. `servedPath` throws for an entry that was not fetched for
-that locale, `translation` for a locale the entry has no translation in.
+order, built from `translatedLocales(entry | homepage)` (the locales it has a translation in) and
+`translatedUrl(entry | homepage, locale, urls)` (its path in one of them), both exported for language switchers that
+need more than the alternates. `toBcp47(code)` turns `pt_BR` into `pt-BR`. `servedPath` throws for an entry that
+was not fetched for that locale, `translation` and `translatedUrl` for a locale the entry has no translation in.
 
 The [`@rushcms/astro` README](https://github.com/rush-cms/js/tree/main/packages/astro#entry-pages) shows these helpers
 in entry pages, redirects and sitemaps.
