@@ -1,14 +1,8 @@
 import { execFileSync } from 'node:child_process'
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { join, posix } from 'node:path'
-
-type ExportTarget = string | { [condition: string]: ExportTarget } | null
-
-type PackageManifest = {
-	name: string
-	private?: boolean
-	exports?: Record<string, ExportTarget>
-}
+import { literalTargets, targetsOf } from './export-targets'
+import type { PackageManifest } from './export-targets'
 
 type PackReport = {
 	files: { path: string }[]
@@ -31,16 +25,6 @@ function packedFiles(dir: string): Set<string> {
 	})
 	const [report] = JSON.parse(output) as PackReport[]
 	return new Set((report?.files ?? []).map((file) => file.path))
-}
-
-function targetsOf(target: ExportTarget, wildcard: string): string[] {
-	if (target === null) {
-		return []
-	}
-	if (typeof target === 'string') {
-		return [posix.normalize(target.replace('*', wildcard))]
-	}
-	return Object.values(target).flatMap((nested) => targetsOf(nested, wildcard))
 }
 
 function wildcardOf(key: string, subpath: string): string | undefined {
@@ -96,16 +80,9 @@ function problemsOf(
 }
 
 function exportProblems(manifest: PackageManifest, files: Set<string>): string[] {
-	return Object.entries(manifest.exports ?? {})
-		.filter(([key]) => !key.includes('*'))
-		.flatMap(([key, target]) =>
-			targetsOf(target, '')
-				.filter((path) => !files.has(path))
-				.map(
-					(path) =>
-						`${manifest.name}: export "${key}" target ${path} is not in the tarball`
-				)
-		)
+	return literalTargets(manifest)
+		.filter((path) => !files.has(path))
+		.map((path) => `${manifest.name}: export target ${path} is not in the tarball`)
 }
 
 function checkPackage(dir: string): string[] {
