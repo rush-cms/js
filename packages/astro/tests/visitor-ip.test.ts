@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest'
 import {
 	FORWARDED_FOR_HEADER,
 	FORWARDED_WITHOUT_PROXIES_WARNING,
-	SHORT_PROXY_CHAIN_WARNING,
+	UNRESOLVED_VISITOR_IP_WARNING,
 	visitorIp,
 	visitorIpWarning
 } from '../src/visitor-ip'
@@ -179,11 +179,21 @@ const WARNING_CASES: WarningCase[] = [
 		trustedProxies: 0,
 		expected: FORWARDED_WITHOUT_PROXIES_WARNING
 	},
-	{ forwardedFor: null, trustedProxies: 1, expected: SHORT_PROXY_CHAIN_WARNING },
+	{ forwardedFor: null, trustedProxies: 1, expected: UNRESOLVED_VISITOR_IP_WARNING },
 	{ forwardedFor: '203.0.113.7', trustedProxies: 1, expected: undefined },
-	{ forwardedFor: '203.0.113.7', trustedProxies: 2, expected: SHORT_PROXY_CHAIN_WARNING },
+	{ forwardedFor: '203.0.113.7', trustedProxies: 2, expected: UNRESOLVED_VISITOR_IP_WARNING },
 	{ forwardedFor: '203.0.113.7, 10.0.0.1', trustedProxies: 2, expected: undefined },
-	{ forwardedFor: 'a, b, c', trustedProxies: 2, expected: undefined }
+	{ forwardedFor: 'a, b, c', trustedProxies: 2, expected: UNRESOLVED_VISITOR_IP_WARNING },
+	{
+		forwardedFor: '203.0.113.7:4711, 10.0.0.1',
+		trustedProxies: 2,
+		expected: UNRESOLVED_VISITOR_IP_WARNING
+	},
+	{
+		forwardedFor: '10.0.0.1, unknown',
+		trustedProxies: 1,
+		expected: UNRESOLVED_VISITOR_IP_WARNING
+	}
 ]
 
 describe('visitorIp through Astro createRequestFromNodeRequest', () => {

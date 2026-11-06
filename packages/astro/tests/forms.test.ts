@@ -3,7 +3,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from
 import { submitForm } from '../src/forms'
 import type { FormContext } from '../src/forms'
 import { POST, prerender } from '../src/routes/forms'
-import { FORWARDED_WITHOUT_PROXIES_WARNING, SHORT_PROXY_CHAIN_WARNING } from '../src/visitor-ip'
+import { FORWARDED_WITHOUT_PROXIES_WARNING, UNRESOLVED_VISITOR_IP_WARNING } from '../src/visitor-ip'
 import { SITE_PREFIX, apiError, asRequest, envelope, startStubApi } from './fixtures/api'
 import type { StubApi, StubRequest } from './fixtures/api'
 import { recordingLogger, rushLocals, siteConfig } from './fixtures/runtime'
@@ -55,7 +55,13 @@ const WARNED_POSTS: WarnedPosts[] = [
 		name: 'warns once per runtime when the chain is shorter than the trusted proxies',
 		trustedProxies: 2,
 		forwardedFor: [`${VISITOR_IP}, 10.0.0.1`, VISITOR_IP, null, '10.0.0.1'],
-		expected: [SHORT_PROXY_CHAIN_WARNING]
+		expected: [UNRESOLVED_VISITOR_IP_WARNING]
+	},
+	{
+		name: 'warns once per runtime when the trusted entry is not a bare IP',
+		trustedProxies: 2,
+		forwardedFor: [`${VISITOR_IP}:4711, 10.0.0.1`, 'unknown, 10.0.0.1'],
+		expected: [UNRESOLVED_VISITOR_IP_WARNING]
 	},
 	{
 		name: 'does not warn when every trusted proxy appended its entry',
