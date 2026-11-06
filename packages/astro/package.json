@@ -63,7 +63,7 @@
 		"test": "vitest run"
 	},
 	"dependencies": {
-		"@rushcms/client": "workspace:^"
+		"@rushcms/client": "^2.1.0"
 	},
 	"peerDependencies": {
 		"astro": ">=7.4.0",

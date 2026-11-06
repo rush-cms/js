@@ -21,7 +21,7 @@
       "name": "@rushcms/astro",
       "version": "0.0.0",
       "dependencies": {
-        "@rushcms/client": "workspace:^",
+        "@rushcms/client": "^2.1.0",
       },
       "devDependencies": {
         "@astrojs/check": "^0.9.12",
