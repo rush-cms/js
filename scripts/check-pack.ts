@@ -9,6 +9,8 @@ type PackReport = {
 }
 
 const PACKAGES_DIR = join(import.meta.dirname, '../packages')
+const ROOT_LICENSE = join(import.meta.dirname, '../LICENSE')
+const RELEASE_FILES = ['README.md', 'LICENSE']
 const CHECKED = /\.(js|mjs|ts|astro)$/
 const SPECIFIER = /(?:\bfrom\s*|\bimport\s*\(?\s*)['"]([^'"]+)['"]/g
 const RESOLVED_SUFFIXES = ['', '.js', '.mjs', '.ts', '.d.ts', '.astro', '/index.js', '/index.ts']
@@ -85,6 +87,18 @@ function exportProblems(manifest: PackageManifest, files: Set<string>): string[]
 		.map((path) => `${manifest.name}: export target ${path} is not in the tarball`)
 }
 
+function releaseFileProblems(manifest: PackageManifest, dir: string, files: Set<string>): string[] {
+	const missing = RELEASE_FILES.filter((file) => !files.has(file)).map(
+		(file) => `${manifest.name}: ${file} is not in the tarball`
+	)
+	const license = join(dir, 'LICENSE')
+	const differs =
+		existsSync(license) && readFileSync(license, 'utf8') !== readFileSync(ROOT_LICENSE, 'utf8')
+	return differs
+		? [...missing, `${manifest.name}: LICENSE differs from the root LICENSE`]
+		: missing
+}
+
 function checkPackage(dir: string): string[] {
 	const manifest = manifestOf(dir)
 	if (manifest.private === true) {
@@ -98,7 +112,11 @@ function checkPackage(dir: string): string[] {
 				(problem) => `${manifest.name}: ${file}: ${problem}`
 			)
 		)
-	return [...exportProblems(manifest, files), ...referenced]
+	return [
+		...releaseFileProblems(manifest, dir, files),
+		...exportProblems(manifest, files),
+		...referenced
+	]
 }
 
 const dirs = readdirSync(PACKAGES_DIR).map((name) => join(PACKAGES_DIR, name))
