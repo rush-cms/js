@@ -1,12 +1,27 @@
 import { describe, expect, it } from 'vitest'
 import Seo from '../src/components/seo.astro'
+import type { RushCollections } from '@rushcms/client'
 import type { SeoFieldMap } from '../src/config'
 import { entryExample, homepageExample } from '../../client/tests/fixtures/contract'
 import { linkHrefs, metaContent, renderComponent } from './fixtures/render'
-import { LOCALE_PATHS, OFFLINE_API, rushLocals, siteConfig } from './fixtures/runtime'
+import { COLLECTION_SLUGS } from '../../client/tests/fixtures/slugs'
+import {
+	LOCALE_PATHS,
+	OFFLINE_API,
+	collectionsOf,
+	rushLocals,
+	siteConfig
+} from './fixtures/runtime'
 
-function localesFor(seo: Record<string, SeoFieldMap> = {}, defaultLocale = 'en'): object {
-	return rushLocals(OFFLINE_API, siteConfig({ seo, defaultLocale, localePaths: LOCALE_PATHS }))
+function localesFor(
+	seo: Record<string, SeoFieldMap> = {},
+	defaultLocale = 'en',
+	collections: RushCollections = {}
+): object {
+	return rushLocals(
+		OFFLINE_API,
+		siteConfig({ seo, defaultLocale, localePaths: LOCALE_PATHS, collections })
+	)
 }
 
 function entryWith(data: Record<string, unknown>) {
@@ -66,6 +81,20 @@ describe('Seo for an entry', () => {
 			locals: localesFor({ [entry.collection.id]: { description: 'summary' } })
 		})
 		expect(metaContent(byId, 'name', 'description')).toEqual(['From artigos'])
+	})
+
+	it('keys the mapping by a slug the entry does not carry through the site collections', async () => {
+		const base = entryWith({ summary: 'From articulos' })
+		const entry = { ...base, translations: { [base.locale]: base.translations[base.locale] } }
+		const seo = { articulos: { description: 'summary' } }
+		const collections = collectionsOf(entry.collection.id, COLLECTION_SLUGS)
+		const mapped = await renderComponent(Seo, {
+			props: { entry },
+			locals: localesFor(seo, 'en', collections)
+		})
+		expect(metaContent(mapped, 'name', 'description')).toEqual(['From articulos'])
+		const unmapped = await renderComponent(Seo, { props: { entry }, locals: localesFor(seo) })
+		expect(metaContent(unmapped, 'name', 'description')).toEqual([entry.excerpt])
 	})
 
 	it('uses an unsized mapped image url as is and resolves a relative one against the site', async () => {

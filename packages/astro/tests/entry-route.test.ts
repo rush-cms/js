@@ -1,35 +1,36 @@
 import { isRecord } from '@rushcms/client'
-import type { Entry } from '@rushcms/client'
+import type { Entry, LocaleCode } from '@rushcms/client'
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { entryExample, responseExample } from '../../client/tests/fixtures/contract'
+import { COLLECTION_SLUGS, ENTRY_SLUGS } from '../../client/tests/fixtures/slugs'
 import type { RushSiteConfig } from '../src/config'
 import { resolveEntry } from '../src/index'
-import type { EntryRoute, EntryRouteContext, EntryRouteProps } from '../src/index'
-import { attachRuntime, createRushRuntime } from '../src/runtime'
+import type { EntryRoute } from '../src/index'
 import { SITE_PREFIX, apiError, envelope, startStubApi } from './fixtures/api'
 import type { StubApi, StubHandler, StubRequest } from './fixtures/api'
-import { rushLocals, siteConfig } from './fixtures/runtime'
-
-type ContextInit = {
-	locals: object
-	params?: Record<string, string | undefined>
-	props?: EntryRouteProps
-	currentLocale?: string
-}
+import { collectionsOf, routeContext, rushLocals, siteConfig } from './fixtures/runtime'
+import type { RouteContextInit } from './fixtures/runtime'
 
 type MissingCase = {
 	code: string
 	params: Record<string, unknown>
 }
 
+type FixedRouteCase = {
+	locale: LocaleCode
+	requested: string
+}
+
 const ARTICLES = entryExample().collection.id
 const PREVIEW_TOKEN = 'rush_prv_e30.c2ln'
 const ENTRY_ROUTE = `${SITE_PREFIX}/collections/blog/entries/hello-world`
+const ENTRY_PATH = /^\/api\/v1\/[^/]+\/collections\/([^/]+)\/entries\/([^/]+)$/
+const FIXED_ROUTE: EntryRoute = { collection: 'artigos' }
 
 const CONFIG: RushSiteConfig = siteConfig({
 	localePaths: { pt_BR: '', en: 'en', es: 'es' },
-	routes: { articles: '/{locale}/posts/{slug}' },
-	routeKeysById: { [ARTICLES]: 'articles' },
+	routes: { artigos: '/{locale}/posts/{slug}' },
+	collections: collectionsOf(ARTICLES, COLLECTION_SLUGS),
 	memo: false
 })
 
@@ -43,22 +44,6 @@ function movedBody(): Record<string, unknown> {
 	return body
 }
 
-function context(init: ContextInit): EntryRouteContext {
-	return {
-		locals: init.locals,
-		currentLocale: init.currentLocale,
-		isPrerendered: false,
-		params: init.params ?? {},
-		props: init.props ?? {}
-	}
-}
-
-function previewLocals(config: RushSiteConfig = CONFIG): object {
-	const locals = {}
-	attachRuntime(locals, createRushRuntime({ api: stub.api, config }).preview(PREVIEW_TOKEN))
-	return locals
-}
-
 function servedEntry(request: StubRequest): Entry {
 	return { ...entryExample(), locale: request.query.get('locale') ?? '' }
 }
@@ -67,15 +52,12 @@ function serving(handler: StubHandler): void {
 	stub.handle(handler)
 }
 
+function entryNotFound(): Response {
+	return apiError(404, { error: 'not found', code: 'not_found', params: { resource: 'entry' } })
+}
+
 function serveEntryAt(path: string): StubHandler {
-	return (request) =>
-		request.path === path
-			? envelope(servedEntry(request))
-			: apiError(404, {
-					error: 'not found',
-					code: 'not_found',
-					params: { resource: 'entry' }
-				})
+	return (request) => (request.path === path ? envelope(servedEntry(request)) : entryNotFound())
 }
 
 function requestLines(): string[] {
@@ -84,8 +66,40 @@ function requestLines(): string[] {
 	)
 }
 
-async function resolveIn(init: ContextInit, route?: EntryRoute) {
-	return resolveEntry(context(init), route)
+function slugOwner(slug: string): LocaleCode | undefined {
+	return Object.keys(ENTRY_SLUGS).find((locale) => ENTRY_SLUGS[locale] === slug)
+}
+
+function resolvingSlugs(request: StubRequest): Response {
+	const [, collection = '', slug = ''] = ENTRY_PATH.exec(request.path) ?? []
+	const locale = request.query.get('locale') ?? ''
+	const known = Object.values(COLLECTION_SLUGS).includes(collection)
+	if (!known || slugOwner(slug) === undefined) {
+		return entryNotFound()
+	}
+	const canonical = { slug: ENTRY_SLUGS[locale], collection: COLLECTION_SLUGS[locale] }
+	if (canonical.slug === slug && canonical.collection === collection) {
+		return envelope(servedEntry(request))
+	}
+	return apiError(404, {
+		error: 'entry moved',
+		code: 'moved',
+		params: {
+			locale,
+			slug: canonical.slug,
+			collection_id: ARTICLES,
+			collection_slug: canonical.collection
+		}
+	})
+}
+
+function fixedPath(locale: LocaleCode, slug: string): string {
+	const prefix = CONFIG.localePaths[locale] ?? ''
+	return prefix === '' ? `/posts/${slug}` : `/${prefix}/posts/${slug}`
+}
+
+async function resolveIn(init: RouteContextInit, route?: EntryRoute) {
+	return resolveEntry(routeContext(init), route)
 }
 
 beforeAll(async () => {
@@ -127,21 +141,43 @@ describe('resolveEntry on demand', () => {
 
 	it('reads drafts with the preview token in a preview deployment without props', async () => {
 		serving(serveEntryAt(ENTRY_ROUTE))
-		const resolved = await resolveIn({ locals: previewLocals(), params: BLOG_PARAMS })
+		const resolved = await resolveIn({
+			locals: rushLocals(stub.api, CONFIG, PREVIEW_TOKEN),
+			params: BLOG_PARAMS
+		})
 		expect(resolved.kind).toBe('found')
 		expect(requestLines()).toEqual([
 			`${ENTRY_ROUTE}?locale=en&perspective=draft Bearer ${PREVIEW_TOKEN}`
 		])
 	})
 
-	it('maps moved to a location built from its params with a single request', async () => {
+	it('maps moved to a permanent location built from its params with a single request', async () => {
 		serving(() => apiError(404, movedBody()))
 		const resolved = await resolveIn({
 			locals: rushLocals(stub.api, CONFIG),
 			params: { locale: 'en', collection: 'blog', slug: 'old-slug' }
 		})
-		expect(resolved).toEqual({ kind: 'moved', location: '/posts/ola-mundo' })
+		expect(resolved).toEqual({ kind: 'moved', location: '/posts/ola-mundo', permanent: true })
 		expect(stub.requests).toHaveLength(1)
+	})
+
+	it('marks moved as temporary in a preview deployment', async () => {
+		serving(() => apiError(404, movedBody()))
+		const preview = siteConfig({ ...CONFIG, preview: true })
+		for (const locals of [
+			rushLocals(stub.api, preview),
+			rushLocals(stub.api, preview, PREVIEW_TOKEN)
+		]) {
+			const resolved = await resolveIn({
+				locals,
+				params: { locale: 'en', collection: 'blog', slug: 'x' }
+			})
+			expect(resolved).toEqual({
+				kind: 'moved',
+				location: '/posts/ola-mundo',
+				permanent: false
+			})
+		}
 	})
 
 	const missing: MissingCase[] = [
@@ -191,15 +227,67 @@ describe('resolveEntry on demand', () => {
 })
 
 describe('resolveEntry route overrides and locales', () => {
-	it('takes the collection of a fixed-collection route from the route argument', async () => {
-		const path = `${SITE_PREFIX}/collections/articles/entries/hello-world`
-		serving(serveEntryAt(path))
+	const fixedCases: FixedRouteCase[] = Object.keys(CONFIG.localePaths).flatMap((locale) =>
+		Object.values(ENTRY_SLUGS).map((requested) => ({ locale, requested }))
+	)
+
+	it.each(fixedCases)(
+		'resolves the fixed-collection route in $locale for the slug $requested without a loop',
+		async ({ locale, requested }) => {
+			serving(resolvingSlugs)
+			const locals = rushLocals(stub.api, CONFIG)
+			const params = { locale: CONFIG.localePaths[locale] || undefined, slug: requested }
+			const resolved = await resolveIn({ locals, params }, FIXED_ROUTE)
+			const canonical = ENTRY_SLUGS[locale] ?? ''
+			expect(stub.requests.map((request) => request.path)).toEqual([
+				`${SITE_PREFIX}/collections/${COLLECTION_SLUGS[locale]}/entries/${requested}`
+			])
+			if (requested === canonical) {
+				expect(resolved.kind === 'found' && resolved.entry.locale).toBe(locale)
+				return
+			}
+			const location = fixedPath(locale, canonical)
+			expect(resolved).toEqual({ kind: 'moved', location, permanent: true })
+			expect(location).not.toBe(fixedPath(locale, requested))
+			const landed = await resolveIn(
+				{ locals, params: { ...params, slug: canonical } },
+				FIXED_ROUTE
+			)
+			expect(landed.kind).toBe('found')
+		}
+	)
+
+	it('keeps a collection segment of a {collection} route unmapped so the API corrects it', async () => {
+		serving(resolvingSlugs)
+		const config = siteConfig({ ...CONFIG, routes: {} })
+		const resolved = await resolveIn({
+			locals: rushLocals(stub.api, config),
+			params: { locale: 'en', collection: 'artigos', slug: 'hello-world' }
+		})
+		expect(resolved).toEqual({
+			kind: 'moved',
+			location: '/en/blog/hello-world',
+			permanent: true
+		})
+		expect(stub.requests.map((request) => request.path)).toEqual([
+			`${SITE_PREFIX}/collections/artigos/entries/hello-world`
+		])
+	})
+
+	it('maps a fixed route keyed by the collection id to the slug of the locale', async () => {
+		serving(resolvingSlugs)
+		const config = siteConfig({
+			...CONFIG,
+			routes: { [ARTICLES]: '/{locale}/posts/{slug}' }
+		})
 		const resolved = await resolveIn(
-			{ locals: rushLocals(stub.api, CONFIG), params: { locale: 'es', slug: 'hello-world' } },
-			{ collection: 'articles' }
+			{ locals: rushLocals(stub.api, config), params: { locale: 'es', slug: 'hola-mundo' } },
+			{ collection: ARTICLES }
 		)
-		expect(resolved.kind === 'found' && resolved.locale).toBe('es')
-		expect(stub.requests.map((request) => request.path)).toEqual([path])
+		expect(resolved.kind).toBe('found')
+		expect(stub.requests.map((request) => request.path)).toEqual([
+			`${SITE_PREFIX}/collections/articulos/entries/hola-mundo`
+		])
 	})
 
 	it('resolves a catch-all route from explicit segments', async () => {
@@ -212,12 +300,13 @@ describe('resolveEntry route overrides and locales', () => {
 	})
 
 	it('uses the empty prefix locale when the route has no locale segment', async () => {
-		serving(serveEntryAt(ENTRY_ROUTE))
+		serving(resolvingSlugs)
 		const resolved = await resolveIn({
 			locals: rushLocals(stub.api, CONFIG),
-			params: { collection: 'blog', slug: 'hello-world' }
+			params: { collection: 'blog', slug: 'ola-mundo' }
 		})
 		expect(resolved.kind === 'found' && resolved.locale).toBe('pt_BR')
+		expect(stub.requests[0]?.path).toBe(`${SITE_PREFIX}/collections/artigos/entries/ola-mundo`)
 	})
 
 	it('maps an Astro i18n locale code when the route has no locale param', async () => {

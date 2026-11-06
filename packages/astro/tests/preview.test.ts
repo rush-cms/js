@@ -8,7 +8,8 @@ import { createRushRuntime } from '../src/runtime'
 import type { RushSiteConfig } from '../src/config'
 import { SITE_PREFIX, apiError, envelope, siteExample, startStubApi } from './fixtures/api'
 import type { StubApi, StubHandler, StubRequest } from './fixtures/api'
-import { rushLocals, siteConfig } from './fixtures/runtime'
+import { collectionsOf, routeContext, rushLocals, siteConfig } from './fixtures/runtime'
+import { COLLECTION_SLUGS } from '../../client/tests/fixtures/slugs'
 
 type ParamCase = {
 	name: string
@@ -47,7 +48,7 @@ function previewConfig(overrides: Partial<RushSiteConfig> = {}): RushSiteConfig 
 	return siteConfig({
 		localePaths: { pt_BR: '', en: 'en', es: 'es' },
 		routes: { artigos: '/{locale}/posts/{slug}' },
-		routeKeysById: { [ARTICLES]: 'artigos' },
+		collections: collectionsOf(ARTICLES, COLLECTION_SLUGS),
 		memo: false,
 		preview: true,
 		...overrides
@@ -322,12 +323,7 @@ describe('middleware', () => {
 			locals: {},
 			cookies: { get }
 		}
-		const page = {
-			locals: context.locals,
-			currentLocale: 'en',
-			isPrerendered: false,
-			params: {}
-		}
+		const page = routeContext({ locals: context.locals, currentLocale: 'en' })
 		const middleware = createRushMiddleware(createRushRuntime({ api: stub.api, config }))
 		const response = await middleware(context, async () => {
 			for (let read = 0; read < (options.reads ?? 1); read++) {
@@ -401,12 +397,11 @@ describe('middleware', () => {
 
 	it('builds a fresh client per request in preview mode', async () => {
 		const { context } = await pass(previewConfig({ memo: true }), TOKEN)
-		const page = {
+		const page = routeContext({
 			locals: context.locals,
 			currentLocale: 'en',
-			isPrerendered: true,
-			params: {}
-		}
+			isPrerendered: true
+		})
 		expect(getRush(page)).not.toBe(getRush(page))
 	})
 })

@@ -1,4 +1,4 @@
-import type { LocaleCode, RushLocalePaths, RushRoutes } from '@rushcms/client'
+import type { LocaleCode, RushCollections, RushLocalePaths, RushRoutes } from '@rushcms/client'
 import type { Plugin } from 'vite'
 
 export type SeoFieldMap = {
@@ -16,7 +16,7 @@ export type RushAstroOptions = {
 export type RushSiteConfig = {
 	routes: RushRoutes
 	localePaths: RushLocalePaths
-	routeKeysById: Record<string, string>
+	collections: RushCollections
 	defaultLocale: LocaleCode
 	seo: Record<string, SeoFieldMap>
 	memo: boolean

@@ -34,26 +34,53 @@ function normalized(code: string): string {
 	return toBcp47(code).toLowerCase()
 }
 
-export function matchLocale(urls: RushUrls, requested: string): LocaleCode | undefined {
+export type LocaleRequest = {
+	segment: string | undefined
+	current: string | undefined
+}
+
+const NO_LOCALE: LocaleRequest = { segment: undefined, current: undefined }
+
+function matchLocale(urls: RushUrls, requested: string): LocaleCode | undefined {
 	return (
 		urls.localeOf(requested) ??
 		urls.locales.find((locale) => normalized(locale) === normalized(requested))
 	)
 }
 
-export function resolveLocale(
-	config: RushSiteConfig,
+export function localeRequest(
+	context: RushContext,
+	segment: string | undefined = context.params.locale
+): LocaleRequest {
+	return { segment, current: context.currentLocale }
+}
+
+export function findLocale(
 	urls: RushUrls,
-	requested: string | undefined
+	defaultLocale: LocaleCode,
+	request: LocaleRequest
+): LocaleCode | undefined {
+	if (request.segment !== undefined) {
+		return urls.localeOf(request.segment)
+	}
+	if (request.current !== undefined) {
+		return matchLocale(urls, request.current)
+	}
+	return urls.localeOf(undefined) ?? defaultLocale
+}
+
+export function resolveLocale(
+	urls: RushUrls,
+	defaultLocale: LocaleCode,
+	request: LocaleRequest
 ): LocaleCode {
-	if (requested === undefined) {
-		return urls.localeOf(undefined) ?? config.defaultLocale
+	const locale = findLocale(urls, defaultLocale, request)
+	if (locale === undefined) {
+		throw new Error(
+			`@rushcms/astro: locale "${request.segment ?? request.current}" matches no localePaths entry`
+		)
 	}
-	const match = matchLocale(urls, requested)
-	if (match === undefined) {
-		throw new Error(`@rushcms/astro: locale "${requested}" matches no localePaths entry`)
-	}
-	return match
+	return locale
 }
 
 export function createRushRuntime(settings: RushRuntimeSettings): RushRuntime {
@@ -98,12 +125,9 @@ export function createRushRuntime(settings: RushRuntimeSettings): RushRuntime {
 		seo: config.seo,
 		urls,
 		client: (context) =>
-			clientIn(
-				context,
-				resolveLocale(config, urls, context.currentLocale ?? context.params.locale)
-			),
+			clientIn(context, resolveLocale(urls, config.defaultLocale, localeRequest(context))),
 		clientIn,
-		onDemandClient: () => create(resolveLocale(config, urls, undefined), false),
+		onDemandClient: () => create(resolveLocale(urls, config.defaultLocale, NO_LOCALE), false),
 		preview: (token, fallback) =>
 			createRushRuntime({
 				api: { ...api, token },

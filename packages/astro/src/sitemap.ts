@@ -3,6 +3,7 @@ import type { Entry, Homepage, LocaleCode, RushClient, RushUrls } from '@rushcms
 import { absoluteLinks, hreflangLinks } from './alternate-links'
 import type { HreflangLink } from './alternate-links'
 import { getRush } from './get-rush'
+import { localizedEntries } from './localized-entries'
 import { runtimeOf } from './runtime'
 import type { RushContext } from './runtime'
 import { absoluteUrl, requireSite } from './site-origin'
@@ -52,11 +53,9 @@ function entryUrl(entry: Entry, source: SitemapSource): SitemapUrl {
 
 async function entryUrls(collection: string, source: SitemapSource): Promise<SitemapUrl[]> {
 	const found: SitemapUrl[] = []
-	for (const locale of source.urls.locales) {
-		for await (const entry of source.client.entries.all(collection, { locale })) {
-			if (!entry.fallback) {
-				found.push(entryUrl(entry, source))
-			}
+	for await (const { entry } of localizedEntries(collection, source.client, source.urls)) {
+		if (!entry.fallback) {
+			found.push(entryUrl(entry, source))
 		}
 	}
 	return found

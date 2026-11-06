@@ -34,13 +34,8 @@ function filled(value: unknown): string | undefined {
 	return typeof value === 'string' && value.trim() !== '' ? value : undefined
 }
 
-function fieldMapOf(entry: Entry, seo: SeoSettings['seo']): SeoFieldMap {
-	const keys = [
-		entry.collection.id,
-		entry.collection.slug,
-		...Object.values(entry.translations).map((item) => item.collection_slug)
-	]
-	const key = keys.find((candidate) => Object.hasOwn(seo, candidate))
+function fieldMapOf(entry: Entry, { urls, seo }: SeoSettings): SeoFieldMap {
+	const key = urls.collectionKeys(entry).find((candidate) => Object.hasOwn(seo, candidate))
 	return (key === undefined ? undefined : seo[key]) ?? {}
 }
 
@@ -107,7 +102,7 @@ function withImage(tags: SeoTags, image: SeoImage | undefined, site: URL): SeoTa
 
 export function entrySeo(entry: Entry, settings: SeoSettings): SeoTags {
 	const { urls, site } = settings
-	const fields = fieldMapOf(entry, settings.seo)
+	const fields = fieldMapOf(entry, settings)
 	const tags: SeoTags = {
 		type: 'article',
 		canonical: absoluteUrl(urls.entry(entry), site),

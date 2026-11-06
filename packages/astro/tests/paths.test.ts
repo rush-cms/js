@@ -5,10 +5,10 @@ import { collectEntryPaths } from '../src/paths'
 import { entryExample } from '../../client/tests/fixtures/contract'
 import { SITE_PREFIX, entryListsByLocale, startStubApi } from './fixtures/api'
 import type { StubApi } from './fixtures/api'
-import { LOCALE_PATHS } from './fixtures/runtime'
+import { COLLECTION_SLUGS } from '../../client/tests/fixtures/slugs'
+import { LOCALE_PATHS, collectionsOf } from './fixtures/runtime'
 
-const COLLECTION_SLUGS: Record<string, string> = { pt_BR: 'artigos', en: 'blog', es: 'articulos' }
-const ROUTE_KEYS = { [entryExample().collection.id]: 'blog' }
+const COLLECTIONS = collectionsOf(entryExample().collection.id, COLLECTION_SLUGS)
 
 let stub: StubApi
 
@@ -76,13 +76,18 @@ describe('entryPaths', () => {
 		const urls = createUrls({
 			localePaths: LOCALE_PATHS,
 			routes: { blog: '/{locale}/posts/{slug}' },
-			routeKeysById: ROUTE_KEYS
+			collections: COLLECTIONS
 		})
 		const paths = await collectEntryPaths('blog', clientOf(), urls)
 		expect(paths.map((path) => path.params)).toEqual([
 			{ locale: 'pt', slug: 'ola' },
 			{ locale: 'en', slug: 'ola' }
 		])
+		expect(stub.requests.slice(-3).map((request) => request.path)).toEqual(
+			['artigos', 'blog', 'articulos'].map(
+				(slug) => `${SITE_PREFIX}/collections/${slug}/entries`
+			)
+		)
 		expect(paths[1]?.props.entry.fallback).toBe(true)
 	})
 
@@ -116,7 +121,7 @@ describe('entryPaths', () => {
 		const urls = createUrls({
 			localePaths: { pt_BR: '', en: 'en', es: 'es' },
 			routes: { blog: '/{locale}/blog/{slug}' },
-			routeKeysById: ROUTE_KEYS
+			collections: COLLECTIONS
 		})
 		const paths = await collectEntryPaths('blog', clientOf(), urls)
 		expect(paths.map((path) => path.params)).toEqual([{ locale: undefined, slug: 'ola' }])

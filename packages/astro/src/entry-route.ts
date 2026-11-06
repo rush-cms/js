@@ -1,7 +1,7 @@
 import { isRushError } from '@rushcms/client'
-import type { Entry, LocaleCode } from '@rushcms/client'
+import type { Entry, LocaleCode, RushUrls } from '@rushcms/client'
 import type { EntryStaticPath } from './paths'
-import { matchLocale, runtimeOf } from './runtime'
+import { findLocale, localeRequest, runtimeOf } from './runtime'
 import type { RushContext, RushRuntime } from './runtime'
 
 export type EntryRouteProps = Partial<EntryStaticPath['props']>
@@ -25,6 +25,7 @@ export type EntryFound = {
 export type EntryMoved = {
 	kind: 'moved'
 	location: string
+	permanent: boolean
 }
 
 export type EntryMissing = {
@@ -37,18 +38,11 @@ const MISSING: EntryMissing = { kind: 'missing' }
 
 const MISSING_CODES = ['not_found', 'not_translated', 'locale_not_served'] as const
 
-function routeLocale(
-	runtime: RushRuntime,
-	context: RushContext,
-	segment: string | undefined
-): LocaleCode | undefined {
-	if (segment !== undefined) {
-		return runtime.urls.localeOf(segment)
-	}
-	if (context.currentLocale !== undefined) {
-		return matchLocale(runtime.urls, context.currentLocale)
-	}
-	return runtime.urls.localeOf(undefined) ?? runtime.defaultLocale
+function requestedCollection(urls: RushUrls, key: string, locale: LocaleCode): string {
+	const ref = urls.collectionRef(key, locale)
+	const fixed =
+		ref !== undefined && !Object.hasOwn(urls.entryParams(ref, locale, ''), 'collection')
+	return fixed ? ref.slug : key
 }
 
 function isMissing(err: unknown): boolean {
@@ -65,11 +59,15 @@ async function fetchEntry(
 	try {
 		const entry = await runtime
 			.clientIn(context, locale)
-			.entries.get(collection, slug, { locale })
+			.entries.get(requestedCollection(runtime.urls, collection, locale), slug, { locale })
 		return { kind: 'found', entry, locale }
 	} catch (err) {
 		if (isRushError(err, 'moved')) {
-			return { kind: 'moved', location: runtime.urls.moved(err.params) }
+			return {
+				kind: 'moved',
+				location: runtime.urls.moved(err.params),
+				permanent: !runtime.previewMode
+			}
 		}
 		if (isMissing(err)) {
 			return MISSING
@@ -83,7 +81,11 @@ export async function resolveEntry(
 	route: EntryRoute = {}
 ): Promise<EntryResolution> {
 	const runtime = runtimeOf(context.locals)
-	const locale = routeLocale(runtime, context, route.locale ?? context.params.locale)
+	const locale = findLocale(
+		runtime.urls,
+		runtime.defaultLocale,
+		localeRequest(context, route.locale)
+	)
 	if (locale === undefined) {
 		return MISSING
 	}

@@ -5,7 +5,7 @@ import type { SitemapContext } from '../src/sitemap'
 import { entryExample, homepageExample } from '../../client/tests/fixtures/contract'
 import { SITE_PREFIX, apiError, entryListsByLocale, envelope, startStubApi } from './fixtures/api'
 import type { StubApi } from './fixtures/api'
-import { LOCALE_PATHS, rushLocals, siteConfig } from './fixtures/runtime'
+import { LOCALE_PATHS, routeContext, rushLocals, siteConfig } from './fixtures/runtime'
 
 type Catalog = {
 	entries: Record<string, Entry[]>
@@ -49,13 +49,7 @@ function serve(catalog: Catalog): void {
 
 function contextFor(site: URL | undefined): SitemapContext {
 	const config = siteConfig({ localePaths: LOCALE_PATHS, defaultLocale: 'en' })
-	return {
-		locals: rushLocals(stub.api, config),
-		currentLocale: undefined,
-		isPrerendered: false,
-		params: {},
-		site
-	}
+	return { ...routeContext({ locals: rushLocals(stub.api, config) }), site }
 }
 
 function urlBlocks(xml: string): string[] {

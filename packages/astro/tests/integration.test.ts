@@ -204,7 +204,20 @@ describe('site check at build and dev start', () => {
 		expect(config).toEqual({
 			routes: { artigos: '/{locale}/blog/{slug}', pages: '/{locale}/{slug}' },
 			localePaths: ALL_LOCALES,
-			routeKeysById: { [ARTICLES]: 'artigos', [PAGES]: 'pages' },
+			collections: {
+				en: [
+					{ id: ARTICLES, slug: 'articles' },
+					{ id: PAGES, slug: 'pages' }
+				],
+				pt_BR: [
+					{ id: ARTICLES, slug: 'artigos' },
+					{ id: PAGES, slug: 'paginas' }
+				],
+				es: [
+					{ id: ARTICLES, slug: 'articulos' },
+					{ id: PAGES, slug: 'paginas' }
+				]
+			},
 			defaultLocale: 'en',
 			seo: { artigos: { description: 'summary' } },
 			memo: true,

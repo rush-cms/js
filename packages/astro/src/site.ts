@@ -1,5 +1,5 @@
 import { createClient } from '@rushcms/client'
-import type { Collection, LocaleCode, RushRoutes } from '@rushcms/client'
+import type { CollectionSlug, LocaleCode } from '@rushcms/client'
 import type { RushAstroOptions, RushSiteConfig } from './config'
 import type { RushApiSettings } from './settings'
 
@@ -21,31 +21,22 @@ export function assertLocales(configured: LocaleCode[], served: LocaleCode[]): v
 	}
 }
 
-export function routeKeysById(
-	routes: RushRoutes,
-	collections: Collection[]
-): Record<string, string> {
-	const keys: Record<string, string> = {}
-	for (const collection of collections) {
-		if (!Object.hasOwn(keys, collection.id) && Object.hasOwn(routes, collection.slug)) {
-			keys[collection.id] = collection.slug
-		}
-	}
-	return keys
-}
-
 export async function loadSiteConfig(request: RushSiteRequest): Promise<RushSiteConfig> {
 	const { options } = request
 	const client = createClient(request.api)
 	const site = await client.site.get()
 	const locales = Object.keys(options.localePaths)
 	assertLocales(locales, site.locales)
-	const routes = options.routes ?? {}
-	const lists = await Promise.all(locales.map((locale) => client.collections.list({ locale })))
+	const lists = await Promise.all(
+		locales.map(async (locale): Promise<[LocaleCode, CollectionSlug[]]> => {
+			const collections = await client.collections.list({ locale })
+			return [locale, collections.map(({ id, slug }) => ({ id, slug }))]
+		})
+	)
 	return {
-		routes,
+		routes: options.routes ?? {},
 		localePaths: options.localePaths,
-		routeKeysById: routeKeysById(routes, lists.flat()),
+		collections: Object.fromEntries(lists),
 		defaultLocale: site.default_locale,
 		seo: options.seo ?? {},
 		memo: request.memo,

@@ -29,7 +29,7 @@ export default defineConfig({
 | Option        | Description                                                                                  |
 | ------------- | -------------------------------------------------------------------------------------------- |
 | `localePaths` | CMS locale code → URL prefix; at most one `''`. Must list exactly the site's active locales. |
-| `routes`      | Collection slug (any locale) → URL pattern with `{locale}`, `{collection}`, `{slug}`.        |
+| `routes`      | Collection id or slug (any locale) → URL pattern with `{locale}`, `{collection}`, `{slug}`.  |
 | `seo`         | Per collection, the data fields used for title, description and image.                       |
 
 ## Environment
@@ -45,7 +45,9 @@ Declared through `astro:env`; the token is a secret and never reaches the client
 | `RUSH_PREVIEW`   | server, boolean | Preview deployment mode (default `false`)                    |
 
 At build and dev start the integration reads `/site` and `/collections` once per locale. It fails when the set of
-`localePaths` keys differs from the site's locales, listing both sets.
+`localePaths` keys differs from the site's locales, listing both sets. The collection slugs of every locale are kept
+in the site config, so a `routes` or `seo` key (a collection id or any locale's slug) and the collection segment of
+an entry page resolve in every locale.
 
 ## Pages
 
@@ -58,10 +60,10 @@ const entry = await rush.entries.get('artigos', Astro.params.slug)
 ---
 ```
 
-`getRush(Astro)` returns a client bound to the route's locale: `Astro.currentLocale` (with Astro `i18n`) or the
-`locale` route param (a `[locale]` route without it), mapped back to the CMS code through `localePaths` by prefix or
-code. A value that matches no entry throws; without either, the locale with the `''` prefix is used, else the site's
-default locale.
+`getRush(Astro)` returns a client bound to the route's locale: the `locale` route param, matched against the
+`localePaths` prefixes only (`pt_BR` or `pt-BR` in the URL never match), else `Astro.currentLocale` (with Astro
+`i18n`), matched by prefix or CMS code (`pt-BR`, `pt_BR`, any case). A value that matches nothing throws; without
+either, the locale with the `''` prefix is used, else the site's default locale.
 Static builds share one memoized client per locale; on-demand requests and `astro dev` never memoize.
 
 With Astro `i18n`, every route gets a `currentLocale`, and routes outside a locale segment get Astro's
@@ -132,10 +134,12 @@ import Callout from '../components/callout.astro'
 - Text is always escaped. Links are rendered only for `http`, `https`, `mailto`, `tel` and relative `href`s; any other
   scheme renders the text without a link. `rel` is never taken from content (`target="_blank"` gets
   `noopener noreferrer`). Nesting deeper than 32 levels renders nothing.
-- An image is joined to `media` by `attrs.mediaId`. Without a media entry (or without its dimensions) a plain
-  `<img>` with the API `src` is rendered: it skips Astro's remote-image check and optimization.
-- `RushImage` (`@rushcms/astro/components/rush-image.astro`) wraps `astro:assets` `<Image>` with width, height and alt
-  from a `media` entry.
+- An image is joined to `media` by `attrs.mediaId` (falling back to the node's `src` without a media entry) and
+  rendered through `RushImage`.
+- `RushImage` (`@rushcms/astro/components/rush-image.astro`) renders `astro:assets` `<Image>` with width, height and
+  alt from a `media` entry. While the media has no dimensions (the media worker has not processed it yet, or the
+  image is not in `media`) it renders a plain `<img src alt loading="lazy" decoding="async">` with the other props,
+  which skips Astro's remote-image check and optimization. Without a media URL it renders nothing.
 
 ## SEO
 
@@ -207,7 +211,7 @@ export const getStaticPaths = () => entryPaths('artigos')
 
 const resolved = await resolveEntry(Astro, { collection: 'artigos' })
 if (resolved.kind === 'moved') {
-	return Astro.redirect(resolved.location, 301)
+	return Astro.redirect(resolved.location, resolved.permanent ? 301 : 302)
 }
 if (resolved.kind === 'missing') {
 	return new Response(null, { status: 404 })
@@ -220,17 +224,21 @@ const { entry, locale } = resolved
 
 - `{ kind: 'found', entry, locale }`: the `entry` prop from `getStaticPaths` when present, otherwise the entry fetched
   with `getRush` (drafts in a preview session) by the route's `collection` and `slug` params in the route's locale.
-- `{ kind: 'moved', location }`: the API answered `moved` (retired slug, another locale's slug, wrong collection
-  segment); `location` is built from the error params alone, without a second request.
+  When `collection` names a fixed-collection route (a collection id or any locale's slug whose pattern has no
+  `{collection}`, such as `artigos` above), it is mapped to the collection's slug in the route's locale before the
+  request, so the fixed segment serves every locale. A collection segment of a `{collection}` route is sent as is,
+  so the API answers `moved` for another locale's segment.
+- `{ kind: 'moved', location, permanent }`: the API answered `moved` (retired slug, another locale's slug, wrong
+  collection segment); `location` is built from the error params alone, without a second request. `permanent` is
+  `false` in a preview deployment, where content (and slugs) still change: answer `302` there, `301` otherwise.
 - `{ kind: 'missing' }`: `not_found`, `not_translated`, `locale_not_served`, a locale segment that is not a
   `localePaths` prefix (codes such as `pt_BR` do not match), or a missing collection or slug.
 
-The locale comes from the `locale` param, mapped back by exact prefix (`urls.localeOf`); without that param, from
-`Astro.currentLocale` (prefix or code), else the locale with the `''` prefix, else the site's default locale.
+The locale is found as for `getRush`, but a value that matches nothing gives `missing` instead of throwing.
 `route` overrides the `locale`, `collection` and `slug` params, for routes with a fixed collection segment (as above)
 or a catch-all route that splits the path itself. Other API errors are thrown.
 
-`entryPaths(collection, rush?)` walks the collection in every `localePaths` locale and returns
+`entryPaths(collection, rush?)` walks the collection (an id or any locale's slug) in every `localePaths` locale and returns
 `{ params, props: { entry } }`; `params` holds the `locale` (undefined for the empty prefix), `collection` and `slug`
 of the route pattern that applies to the collection. Entries served as a fallback produce a page under the requested
 locale too. Pass a client as `rush` to override the default one.
@@ -238,19 +246,30 @@ locale too. Pass a client as `rush` to override the default one.
 A static build only answers the paths it generated, so old URLs (retired slugs, another locale's slug) get Astro's
 not-found page. To redirect them, add an on-demand catch-all route (`export const prerender = false`) that splits the
 path into the same segments and calls `resolveEntry(Astro, { locale, collection, slug })`, redirecting on `moved`
-and answering `404` otherwise.
+and answering `404` otherwise. For a fixed segment, pass the route key as `collection` (`blog` → `artigos`).
 
-Links come from the URL helpers of `@rushcms/client` (`createUrls({ routes, localePaths })`, with the options passed
-to `rush()`):
+Links come from `getUrls(Astro)`, the URL helpers of `@rushcms/client` built from the options passed to `rush()`
+and the site's collections. `createUrls({ routes, localePaths, collections })` builds the same helpers anywhere else
+(`getStaticPaths`, scripts), where `collections` maps each locale to its `collections.list({ locale })` (`id` and
+`slug` are enough). Without `collections`, a route keyed by one locale's slug is found only through the slugs an
+entry carries in its `translations`, so collection pages, navigation targets and `moved` locations in other locales
+fall back to the default pattern.
 
-| Helper                     | Returns                                                                              |
-| -------------------------- | ------------------------------------------------------------------------------------ |
-| `urls.entry(entry)`        | The canonical URL (the served translation's own locale).                             |
-| `urls.entryPathIn(e, l)`   | The URL that answers `200` for `e` in locale `l`, including fallback pages.          |
-| `urls.translation(e, l)`   | The URL of `e`'s translation in `l` (throws when there is none).                     |
-| `urls.moved(params)`       | The URL from `moved` error params, routed by `collection_id` then `collection_slug`. |
-| `urls.localeOf(param)`     | The locale whose prefix equals a URL segment (`undefined` → the `''` prefix locale). |
-| `urls.localeParam(locale)` | The `locale` route param of a locale (`undefined` for the `''` prefix).              |
+| Helper                          | Returns                                                                                 |
+| ------------------------------- | --------------------------------------------------------------------------------------- |
+| `urls.entry(entry)`             | The canonical URL (the served translation's own locale).                                |
+| `urls.servedPath(e, requested)` | The URL that answers `200` for `e` as fetched for `requested`, fallback pages included. |
+| `urls.translation(e, l)`        | The URL of `e`'s translation in `l` (throws when there is none).                        |
+| `urls.moved(params)`            | The URL from `moved` error params, routed by `collection_id` then `collection_slug`.    |
+| `urls.collectionSlug(key, l)`   | The slug in `l` of the collection a route key names (the key itself when unknown).      |
+| `urls.collectionRef(key, l)`    | `{ id, slug }` in `l` of the collection a key names (`undefined` when unknown).         |
+| `urls.localeOf(param)`          | The locale whose prefix equals a URL segment (`undefined` → the `''` prefix locale).    |
+| `urls.localeParam(locale)`      | The `locale` route param of a locale (`undefined` for the `''` prefix).                 |
+
+`urls.servedPath` throws when `e` cannot have been fetched for `requested` (a translated entry fetched in another
+locale, or a fallback entry for a locale it has a translation in). `params.collection_id` in `moved` errors comes
+with the Rush CMS API release that adds slug history; an older API omits it and `urls.moved` then routes by
+`collection_slug` alone.
 
 ## Sitemap
 

@@ -1,5 +1,5 @@
 export { rush as default } from './integration'
-export { getRush } from './get-rush'
+export { getRush, getUrls } from './get-rush'
 export type { RushAstroOptions, SeoFieldMap } from './config'
 export { entryPaths } from './paths'
 export { resolveEntry } from './entry-route'

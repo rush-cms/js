@@ -1,18 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import { alternates, createUrls, toBcp47 } from '../src/index'
-import type { Entry, Navigation, NavigationItem, RushLocalePaths, UrlConfig } from '../src/index'
+import type { Entry, Navigation, RushLocalePaths, UrlConfig } from '../src/index'
 import { entryExample, responseExample } from './fixtures/contract'
-
-type EntrySummary = NonNullable<NonNullable<NavigationItem['target']>['entry']>
+import { navigationItem } from './fixtures/navigation'
+import type { EntrySummary } from './fixtures/navigation'
 
 const LOCALE_PATHS: RushLocalePaths = { en: 'en', pt_BR: 'pt', es: 'es' }
 
 function urlsFor(config: Partial<UrlConfig> = {}) {
 	return createUrls({ localePaths: LOCALE_PATHS, ...config })
-}
-
-function navigationItem(target?: NavigationItem['target']): NavigationItem {
-	return { label: 'x', type: 'entry', ...(target === undefined ? {} : { target }), children: [] }
 }
 
 describe('toBcp47', () => {
@@ -137,7 +133,9 @@ describe('alternates', () => {
 
 describe('collection pages and id route keys', () => {
 	const routes = { blog: '/{locale}/posts/{slug}', docs: '/{locale}/{collection}/{slug}' }
-	const idKeyed = urlsFor({ routes, routeKeysById: { [entryExample().collection.id]: 'blog' } })
+	const idKeyed = urlsFor({
+		routes: { [entryExample().collection.id]: '/{locale}/posts/{slug}' }
+	})
 
 	it('drops the slug segment for collection pages', () => {
 		const urls = urlsFor({ routes })
@@ -174,17 +172,31 @@ describe('collection pages and id route keys', () => {
 
 	it('prefers the id key over a slug match', () => {
 		const id = entryExample().collection.id
-		const urls = urlsFor({ routes, routeKeysById: { [id]: 'docs' } })
+		const urls = urlsFor({ routes: { ...routes, [id]: '/{locale}/{collection}/{slug}' } })
 		expect(urls.collection({ id, slug: 'blog' }, 'en')).toBe('/en/blog')
+	})
+
+	it('finds a route keyed by a slug the entry does not carry through collections', () => {
+		const entry = entryExample()
+		const collections = {
+			en: [{ id: entry.collection.id, slug: 'blog' }],
+			fr: [{ id: entry.collection.id, slug: 'billets' }]
+		}
+		const urls = urlsFor({ routes: { billets: '/{locale}/b/{slug}' }, collections })
+		expect(urls.entry(entry)).toBe('/pt/b/ola-mundo')
+		expect(urls.collection({ id: entry.collection.id, slug: 'blog' }, 'en')).toBe('/en/b')
+		expect(urlsFor({ routes: { billets: '/{locale}/b/{slug}' } }).entry(entry)).toBe(
+			'/pt/artigos/ola-mundo'
+		)
 	})
 })
 
 describe('hardening', () => {
-	it('falls through when the id key has no route', () => {
+	it('falls through when a mapped slug has no route', () => {
 		const entry = entryExample()
 		const urls = urlsFor({
 			routes: { blog: '/{locale}/posts/{slug}' },
-			routeKeysById: { [entry.collection.id]: 'missing' }
+			collections: { en: [{ id: entry.collection.id, slug: 'missing' }] }
 		})
 		expect(urls.entry(entry)).toBe('/pt/posts/ola-mundo')
 	})

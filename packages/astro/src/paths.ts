@@ -1,4 +1,5 @@
 import type { Entry, RouteParams, RushClient, RushUrls } from '@rushcms/client'
+import { localizedEntries } from './localized-entries'
 
 export type EntryStaticPath = {
 	params: RouteParams
@@ -21,15 +22,13 @@ export async function collectEntryPaths(
 	urls: RushUrls
 ): Promise<EntryStaticPath[]> {
 	const paths = new Map<string, EntryStaticPath>()
-	for (const locale of urls.locales) {
-		for await (const entry of client.entries.all(collection, { locale })) {
-			const next: EntryStaticPath = {
-				params: urls.entryParams(entry.collection, locale, entry.slug),
-				props: { entry }
-			}
-			const key = paramsKey(next.params)
-			paths.set(key, preferred(paths.get(key), next))
+	for await (const { locale, entry } of localizedEntries(collection, client, urls)) {
+		const next: EntryStaticPath = {
+			params: urls.entryParams(entry.collection, locale, entry.slug),
+			props: { entry }
 		}
+		const key = paramsKey(next.params)
+		paths.set(key, preferred(paths.get(key), next))
 	}
 	return [...paths.values()]
 }

@@ -2,27 +2,31 @@ import { createUrls } from '@rushcms/client'
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { getRush } from '../src/index'
 import { resolveLocale } from '../src/runtime'
-import type { RushContext } from '../src/runtime'
+import type { LocaleRequest } from '../src/runtime'
 import { SITE_PREFIX, envelope, siteExample, startStubApi } from './fixtures/api'
 import type { StubApi } from './fixtures/api'
-import { rushLocals, siteConfig } from './fixtures/runtime'
+import { routeContext, rushLocals, siteConfig } from './fixtures/runtime'
 
 type LocaleCase = {
 	name: string
 	localePaths: Record<string, string>
-	current: string | undefined
+	request: LocaleRequest
 	expected: string
+}
+
+type RejectedLocale = {
+	request: LocaleRequest
+	shown: string
 }
 
 let stub: StubApi
 
-function context(
-	locals: object,
-	currentLocale: string | undefined,
-	isPrerendered: boolean,
-	params: Record<string, string | undefined> = {}
-): RushContext {
-	return { locals, currentLocale, isPrerendered, params }
+function current(code: string | undefined): LocaleRequest {
+	return { segment: undefined, current: code }
+}
+
+function segment(param: string): LocaleRequest {
+	return { segment: param, current: undefined }
 }
 
 function siteRequests(): number {
@@ -44,48 +48,73 @@ afterAll(() => stub.close())
 
 describe('resolveLocale', () => {
 	const cases: LocaleCase[] = [
-		{ name: 'prefix', localePaths: { pt_BR: '', en: 'en' }, current: 'en', expected: 'en' },
+		{
+			name: 'prefix',
+			localePaths: { pt_BR: '', en: 'en' },
+			request: current('en'),
+			expected: 'en'
+		},
 		{
 			name: 'path prefix',
 			localePaths: { pt_BR: 'br', en: '' },
-			current: 'br',
+			request: current('br'),
 			expected: 'pt_BR'
 		},
 		{
 			name: 'BCP 47 code',
 			localePaths: { pt_BR: 'pt', en: '' },
-			current: 'pt-BR',
+			request: current('pt-BR'),
 			expected: 'pt_BR'
 		},
 		{
 			name: 'lower-case code',
 			localePaths: { pt_BR: 'pt', en: '' },
-			current: 'pt-br',
+			request: current('pt-br'),
+			expected: 'pt_BR'
+		},
+		{
+			name: 'route param prefix',
+			localePaths: { pt_BR: 'pt', en: '' },
+			request: segment('pt'),
+			expected: 'pt_BR'
+		},
+		{
+			name: 'route param over Astro i18n',
+			localePaths: { pt_BR: 'pt', en: 'en' },
+			request: { segment: 'pt', current: 'en' },
 			expected: 'pt_BR'
 		},
 		{
 			name: 'none → unprefixed',
 			localePaths: { en: 'en', es: '' },
-			current: undefined,
+			request: current(undefined),
 			expected: 'es'
 		},
 		{
 			name: 'none → site default',
 			localePaths: { en: 'en', es: 'es' },
-			current: undefined,
+			request: current(undefined),
 			expected: 'en'
 		}
 	]
 
-	it.each(cases)('maps $name', ({ localePaths, current, expected }) => {
+	it.each(cases)('maps $name', ({ localePaths, request, expected }) => {
 		const config = siteConfig({ localePaths, defaultLocale: 'en' })
-		expect(resolveLocale(config, createUrls(config), current)).toBe(expected)
+		expect(resolveLocale(createUrls(config), config.defaultLocale, request)).toBe(expected)
 	})
 
-	it.each(['pt', 'fr', 'constructor'])('throws for "%s", which matches no entry', (current) => {
+	const rejected: RejectedLocale[] = [
+		...['pt', 'fr', 'constructor'].map((code) => ({ request: current(code), shown: code })),
+		...['pt_BR', 'pt-BR', 'EN', 'fr'].map((param) => ({
+			request: segment(param),
+			shown: param
+		}))
+	]
+
+	it.each(rejected)('throws for "$shown", which matches no entry', ({ request, shown }) => {
 		const config = siteConfig({ localePaths: { pt_BR: '', en: 'en' } })
-		expect(() => resolveLocale(config, createUrls(config), current)).toThrow(
-			`locale "${current}" matches no localePaths entry`
+		expect(() => resolveLocale(createUrls(config), config.defaultLocale, request)).toThrow(
+			`locale "${shown}" matches no localePaths entry`
 		)
 	})
 })
@@ -93,53 +122,65 @@ describe('resolveLocale', () => {
 describe('getRush', () => {
 	it('binds the client to the route locale and the configured urls', async () => {
 		const config = siteConfig({ routes: { blog: '/{locale}/blog/{slug}' } })
-		const client = getRush(context(rushLocals(stub.api, config), 'es', false))
+		const client = getRush(
+			routeContext({ locals: rushLocals(stub.api, config), currentLocale: 'es' })
+		)
 		await client.collections.list()
 		expect(stub.requests[0]?.query.get('locale')).toBe('es')
 		expect(client.routes).toEqual(config.routes)
 		expect(client.localePaths).toEqual(config.localePaths)
 	})
 
-	it('reads the locale from a [locale] param when Astro i18n is not configured', async () => {
+	it('reads the locale from a [locale] param before Astro i18n', async () => {
 		const locals = rushLocals(stub.api)
-		await getRush(context(locals, undefined, false, { locale: 'es' })).collections.list()
-		await getRush(context(locals, 'en', false, { locale: 'es' })).collections.list()
-		expect(stub.requests.map((request) => request.query.get('locale'))).toEqual(['es', 'en'])
-		expect(() => getRush(context(locals, undefined, false, { locale: 'xx' }))).toThrow(
-			'matches no localePaths entry'
-		)
+		await getRush(
+			routeContext({ locals, currentLocale: undefined, params: { locale: 'es' } })
+		).collections.list()
+		await getRush(
+			routeContext({ locals, currentLocale: 'en', params: { locale: 'es' } })
+		).collections.list()
+		expect(stub.requests.map((request) => request.query.get('locale'))).toEqual(['es', 'es'])
+		expect(() =>
+			getRush(routeContext({ locals, currentLocale: undefined, params: { locale: 'xx' } }))
+		).toThrow('matches no localePaths entry')
 	})
 
 	it('shares one memoized client per locale for prerendered builds', async () => {
 		const locals = rushLocals(stub.api)
-		const first = getRush(context(locals, 'en', true))
+		const first = getRush(routeContext({ locals, currentLocale: 'en', isPrerendered: true }))
 		await first.site.get()
-		const second = getRush(context(locals, 'en', true))
+		const second = getRush(routeContext({ locals, currentLocale: 'en', isPrerendered: true }))
 		await second.site.get()
 		expect(second).toBe(first)
-		expect(getRush(context(locals, 'es', true))).not.toBe(first)
+		expect(
+			getRush(routeContext({ locals, currentLocale: 'es', isPrerendered: true }))
+		).not.toBe(first)
 		expect(siteRequests()).toBe(1)
 	})
 
 	it('uses a fresh client without memo on demand', async () => {
 		const locals = rushLocals(stub.api)
-		const first = getRush(context(locals, 'en', false))
+		const first = getRush(routeContext({ locals, currentLocale: 'en' }))
 		await first.site.get()
 		await first.site.get()
-		expect(getRush(context(locals, 'en', false))).not.toBe(first)
+		expect(getRush(routeContext({ locals, currentLocale: 'en' }))).not.toBe(first)
 		expect(siteRequests()).toBe(2)
 	})
 
 	it('never memoizes when the site config turns memo off', async () => {
 		const locals = rushLocals(stub.api, siteConfig({ memo: false }))
-		const first = getRush(context(locals, 'en', true))
+		const first = getRush(routeContext({ locals, currentLocale: 'en', isPrerendered: true }))
 		await first.site.get()
 		await first.site.get()
-		expect(getRush(context(locals, 'en', true))).not.toBe(first)
+		expect(
+			getRush(routeContext({ locals, currentLocale: 'en', isPrerendered: true }))
+		).not.toBe(first)
 		expect(siteRequests()).toBe(2)
 	})
 
 	it('throws when the middleware did not run', () => {
-		expect(() => getRush(context({}, 'en', true))).toThrow('middleware did not run')
+		expect(() =>
+			getRush(routeContext({ locals: {}, currentLocale: 'en', isPrerendered: true }))
+		).toThrow('middleware did not run')
 	})
 })
