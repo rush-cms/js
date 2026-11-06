@@ -10,6 +10,12 @@ export type ProxyTarget = {
 	port: number
 }
 
+function appendedFor(incoming: IncomingMessage): string {
+	return [incoming.headers['x-forwarded-for'], incoming.socket.remoteAddress]
+		.filter((value) => value !== undefined && value !== '')
+		.join(', ')
+}
+
 function forward(
 	target: ProxyTarget,
 	forwardedFor: string | undefined,
@@ -24,7 +30,7 @@ function forward(
 			path: incoming.url,
 			headers: {
 				...incoming.headers,
-				'x-forwarded-for': forwardedFor ?? incoming.socket.remoteAddress ?? '',
+				'x-forwarded-for': forwardedFor ?? appendedFor(incoming),
 				'x-forwarded-proto': 'http'
 			}
 		},

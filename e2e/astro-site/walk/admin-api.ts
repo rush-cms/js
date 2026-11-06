@@ -15,6 +15,21 @@ export type CaptchaSettings = {
 export type AdminApi = {
 	submissions(siteId: string, formKey: string): Promise<Submission[]>
 	setCaptchaSecret(siteId: string, secret: string): Promise<void>
+	createMessageForm(siteId: string, key: string): Promise<string>
+	deleteForm(siteId: string, formId: string): Promise<void>
+}
+
+type FormFieldWrite = {
+	handle: string
+	type: string
+	label: Record<string, string>
+	required: boolean
+}
+
+type FormWrite = {
+	name: Record<string, string>
+	key: string
+	fields: FormFieldWrite[]
 }
 
 type Envelope = {
@@ -111,13 +126,20 @@ export async function adminLogin(
 		session.siteId = siteId
 	}
 
+	function idOf(value: unknown): string {
+		if (!isRecord(value) || typeof value['id'] !== 'string') {
+			throw new Error(`no id in ${JSON.stringify(value)}`)
+		}
+		return value['id']
+	}
+
 	async function formId(key: string): Promise<string> {
 		const forms = listOf(dataOf(await call(apiUrl, session, '/admin/forms')))
 		const form = forms.find((item) => isRecord(item) && item['key'] === key)
-		if (!isRecord(form) || typeof form['id'] !== 'string') {
+		if (form === undefined) {
 			throw new Error(`form ${key} not found in the admin`)
 		}
-		return form['id']
+		return idOf(form)
 	}
 
 	return {
@@ -146,6 +168,30 @@ export async function adminLogin(
 				method: 'PUT',
 				body: JSON.stringify({ settings: { ...settings, captcha: next } })
 			})
+		},
+		createMessageForm: async (siteId, key) => {
+			await useSite(siteId)
+			const form: FormWrite = {
+				name: { en: key },
+				key,
+				fields: [
+					{
+						handle: 'message',
+						type: 'textarea',
+						label: { en: 'Message' },
+						required: true
+					}
+				]
+			}
+			const created = await call(apiUrl, session, '/admin/forms', {
+				method: 'POST',
+				body: JSON.stringify(form)
+			})
+			return idOf(dataOf(created))
+		},
+		deleteForm: async (siteId, id) => {
+			await useSite(siteId)
+			await call(apiUrl, session, `/admin/forms/${id}`, { method: 'DELETE' })
 		}
 	}
 }

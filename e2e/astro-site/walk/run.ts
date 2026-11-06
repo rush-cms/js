@@ -15,6 +15,7 @@ import { readWalkEnv } from './env.ts'
 import { fixedRouteOnPreview, fixedRouteOnSite } from './fixed-route-checks.ts'
 import type { WalkEnv } from './env.ts'
 import {
+	forgedForwardedForDirect,
 	formWithScript,
 	formWithoutScript,
 	visitorIpBehindProxy,
@@ -96,6 +97,10 @@ const GROUPS: Record<Group, GroupPlan> = {
 			{
 				name: 'moved redirect without refetch',
 				run: ({ walker, env }) => movedWithoutRefetch(walker, env)
+			},
+			{
+				name: 'forged X-Forwarded-For from a direct client',
+				run: ({ admin, env }) => forgedForwardedForDirect(admin, env.siteId)
 			},
 			{
 				name: 'preview from the admin button + exit',

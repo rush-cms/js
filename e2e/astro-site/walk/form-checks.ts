@@ -5,11 +5,12 @@ import type { AdminApi, Submission } from './admin-api.ts'
 import type { Walker } from './browser.ts'
 import { hopsOf } from './browser.ts'
 import { VISITOR, fillContact, markerFor, statusOf, submitWithScript } from './contact-form.ts'
-import { PORTS, PROXY_HOST, PROXY_PORT, SITE_URL } from './env.ts'
+import { PORTS, PREVIEW_URL, PROXY_HOST, PROXY_PORT, SITE_URL } from './env.ts'
 import type { WalkEnv } from './env.ts'
 import { startProxy } from './proxy.ts'
 import type { ProxyTarget } from './proxy.ts'
 import { submitContactDirect } from './public-api.ts'
+import { withRestore } from './restore.ts'
 import { Blocked } from './results.ts'
 
 const VISITOR_LIMIT = 5
@@ -20,6 +21,8 @@ const PROXIED_CONTACT_PAGE = `http://localhost:${PROXY_PORT}/pt/contact`
 const SITE_TARGET: ProxyTarget = { host: 'localhost', port: PORTS.site }
 
 const LOOPBACK = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1'])
+
+const FORGED_BY_BROWSER = '198.51.100.66'
 
 async function submissionWith(
 	admin: AdminApi,
@@ -87,6 +90,7 @@ export async function visitorIpBehindProxy(
 	const proxy = await startProxy(PROXY_PORT, SITE_TARGET)
 	try {
 		return await walker.withPage(async (page) => {
+			await page.setExtraHTTPHeaders({ 'X-Forwarded-For': FORGED_BY_BROWSER })
 			await page.goto(`http://${PROXY_HOST}:${PROXY_PORT}/pt/contact`)
 			const marker = markerFor('proxy')
 			const outcome = await submitWithScript(page, marker)
@@ -94,7 +98,7 @@ export async function visitorIpBehindProxy(
 			const stored = await submissionWith(admin, siteId, marker)
 			assert.equal(stored.ip_address, walker.visitorIp)
 			const shot = await walker.shot(page, '08-form-behind-proxy')
-			return `via proxy ${PROXY_HOST}:${PROXY_PORT} (X-Forwarded-For = socket address ${walker.visitorIp}, Node sees the proxy on loopback): stored ip_address ${stored.ip_address} [${shot}]`
+			return `via proxy ${PROXY_HOST}:${PROXY_PORT} (browser sends X-Forwarded-For ${FORGED_BY_BROWSER}, the proxy appends the socket address ${walker.visitorIp}, trustedProxies 1, Node sees the proxy on loopback): stored ip_address ${stored.ip_address} [${shot}]`
 		})
 	} finally {
 		await proxy.close()
@@ -153,4 +157,49 @@ export async function visitorRateLimit(walker: Walker, env: WalkEnv): Promise<st
 	} finally {
 		await proxy.close()
 	}
+}
+
+function forgedChain(attempt: number): string {
+	return `198.51.100.${attempt}, 203.0.113.${attempt}`
+}
+
+async function postForged(key: string, attempt: number, marker: string): Promise<number> {
+	const response = await fetch(`${PREVIEW_URL}/_rush/forms/${key}`, {
+		method: 'POST',
+		headers: {
+			'Content-Type': 'application/json',
+			Accept: 'application/json',
+			'X-Forwarded-For': forgedChain(attempt)
+		},
+		body: JSON.stringify({ message: marker })
+	})
+	await response.arrayBuffer()
+	return response.status
+}
+
+export async function forgedForwardedForDirect(admin: AdminApi, siteId: string): Promise<string> {
+	const key = `forged-xff-${Date.now()}`
+	const formId = await admin.createMessageForm(siteId, key)
+	return withRestore(
+		() => admin.deleteForm(siteId, formId),
+		async () => {
+			const statuses: number[] = []
+			const forged = new Set<string>()
+			for (let attempt = 1; attempt <= VISITOR_LIMIT + 1; attempt++) {
+				forgedChain(attempt)
+					.split(', ')
+					.forEach((entry) => forged.add(entry))
+				statuses.push(await postForged(key, attempt, markerFor(`xff-${attempt}`)))
+			}
+			assert.deepEqual(statuses, [...Array<number>(VISITOR_LIMIT).fill(201), 429])
+			const stored = await admin.submissions(siteId, key)
+			assert.equal(stored.length, VISITOR_LIMIT)
+			const ips = new Set(stored.map((submission) => submission.ip_address ?? ''))
+			for (const ip of ips) {
+				assert.ok(LOOPBACK.has(ip), `stored ip ${ip}`)
+				assert.ok(!forged.has(ip), `forged ip ${ip} stored`)
+			}
+			return `form ${key} on ${PREVIEW_URL} (trustedProxies 0, Host in allowedDomains), 6 direct posts with rotating X-Forwarded-For ${forgedChain(1)} … ${forgedChain(VISITOR_LIMIT + 1)}: statuses ${statuses.join(',')}; stored ip_address ${[...ips].join(',')} (the Astro server, none forged); form deleted afterwards`
+		}
+	)
 }

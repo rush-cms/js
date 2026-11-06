@@ -26,6 +26,8 @@
   `pt_BR` slug: `src/pages/[locale]/solutions/` serves it in every locale (`resolveEntry(Astro, { collection:
 'servicos' })` maps the key to `services`/`servicios`), the catch-all maps the `solutions` segment to the key, and
   the `[collection]` pages skip collections whose pattern has no `{collection}`.
+- The site and captcha builds set `trustedProxies: 1`, because the walker reaches the forms route of the site through
+  its proxy; the preview build keeps the default `0` and is only reached directly.
 - Links use `getUrls(Astro)` (`urls.servedPath` for list items, fallback pages included); `getStaticPaths` builds the
   same helpers with `createUrls({ ...siteConfig, collections })`.
 - The seeded `body` rich text renders through `<RichText>` with a `callout` block component, the featured image
@@ -120,13 +122,16 @@ bun run walk captcha
   locale's slug and from a wrong collection segment; services order (on the fixed route) and tag page; the fixed
   route in `pt`, `en` and `es` (`200` at the canonical URL, one `301` hop from another locale's slug, and from the
   route key segment through the catch-all); form with and without JavaScript
-  (`303`); visitor IP behind a forwarding proxy; `429` after the visitor limit; rich text (heading, link, list, image,
+  (`303`); visitor IP behind a forwarding proxy (the browser's own `X-Forwarded-For` is ignored); `429` after the
+  visitor limit; rich text (heading, link, list, image,
   callout block) in each locale; featured image through `RushImage`, and its media URL answers `200`.
 - `preview`: an entry page on the preview instance without a cookie (on demand, no props); the fixed route on demand
   in `en` (`200`, and one `302` hop from the `pt` and `es` slugs and from the route key segment); `/pt_BR/` and
   `/PT/` answer `404`; a `moved` redirect on both instances (`301` on the
   site, `302` on the preview instance) with the API's entry requests counted between two sentinel requests in `API_LOG` (the redirect
-  costs only the `moved` answer, no lookup of its target); saves a draft excerpt in the admin, follows the admin
+  costs only the `moved` answer, no lookup of its target); a forged, rotating `X-Forwarded-For` from a direct client
+  on the preview instance (a temporary form created and deleted through the admin API, so its limit window is new:
+  exactly 5 posts accepted, the 6th `429`, every stored IP the Astro server's loopback address); saves a draft excerpt in the admin, follows the admin
   Preview button to `:4322`, exits the preview and restores the excerpt.
 - `captcha`: Turnstile pass; Turnstile fail after flipping the site secret to the always-fail key through the admin
   API (restored afterwards).
@@ -134,8 +139,9 @@ bun run walk captcha
 Notes:
 
 - The proxy check maps `visitor.test` to the machine's first non-loopback IPv4 address in Chrome, so the proxy sees
-  that address and forwards it as `X-Forwarded-For` while Node only sees the proxy on loopback; `astro.config.ts`
-  lists `visitor.test` in `security.allowedDomains`. Without such an interface the check is `BLOCKED`.
+  that address and appends it to the `X-Forwarded-For` the browser sent (a forged one) while Node only sees the proxy
+  on loopback; `astro.config.ts` lists `visitor.test` in `security.allowedDomains`. Without such an interface the
+  check is `BLOCKED`.
 - The Turnstile checks need the browser and the API to reach `challenges.cloudflare.com`; without it they are
   `BLOCKED`.
 - The visitor limit is 5 posts per minute. The `429` check forwards a fresh random visitor IP through the proxy on
