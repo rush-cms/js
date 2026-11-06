@@ -1,19 +1,11 @@
 ---
-import { getRush } from '@rushcms/astro'
-import { lookupEntry } from '../entry-route'
-import { localeOf } from '../urls'
+import { resolveEntry } from '@rushcms/astro'
+import { redirectOrNotFound } from '../entry-response'
 
 export const prerender = false
 
-const [prefix, collection, slug, ...rest] = (Astro.params.path ?? '').split('/')
-const locale = localeOf(prefix)
-if (locale !== undefined && collection && slug && rest.length === 0) {
-	const found = await lookupEntry(getRush(Astro), locale, collection, slug)
-	if (found.kind === 'moved') {
-		return Astro.redirect(found.location, 301)
-	}
-}
-Astro.response.status = 404
+const [locale, collection, slug, ...rest] = (Astro.params.path ?? '').split('/')
+const resolved =
+	rest.length === 0 ? await resolveEntry(Astro, { locale, collection, slug }) : undefined
+return redirectOrNotFound(resolved)
 ---
-
-<h1>Not found</h1>

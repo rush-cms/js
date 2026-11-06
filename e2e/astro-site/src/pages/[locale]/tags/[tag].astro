@@ -5,7 +5,7 @@ import { buildClient } from '../../../build-client'
 import EntryList from '../../../components/entry-list.astro'
 import Base from '../../../layouts/base.astro'
 import { localizedPaths } from '../../../static-paths'
-import { localeOf, switcherFor } from '../../../urls'
+import { pageLocale, switcherFor } from '../../../urls'
 
 type Props = {
 	tag?: Tag
@@ -17,10 +17,7 @@ export const getStaticPaths = () =>
 		(tag, locale) => ({ params: { locale, tag: tag.slug }, props: { tag } })
 	)
 
-const locale = localeOf(Astro.params.locale)
-if (locale === undefined) {
-	return new Response(null, { status: 404 })
-}
+const locale = pageLocale(Astro.params)
 const rush = getRush(Astro)
 const tag =
 	Astro.props.tag ?? (await rush.tags.list()).find((item) => item.slug === Astro.params.tag)

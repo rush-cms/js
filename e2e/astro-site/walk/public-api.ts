@@ -1,3 +1,5 @@
+import { createClient } from '@rushcms/client'
+import type { RushClient } from '@rushcms/client'
 import type { ContactData } from './contact-form.ts'
 import type { WalkEnv } from './env.ts'
 
@@ -21,4 +23,8 @@ export async function submitContactDirect(
 		body: JSON.stringify(data)
 	})
 	return { status: response.status, retryAfter: response.headers.get('Retry-After') }
+}
+
+export function publicClient(env: WalkEnv): RushClient {
+	return createClient({ url: env.apiUrl, siteId: env.siteId, token: env.apiToken })
 }

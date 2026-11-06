@@ -15,9 +15,15 @@
   both packages with `skipLibCheck` off (errors from other packages are not reported), because tsdown generates them
   with the tsgo generator that is experimental until TypeScript 7.1.
 - Every locale has a URL prefix (`pt_BR` → `/pt`, `en` → `/en`, `es` → `/es`); `/` redirects to `/pt`.
-- Pages are prerendered from `getStaticPaths` props and fall back to fetching by route params when the props are
-  missing, which is the case in the preview deployment (every route on demand). An on-demand catch-all route turns
-  the API's `moved` answers into `301`s for URLs that were not prerendered.
+- Entry pages follow the `@rushcms/astro` README pattern: `resolveEntry(Astro)` takes the `getStaticPaths` props when
+  prerendered and fetches by route params on demand (the preview deployment, where every route is on demand). An
+  on-demand catch-all route calls `resolveEntry` with the path segments and turns `moved` into a `301` for URLs that
+  were not prerendered. Locale segments map back through `urls.localeOf`; `src/middleware.ts` answers `404` for an
+  unknown one, so pages read their locale with `pageLocale`.
+- Links use the client URL helpers (`urls.entryPathIn` for list items, fallback pages included).
+- The seeded `body` rich text renders through `<RichText>` with a `callout` block component, the featured image
+  through `<RushImage>`. The API runs the media worker in process, so dimensions are set once `make dev/up` has
+  started; `RushImage` renders nothing for a media entry without dimensions.
 
 ## API side, from zero
 
@@ -27,8 +33,10 @@ In a `rush-cms` checkout (a worktree keeps its own `backend/.env`):
    `MEDIA_DRIVER=local` and `ADMIN_CORS_ORIGINS=http://localhost:5174`. Create that database for the role in
    `DATABASE_URL` in the devstack Postgres.
 2. `make migrate/up`, then `make db/seed SEED_FLAGS="--preset=sdk-e2e"`. The seed prints the site ids, delivery
-   tokens and admin login used below. To start over: `make db/fresh-seed FORCE=1 SEED_FLAGS="--preset=sdk-e2e"`.
-3. `make dev/up` (API on `:8091`; `make dev/down` stops it).
+   tokens and admin login used below. To start over:
+   `make db/fresh-seed FRESH_FLAGS=--yes SEED_FLAGS="--preset=sdk-e2e"`.
+3. `make dev/up > <log file>` (API on `:8091`; `make dev/down` stops it). The walker reads the API request log from
+   that file (`API_LOG`) to count entry requests.
 4. Admin, for the preview check: `cd frontend && bun install && VITE_API_URL=http://localhost:8091 bun run dev`
    (`:5174`).
 
@@ -67,6 +75,7 @@ ADMIN_PASSWORD=<admin password>
 RUSH_API_TOKEN=<sdk-e2e site API token>
 CHROME_PATH=/usr/bin/google-chrome
 E2E_SHOTS_DIR=<directory for screenshots and results>
+API_LOG=<the make dev/up log file>
 ```
 
 Check and build the three outputs:
@@ -102,9 +111,12 @@ bun run walk captcha
 
 - `site`: language switcher and hreflang; fallback page and canonical; `301` from a retired slug, from another
   locale's slug and from a wrong collection segment; services order and tag page; form with and without JavaScript
-  (`303`); visitor IP behind a forwarding proxy; `429` after the visitor limit.
-- `preview`: saves a draft excerpt in the admin, follows the admin Preview button to `:4322`, exits the preview and
-  restores the excerpt.
+  (`303`); visitor IP behind a forwarding proxy; `429` after the visitor limit; rich text (heading, link, list, image,
+  callout block) in each locale; featured image through `RushImage`, and its media URL answers `200`.
+- `preview`: an entry page on the preview instance without a cookie (on demand, no props); a `moved` redirect on
+  both instances with the API's entry requests counted between two sentinel requests in `API_LOG` (the redirect
+  costs only the `moved` answer, no lookup of its target); saves a draft excerpt in the admin, follows the admin
+  Preview button to `:4322`, exits the preview and restores the excerpt.
 - `captcha`: Turnstile pass; Turnstile fail after flipping the site secret to the always-fail key through the admin
   API (restored afterwards).
 

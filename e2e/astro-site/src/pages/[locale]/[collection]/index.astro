@@ -6,7 +6,7 @@ import EntryList from '../../../components/entry-list.astro'
 import Base from '../../../layouts/base.astro'
 import { unlessNotFound } from '../../../optional'
 import { localizedPaths } from '../../../static-paths'
-import { localeOf, switcherFor } from '../../../urls'
+import { pageLocale, switcherFor } from '../../../urls'
 
 type Props = {
 	collection?: Collection
@@ -18,10 +18,7 @@ export const getStaticPaths = () =>
 		(collection, locale) => ({ params: { locale, collection: collection.slug }, props: { collection } })
 	)
 
-const locale = localeOf(Astro.params.locale)
-if (locale === undefined) {
-	return new Response(null, { status: 404 })
-}
+const locale = pageLocale(Astro.params)
 const rush = getRush(Astro)
 const collection =
 	Astro.props.collection ??

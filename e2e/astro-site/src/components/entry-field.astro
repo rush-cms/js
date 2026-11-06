@@ -1,5 +1,6 @@
 ---
 import RichText from '@rushcms/astro/components/rich-text.astro'
+import Callout from './callout.astro'
 import { isRecord } from '@rushcms/client'
 import type { Entry } from '@rushcms/client'
 import type { ComponentProps } from 'astro/types'
@@ -20,6 +21,6 @@ const { name, value, media } = Astro.props
 ---
 
 <section data-field={name}>
-	{isRichText(value) && <RichText content={value} media={media} />}
+	{isRichText(value) && <RichText content={value} media={media} blocks={{ callout: Callout }} />}
 	{typeof value === 'string' && value.split('\n\n').map((paragraph) => <p>{paragraph}</p>)}
 </section>

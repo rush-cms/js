@@ -2,14 +2,11 @@
 import { getRush } from '@rushcms/astro'
 import Form from '@rushcms/astro/components/form.astro'
 import Base from '../../layouts/base.astro'
-import { localeOf, switcherFor } from '../../urls'
+import { pageLocale, switcherFor } from '../../urls'
 
 export const prerender = false
 
-const locale = localeOf(Astro.params.locale)
-if (locale === undefined) {
-	return new Response(null, { status: 404 })
-}
+const locale = pageLocale(Astro.params)
 const form = await getRush(Astro).forms.get('contact')
 ---
 

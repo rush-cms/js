@@ -1,5 +1,5 @@
 import { alternates, createUrls, toBcp47 } from '@rushcms/client'
-import type { Entry, Homepage, LocaleCode } from '@rushcms/client'
+import type { Entry, Homepage, LocaleCode, RouteParams } from '@rushcms/client'
 import { siteConfig } from './site-config'
 
 export type SwitcherLink = {
@@ -11,21 +11,25 @@ export type SwitcherLink = {
 }
 
 export type LocaleParams = {
-	params: { locale: string }
+	params: { locale: string | undefined }
 }
 
 export const urls = createUrls(siteConfig)
 
-export function prefixOf(locale: LocaleCode): string {
-	return siteConfig.localePaths[locale] ?? ''
+export function hasUnknownLocale(params: RouteParams): boolean {
+	return Object.hasOwn(params, 'locale') && urls.localeOf(params.locale) === undefined
 }
 
-export function localeOf(prefix: string | undefined): LocaleCode | undefined {
-	return urls.locales.find((locale) => prefixOf(locale) === prefix)
+export function pageLocale(params: RouteParams): LocaleCode {
+	const locale = urls.localeOf(params.locale)
+	if (locale === undefined) {
+		throw new Error(`no locale for the route segment "${params.locale}"`)
+	}
+	return locale
 }
 
 export function localeParams(): LocaleParams[] {
-	return urls.locales.map((locale) => ({ params: { locale: prefixOf(locale) } }))
+	return urls.locales.map((locale) => ({ params: { locale: urls.localeParam(locale) } }))
 }
 
 export function tagPath(locale: LocaleCode, slug: string): string {
@@ -36,18 +40,12 @@ export function contactPath(locale: LocaleCode): string {
 	return `${urls.homepage(locale)}/contact`
 }
 
-export function entryPathIn(entry: Entry, locale: LocaleCode): string {
-	return entry.fallback
-		? `${urls.collection(entry.collection, locale)}/${entry.slug}`
-		: urls.entry(entry)
-}
-
 export function switcherFor(current: LocaleCode, source?: Entry | Homepage): SwitcherLink[] {
 	const translated = source === undefined ? [] : alternates(source, urls)
 	return urls.locales.map((locale) => ({
 		locale,
 		hreflang: toBcp47(locale),
-		label: prefixOf(locale).toUpperCase(),
+		label: (urls.localeParam(locale) ?? locale).toUpperCase(),
 		url: translated.find((link) => link.locale === locale)?.url ?? urls.homepage(locale),
 		current: locale === current
 	}))

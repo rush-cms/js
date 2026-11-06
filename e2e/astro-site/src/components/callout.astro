@@ -1,0 +1,12 @@
+---
+import { isRecord } from '@rushcms/client'
+
+type Props = {
+	values: unknown
+}
+
+const { values } = Astro.props
+const headline = isRecord(values) && typeof values['headline'] === 'string' ? values['headline'] : ''
+---
+
+<aside data-callout>{headline}</aside>

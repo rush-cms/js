@@ -5,6 +5,12 @@ import { adminLogin } from './admin-api.ts'
 import type { Walker } from './browser.ts'
 import { launchWalker } from './browser.ts'
 import { turnstileFails, turnstilePasses, useAlwaysPassSecret } from './captcha-checks.ts'
+import {
+	featuredImage,
+	movedWithoutRefetch,
+	previewOnDemand,
+	richTextInEachLocale
+} from './content-checks.ts'
 import { readWalkEnv } from './env.ts'
 import type { WalkEnv } from './env.ts'
 import {
@@ -48,6 +54,11 @@ const GROUPS: Record<Group, GroupPlan> = {
 			{ name: 'fallback page + canonical', run: ({ walker }) => fallbackCanonical(walker) },
 			{ name: '301 from moved slugs/segments', run: ({ walker }) => movedRedirects(walker) },
 			{ name: 'services order + tag page', run: ({ walker }) => servicesOrder(walker) },
+			{ name: 'rich text in each locale', run: ({ walker }) => richTextInEachLocale(walker) },
+			{
+				name: 'featured image via RushImage',
+				run: ({ walker, env }) => featuredImage(walker, env)
+			},
 			{
 				name: 'form with JS',
 				run: ({ walker, admin, env }) => formWithScript(walker, admin, env.siteId)
@@ -68,6 +79,11 @@ const GROUPS: Record<Group, GroupPlan> = {
 	},
 	preview: {
 		checks: [
+			{ name: 'preview deployment on demand', run: ({ walker }) => previewOnDemand(walker) },
+			{
+				name: 'moved redirect without refetch',
+				run: ({ walker, env }) => movedWithoutRefetch(walker, env)
+			},
 			{
 				name: 'preview from the admin button + exit',
 				run: ({ walker, env }) => previewFromAdmin(walker, env)

@@ -7,6 +7,7 @@ export type WalkEnv = {
 	apiToken: string
 	chromePath: string
 	shotsDir: string
+	apiLog: string | undefined
 }
 
 export type Instance = 'site' | 'preview' | 'captcha'
@@ -37,6 +38,7 @@ export function readWalkEnv(): WalkEnv {
 		adminPassword: required('ADMIN_PASSWORD'),
 		apiToken: required('RUSH_API_TOKEN'),
 		chromePath: required('CHROME_PATH'),
-		shotsDir: required('E2E_SHOTS_DIR')
+		shotsDir: required('E2E_SHOTS_DIR'),
+		apiLog: process.env['API_LOG'] || undefined
 	}
 }

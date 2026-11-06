@@ -1,15 +1,15 @@
 ---
-import { entryPaths, getRush } from '@rushcms/astro'
+import { entryPaths, resolveEntry } from '@rushcms/astro'
 import Seo from '@rushcms/astro/components/seo.astro'
 import RushImage from '@rushcms/astro/components/rush-image.astro'
-import type { EntryStaticPath } from '@rushcms/astro'
+import type { EntryRouteProps } from '@rushcms/astro'
 import { buildClient } from '../../../build-client'
 import EntryField from '../../../components/entry-field.astro'
-import { lookupEntry } from '../../../entry-route'
+import { redirectOrNotFound } from '../../../entry-response'
 import Base from '../../../layouts/base.astro'
-import { localeOf, switcherFor, tagPath } from '../../../urls'
+import { switcherFor, tagPath } from '../../../urls'
 
-type Props = Partial<EntryStaticPath['props']>
+type Props = EntryRouteProps
 
 export async function getStaticPaths() {
 	const collections = await buildClient.collections.list()
@@ -19,32 +19,24 @@ export async function getStaticPaths() {
 	return groups.flat()
 }
 
-const locale = localeOf(Astro.params.locale)
-if (locale === undefined) {
-	return new Response(null, { status: 404 })
+const resolved = await resolveEntry(Astro)
+if (resolved.kind !== 'found') {
+	return redirectOrNotFound(resolved)
 }
-const found = Astro.props.entry
-	? { kind: 'found' as const, entry: Astro.props.entry }
-	: await lookupEntry(
-			getRush(Astro),
-			locale,
-			Astro.params.collection ?? '',
-			Astro.params.slug ?? ''
-		)
-if (found.kind === 'moved') {
-	return Astro.redirect(found.location, 301)
-}
-if (found.kind === 'missing') {
-	return new Response(null, { status: 404 })
-}
-const { entry } = found
+const { entry, locale } = resolved
 ---
 
 <Base locale={locale} switcher={switcherFor(locale, entry)}>
 	<Seo slot="head" entry={entry} />
 	<article data-entry={entry.id} data-locale={entry.locale} data-fallback={String(entry.fallback)}>
 		<h1>{entry.title}</h1>
-		{entry.featured_image && <RushImage media={entry.featured_image} />}
+		{
+			entry.featured_image && (
+				<figure data-featured>
+					<RushImage media={entry.featured_image} />
+				</figure>
+			)
+		}
 		{entry.excerpt && <p data-excerpt>{entry.excerpt}</p>}
 		{
 			Object.entries(entry.data).map(([name, value]) => (
