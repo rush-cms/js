@@ -260,34 +260,50 @@ describe('servedPath', () => {
 	})
 })
 
-describe('collectionSlug', () => {
+describe('collectionRef', () => {
 	const urls = createUrls({ localePaths: PREFIXES, collections: COLLECTIONS })
 
-	it('maps a collection id or any locale slug to the slug in a locale', () => {
+	it('gives the collection ref of an id or any locale slug in a locale', () => {
 		for (const key of [COLLECTION_ID, ...Object.values(COLLECTION_SLUGS)]) {
-			expect(LOCALES.map((locale) => urls.collectionSlug(key, locale))).toEqual([
+			expect(LOCALES.map((locale) => urls.collectionRef(key, locale)?.slug)).toEqual([
 				'artigos',
 				'blog',
 				'articulos'
 			])
 		}
-	})
-
-	it('gives the collection ref of a key in a locale', () => {
 		expect(urls.collectionRef('artigos', 'es')).toEqual({
 			id: COLLECTION_ID,
 			slug: 'articulos'
 		})
 		expect(urls.collectionRef(COLLECTION_ID, 'en')).toEqual({ id: COLLECTION_ID, slug: 'blog' })
-		expect(urls.collectionRef('artigos', 'fr')).toBeUndefined()
-		expect(urls.collectionRef('unknown', 'en')).toBeUndefined()
 	})
 
-	it('returns an unknown key unchanged, and every key without collections', () => {
-		expect(urls.collectionSlug('unknown', 'en')).toBe('unknown')
-		expect(createUrls({ localePaths: PREFIXES }).collectionSlug('artigos', 'en')).toBe(
-			'artigos'
-		)
+	it('gives undefined for an unknown key or locale, and for every key without collections', () => {
+		expect(urls.collectionRef('artigos', 'fr')).toBeUndefined()
+		expect(urls.collectionRef('unknown', 'en')).toBeUndefined()
+		expect(createUrls({ localePaths: PREFIXES }).collectionRef('artigos', 'en')).toBeUndefined()
+	})
+})
+
+describe('hasCollectionSegment', () => {
+	const ref = { id: COLLECTION_ID, slug: 'blog' }
+
+	it.each(PATTERNS)('reports whether the pattern %s has a {collection} segment', (pattern) => {
+		const urls = createUrls({
+			localePaths: PREFIXES,
+			routes: { [COLLECTION_ID]: pattern }
+		})
+		expect(urls.hasCollectionSegment(ref)).toBe(pattern.includes('{collection}'))
+	})
+
+	it('is true for a collection without a route and false for a route keyed by another locale slug', () => {
+		expect(createUrls({ localePaths: PREFIXES }).hasCollectionSegment(ref)).toBe(true)
+		const keyed = createUrls({
+			localePaths: PREFIXES,
+			routes: { artigos: '/{locale}/posts/{slug}' },
+			collections: COLLECTIONS
+		})
+		expect(keyed.hasCollectionSegment(ref)).toBe(false)
 	})
 })
 

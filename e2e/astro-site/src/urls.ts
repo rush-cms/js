@@ -16,10 +16,6 @@ export type LocaleParams = {
 
 export const localeUrls = createUrls({ localePaths: siteConfig.localePaths })
 
-export function hasUnknownLocale(params: RouteParams): boolean {
-	return Object.hasOwn(params, 'locale') && localeUrls.localeOf(params.locale) === undefined
-}
-
 export function pageLocale(params: RouteParams): LocaleCode {
 	const locale = localeUrls.localeOf(params.locale)
 	if (locale === undefined) {
@@ -32,10 +28,6 @@ export function localeParams(): LocaleParams[] {
 	return localeUrls.locales.map((locale) => ({
 		params: { locale: localeUrls.localeParam(locale) }
 	}))
-}
-
-export function hasCollectionSegment(params: RouteParams): boolean {
-	return params['collection'] !== undefined
 }
 
 export function tagPath(locale: LocaleCode, slug: string): string {

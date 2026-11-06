@@ -1,5 +1,5 @@
-import { createUrls } from '@rushcms/client'
-import type { Collection, LocaleCode, RushUrls } from '@rushcms/client'
+import { createUrls, listCollectionsByLocale } from '@rushcms/client'
+import type { LocaleCode, RushUrls } from '@rushcms/client'
 import { buildClient } from './build-client'
 import { siteConfig } from './site-config'
 import { localeUrls } from './urls'
@@ -17,11 +17,6 @@ export async function localizedPaths<T, P>(
 }
 
 export async function buildUrls(): Promise<RushUrls> {
-	const lists = await Promise.all(
-		localeUrls.locales.map(async (locale): Promise<[LocaleCode, Collection[]]> => [
-			locale,
-			await buildClient.collections.list({ locale })
-		])
-	)
-	return createUrls({ ...siteConfig, collections: Object.fromEntries(lists) })
+	const collections = await listCollectionsByLocale(buildClient, localeUrls.locales)
+	return createUrls({ ...siteConfig, collections })
 }

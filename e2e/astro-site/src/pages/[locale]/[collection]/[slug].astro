@@ -4,16 +4,17 @@ import type { EntryRouteProps } from '@rushcms/astro'
 import { buildClient } from '../../../build-client'
 import EntryPage from '../../../components/entry-page.astro'
 import { redirectOrNotFound } from '../../../entry-response'
-import { hasCollectionSegment } from '../../../urls'
+import { buildUrls } from '../../../static-paths'
 
 type Props = EntryRouteProps
 
 export async function getStaticPaths() {
-	const collections = await buildClient.collections.list()
-	const groups = await Promise.all(
-		collections.map((collection) => entryPaths(collection.slug))
+	const urls = await buildUrls()
+	const collections = (await buildClient.collections.list()).filter((collection) =>
+		urls.hasCollectionSegment(collection)
 	)
-	return groups.flat().filter((path) => hasCollectionSegment(path.params))
+	const groups = await Promise.all(collections.map((collection) => entryPaths(collection.slug)))
+	return groups.flat()
 }
 
 const resolved = await resolveEntry(Astro)

@@ -11,7 +11,7 @@ export async function* localizedEntries(
 	urls: RushUrls
 ): AsyncGenerator<LocalizedEntry, void, undefined> {
 	for (const locale of urls.locales) {
-		const slug = urls.collectionSlug(collection, locale)
+		const slug = urls.collectionRef(collection, locale)?.slug ?? collection
 		for await (const entry of client.entries.all(slug, { locale })) {
 			yield { locale, entry }
 		}

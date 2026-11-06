@@ -1,5 +1,5 @@
-import { createClient } from '@rushcms/client'
-import type { CollectionSlug, LocaleCode } from '@rushcms/client'
+import { createClient, listCollectionsByLocale } from '@rushcms/client'
+import type { LocaleCode } from '@rushcms/client'
 import type { RushAstroOptions, RushSiteConfig } from './config'
 import type { RushApiSettings } from './settings'
 
@@ -27,16 +27,10 @@ export async function loadSiteConfig(request: RushSiteRequest): Promise<RushSite
 	const site = await client.site.get()
 	const locales = Object.keys(options.localePaths)
 	assertLocales(locales, site.locales)
-	const lists = await Promise.all(
-		locales.map(async (locale): Promise<[LocaleCode, CollectionSlug[]]> => {
-			const collections = await client.collections.list({ locale })
-			return [locale, collections.map(({ id, slug }) => ({ id, slug }))]
-		})
-	)
 	return {
 		routes: options.routes ?? {},
 		localePaths: options.localePaths,
-		collections: Object.fromEntries(lists),
+		collections: await listCollectionsByLocale(client, locales),
 		defaultLocale: site.default_locale,
 		seo: options.seo ?? {},
 		memo: request.memo,

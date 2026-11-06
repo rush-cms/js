@@ -1,7 +1,6 @@
 import type { MovedParams } from './errors'
 import { toBcp47 } from './locales'
 import type {
-	Collection,
 	Entry,
 	Homepage,
 	LocaleCode,
@@ -12,9 +11,7 @@ import type {
 
 const DEFAULT_PATTERN = '/{locale}/{collection}/{slug}'
 
-export type CollectionSlug = Pick<Collection, 'id' | 'slug'>
-
-export type RushCollections = Record<LocaleCode, CollectionSlug[]>
+export type RushCollections = Record<LocaleCode, CollectionRef[]>
 
 export type UrlConfig = {
 	routes?: RushRoutes
@@ -27,7 +24,7 @@ export type RushUrls = {
 	localeOf(param: string | undefined): LocaleCode | undefined
 	localeParam(locale: LocaleCode): string | undefined
 	collectionRef(key: string, locale: LocaleCode): CollectionRef | undefined
-	collectionSlug(key: string, locale: LocaleCode): string
+	hasCollectionSegment(collection: CollectionRef): boolean
 	collectionKeys(entry: Entry): string[]
 	collection(collection: CollectionRef, locale: LocaleCode): string
 	entry(entry: Entry): string
@@ -232,8 +229,8 @@ export function createUrls(config: UrlConfig): RushUrls {
 		collection,
 		collectionKeys,
 		collectionRef,
-		collectionSlug: (key, locale) => collectionRef(key, locale)?.slug ?? key,
 		entryParams,
+		hasCollectionSegment: (ref) => placeholdersOf(refSegments(ref)).includes('collection'),
 		locales: localeOrder,
 		localeOf: (param) =>
 			localeOrder.find((locale) => config.localePaths[locale] === (param ?? '')),

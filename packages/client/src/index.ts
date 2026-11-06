@@ -2,11 +2,11 @@ export type { components, operations, paths } from './generated/api'
 export type { Paginated } from './contract'
 export { createClient } from './create-client'
 export { toBcp47 } from './locales'
+export { listCollectionsByLocale } from './collections-by-locale'
 export { alternates, createUrls, translatedLocales, translatedUrl } from './urls'
 export type {
 	Alternate,
 	CollectionRef,
-	CollectionSlug,
 	RouteParams,
 	RushCollections,
 	RushUrls,

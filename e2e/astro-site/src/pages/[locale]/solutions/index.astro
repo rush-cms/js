@@ -12,9 +12,9 @@ export const getStaticPaths = async () =>
 		: localeParams()
 
 const locale = pageLocale(Astro.params)
-const collection = await unlessNotFound(
-	getRush(Astro).collections.get(getUrls(Astro).collectionSlug(SOLUTIONS_KEY, locale))
-)
+const slug = getUrls(Astro).collectionRef(SOLUTIONS_KEY, locale)?.slug
+const collection =
+	slug === undefined ? undefined : await unlessNotFound(getRush(Astro).collections.get(slug))
 if (collection === undefined) {
 	return new Response(null, { status: 404 })
 }
