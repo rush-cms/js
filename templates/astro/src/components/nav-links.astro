@@ -1,0 +1,33 @@
+---
+import type { NavigationLink } from '@rushcms/client'
+
+type Props = {
+	links: NavigationLink[]
+	nested?: boolean
+}
+
+const { links, nested = false } = Astro.props
+---
+
+<ul class:list={['nav-links', nested ? 'nav-links-nested' : 'nav-links-top']}>
+	{
+		links.map((link) => (
+			<li class="nav-item">
+				{link.href === undefined ? (
+					<span class="nav-label">{link.label}</span>
+				) : (
+					<a
+						{...link.attributes}
+						href={link.href}
+						target={link.target}
+						rel={link.rel}
+						class:list={['nav-link', link.className]}
+					>
+						{link.label}
+					</a>
+				)}
+				{link.children.length > 0 && <Astro.self links={link.children} nested />}
+			</li>
+		))
+	}
+</ul>

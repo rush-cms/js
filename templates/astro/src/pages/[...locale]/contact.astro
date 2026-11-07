@@ -1,0 +1,59 @@
+---
+import { getRush, getUrls } from '@rushcms/astro'
+import Form from '@rushcms/astro/components/form.astro'
+import { optional } from '@rushcms/client'
+import Base from '../../layouts/base.astro'
+import NotFound from '../../views/not-found.astro'
+
+export const prerender = false
+
+const locale = getUrls(Astro).localeOf(Astro.params.locale)
+// TODO: create a form with the key "contact" in Rush CMS, or change the key here.
+const form = locale === undefined ? undefined : await optional(getRush(Astro).forms.get('contact'))
+const notice = locale !== undefined && form === undefined && import.meta.env.DEV
+if (form === undefined && !notice) {
+	Astro.response.status = 404
+}
+---
+
+{
+	locale !== undefined && (form !== undefined || notice) ? (
+		<Base locale={locale} title={form?.name ?? 'Contact'}>
+			<div class="mx-auto max-w-2xl px-6 py-16">
+				<h1 class="text-4xl font-semibold tracking-tight">{form?.name ?? 'Contact'}</h1>
+				{form ? (
+					<div class="contact-form mt-10">
+						<Form
+							form={form}
+							submitLabel="Send"
+							messages={{
+								sent: 'Thank you, your message was sent.',
+								error: 'Your message could not be sent. Please try again.',
+								required: 'This field is required.',
+								invalid_option: 'Choose one of the options.',
+								invalid_email: 'Enter a valid email address.',
+								invalid_url: 'Enter a valid URL.',
+								invalid_number: 'Enter a number.',
+								invalid_format: 'Check the format of this field.',
+								too_small: 'Enter {min} or more.',
+								too_large: 'Enter {max} or less.',
+								too_short: 'Use at least {min} characters.',
+								too_long: 'Use at most {max} characters.',
+								rate_limited: 'Too many attempts. Try again in a minute.',
+								captcha_failed: 'The captcha check failed. Please try again.'
+							}}
+						/>
+					</div>
+				) : (
+					<p lang="en" class="mt-6 rounded-lg border border-dashed border-line px-5 py-4 text-muted">
+						This page shows the Rush CMS form with the key <code class="font-mono">contact</code>.
+						Create that form in Rush CMS and reload. This notice appears only in
+						<code class="font-mono">astro dev</code>; production builds answer 404 here.
+					</p>
+				)}
+			</div>
+		</Base>
+	) : (
+		<NotFound />
+	)
+}

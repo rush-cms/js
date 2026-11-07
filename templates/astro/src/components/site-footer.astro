@@ -1,0 +1,29 @@
+---
+import type { NavigationLink } from '@rushcms/client'
+import NavLinks from './nav-links.astro'
+
+type Props = {
+	name: string
+	links: NavigationLink[]
+}
+
+const { name, links } = Astro.props
+---
+
+<footer class="border-t border-line">
+	<div
+		class="mx-auto flex max-w-6xl flex-col gap-6 px-6 py-10 text-sm text-muted md:flex-row md:items-start md:justify-between"
+	>
+		<p>
+			&copy; {`${new Date().getFullYear()} ${name}`}. Powered by
+			<span class="font-medium text-ink">Rush CMS</span>.
+		</p>
+		{
+			links.length > 0 && (
+				<nav aria-label="Footer" class="footer-nav">
+					<NavLinks links={links} />
+				</nav>
+			)
+		}
+	</div>
+</footer>

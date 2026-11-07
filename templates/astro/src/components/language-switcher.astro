@@ -1,0 +1,42 @@
+---
+import { getUrls } from '@rushcms/astro'
+import { toBcp47 } from '@rushcms/client'
+import type { Alternate, LocaleCode } from '@rushcms/client'
+import { languageName } from '../lib/locale'
+
+type Props = {
+	locale: LocaleCode
+	translations: Alternate[]
+}
+
+const { locale, translations } = Astro.props
+const urls = getUrls(Astro)
+const links = urls.locales.map((code) => ({
+	locale: code,
+	hreflang: toBcp47(code),
+	label: languageName(code),
+	url: translations.find((translation) => translation.locale === code)?.url ?? urls.homepage(code)
+}))
+---
+
+{
+	links.length > 1 && (
+		<nav aria-label="Language" class="text-sm">
+			<ul class="flex flex-wrap items-center gap-1">
+				{links.map((link) => (
+					<li>
+						<a
+							href={link.url}
+							hreflang={link.hreflang}
+							lang={link.hreflang}
+							aria-current={link.locale === locale ? 'true' : undefined}
+							class="block rounded-full px-3 py-1 text-muted transition-colors hover:text-ink aria-[current]:bg-accent-soft aria-[current]:text-ink"
+						>
+							{link.label}
+						</a>
+					</li>
+				))}
+			</ul>
+		</nav>
+	)
+}

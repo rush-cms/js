@@ -1,0 +1,278 @@
+@import 'tailwindcss';
+@plugin '@tailwindcss/typography';
+
+@theme {
+	--font-sans:
+		ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
+		sans-serif;
+	--font-mono: ui-monospace, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+	--color-canvas: oklch(0.985 0.004 265);
+	--color-surface: oklch(1 0 0);
+	--color-ink: oklch(0.23 0.025 265);
+	--color-muted: oklch(0.5 0.025 265);
+	--color-line: oklch(0.91 0.012 265);
+	--color-accent: oklch(0.52 0.21 277);
+	--color-accent-ink: oklch(0.99 0.005 277);
+	--color-accent-soft: oklch(0.93 0.045 277);
+	--color-danger: oklch(0.55 0.2 25);
+	--color-success: oklch(0.55 0.14 155);
+}
+
+@media (prefers-color-scheme: dark) {
+	:root {
+		--color-canvas: oklch(0.17 0.018 265);
+		--color-surface: oklch(0.21 0.02 265);
+		--color-ink: oklch(0.95 0.008 265);
+		--color-muted: oklch(0.74 0.02 265);
+		--color-line: oklch(0.31 0.022 265);
+		--color-accent: oklch(0.76 0.14 277);
+		--color-accent-ink: oklch(0.18 0.03 277);
+		--color-accent-soft: oklch(0.3 0.07 277);
+		--color-danger: oklch(0.72 0.17 25);
+		--color-success: oklch(0.75 0.14 155);
+	}
+}
+
+@layer base {
+	:root {
+		color-scheme: light dark;
+	}
+
+	:focus-visible {
+		outline: 2px solid var(--color-accent);
+		outline-offset: 3px;
+		border-radius: 4px;
+	}
+
+	::selection {
+		background-color: var(--color-accent-soft);
+	}
+}
+
+@layer components {
+	.button,
+	.contact-form button[type='submit'] {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		gap: 0.5rem;
+		border-radius: 9999px;
+		padding: 0.625rem 1.25rem;
+		font-weight: 500;
+		transition:
+			background-color 150ms,
+			border-color 150ms,
+			color 150ms;
+	}
+
+	.button-primary,
+	.contact-form button[type='submit'] {
+		background-color: var(--color-accent);
+		color: var(--color-accent-ink);
+	}
+
+	.button-primary:hover,
+	.contact-form button[type='submit']:hover {
+		background-color: color-mix(in oklch, var(--color-accent) 88%, var(--color-ink));
+	}
+
+	.button-secondary {
+		border: 1px solid var(--color-line);
+		background-color: var(--color-surface);
+	}
+
+	.button-secondary:hover {
+		border-color: var(--color-accent);
+	}
+
+	.card {
+		border: 1px solid var(--color-line);
+		border-radius: 1rem;
+		background-color: var(--color-surface);
+		padding: 1.5rem;
+		transition:
+			border-color 150ms,
+			box-shadow 150ms;
+	}
+
+	.card:hover,
+	.card:focus-within {
+		border-color: var(--color-accent);
+		box-shadow: 0 8px 30px -12px color-mix(in oklch, var(--color-accent) 40%, transparent);
+	}
+
+	.nav-links-top {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.25rem 1.25rem;
+	}
+
+	.nav-item {
+		position: relative;
+	}
+
+	.nav-link,
+	.nav-label {
+		display: inline-block;
+		padding-block: 0.25rem;
+		color: var(--color-muted);
+	}
+
+	.nav-link:hover,
+	.nav-link[aria-current] {
+		color: var(--color-ink);
+	}
+
+	.site-nav .nav-links-nested {
+		position: absolute;
+		top: 100%;
+		left: -1rem;
+		z-index: 20;
+		display: none;
+		min-width: 12rem;
+		border: 1px solid var(--color-line);
+		border-radius: 0.75rem;
+		background-color: var(--color-surface);
+		padding: 0.5rem 1rem;
+		box-shadow: 0 12px 30px -12px rgb(0 0 0 / 0.25);
+	}
+
+	.site-nav .nav-item:hover > .nav-links-nested,
+	.site-nav .nav-item:focus-within > .nav-links-nested {
+		display: block;
+	}
+
+	.footer-nav .nav-links-top {
+		align-items: flex-start;
+		gap: 1rem 2.5rem;
+	}
+
+	.footer-nav .nav-links-nested {
+		margin-top: 0.25rem;
+	}
+
+	[data-rush-preview] {
+		position: sticky;
+		top: 0;
+		z-index: 40;
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		justify-content: center;
+		gap: 0.5rem 1rem;
+		background-color: var(--color-ink);
+		padding: 0.5rem 1rem;
+		color: var(--color-canvas);
+		font-size: 0.875rem;
+	}
+
+	[data-rush-preview] a {
+		font-weight: 600;
+		text-decoration: underline;
+		text-underline-offset: 3px;
+	}
+
+	.contact-form form {
+		display: grid;
+		gap: 1.5rem;
+	}
+
+	.contact-form label,
+	.contact-form legend {
+		display: block;
+		margin-bottom: 0.375rem;
+		font-weight: 500;
+	}
+
+	.contact-form fieldset label {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		font-weight: 400;
+	}
+
+	.contact-form input:not([type='checkbox'], [type='radio']),
+	.contact-form textarea,
+	.contact-form select {
+		width: 100%;
+		border: 1px solid var(--color-line);
+		border-radius: 0.5rem;
+		background-color: var(--color-surface);
+		padding: 0.625rem 0.75rem;
+	}
+
+	.contact-form textarea {
+		min-height: 9rem;
+	}
+
+	.contact-form input:focus-visible,
+	.contact-form textarea:focus-visible,
+	.contact-form select:focus-visible {
+		outline-offset: 0;
+		border-color: var(--color-accent);
+	}
+
+	.contact-form input[type='checkbox'],
+	.contact-form input[type='radio'] {
+		accent-color: var(--color-accent);
+	}
+
+	.contact-form [id$='-help'] {
+		margin-top: 0.375rem;
+		color: var(--color-muted);
+		font-size: 0.875rem;
+	}
+
+	.contact-form [data-rush-error-for] {
+		margin-top: 0.375rem;
+		color: var(--color-danger);
+		font-size: 0.875rem;
+	}
+
+	.contact-form [data-rush-status] {
+		border: 1px solid var(--color-line);
+		border-radius: 0.5rem;
+		padding: 0.75rem 1rem;
+	}
+
+	.contact-form [data-rush-status][data-state='sent'] {
+		border-color: var(--color-success);
+		color: var(--color-success);
+	}
+
+	.contact-form [data-rush-status][data-state='error'] {
+		border-color: var(--color-danger);
+		color: var(--color-danger);
+	}
+
+	.contact-form button[type='submit'] {
+		justify-self: start;
+		cursor: pointer;
+	}
+
+	.contact-form button[type='submit']:disabled {
+		cursor: progress;
+		opacity: 0.7;
+	}
+}
+
+.prose {
+	--tw-prose-body: var(--color-ink);
+	--tw-prose-headings: var(--color-ink);
+	--tw-prose-lead: var(--color-muted);
+	--tw-prose-links: var(--color-accent);
+	--tw-prose-bold: var(--color-ink);
+	--tw-prose-counters: var(--color-muted);
+	--tw-prose-bullets: var(--color-line);
+	--tw-prose-hr: var(--color-line);
+	--tw-prose-quotes: var(--color-ink);
+	--tw-prose-quote-borders: var(--color-accent);
+	--tw-prose-captions: var(--color-muted);
+	--tw-prose-kbd: var(--color-ink);
+	--tw-prose-code: var(--color-ink);
+	--tw-prose-pre-code: var(--color-ink);
+	--tw-prose-pre-bg: var(--color-surface);
+	--tw-prose-th-borders: var(--color-line);
+	--tw-prose-td-borders: var(--color-line);
+}

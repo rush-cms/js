@@ -1,0 +1,161 @@
+---
+import { getRush, getUrls } from '@rushcms/astro'
+import Seo from '@rushcms/astro/components/seo.astro'
+import Base from '../layouts/base.astro'
+import { inLocale } from '../lib/locale'
+import type { HomeViewProps } from './index'
+
+type Props = HomeViewProps
+
+type Step = {
+	title: string
+	body: string
+	code: string
+}
+
+const { page } = Astro.props
+const { locale, homepage } = page
+const urls = getUrls(Astro)
+const rush = getRush(inLocale(Astro, locale))
+const site = await rush.site.get()
+const collections = (await rush.collections.list()).filter((collection) => urls.routed(collection))
+const title = homepage?.meta?.title === undefined ? site.name : undefined
+
+const steps: Step[] = [
+	{
+		title: 'Shape your URLs',
+		body: 'Replace the catch-all route with one route per public collection, so data-only collections stay off the site.',
+		code: "routes: { posts: '/{locale}/blog/{slug}' }"
+	},
+	{
+		title: 'Fill the menus',
+		body: 'Create the navigations "main" and "footer" in Rush CMS. The header and footer pick them up on the next build.',
+		code: "getNavigation(Astro, 'main')"
+	},
+	{
+		title: 'Add a contact form',
+		body: 'Create a form with the key "contact". It appears at /contact, with validation and spam protection handled for you.',
+		code: "forms.get('contact')"
+	},
+	{
+		title: 'Go live',
+		body: 'Set your domain in site and security.allowedDomains, count the proxies in front of the server, then build.',
+		code: 'npm run build'
+	}
+]
+---
+
+<Base locale={locale} title={title}>
+	{homepage && <Seo slot="head" homepage={homepage} />}
+	<div lang="en">
+		<section class="relative overflow-hidden border-b border-line">
+			<div
+				aria-hidden="true"
+				class="pointer-events-none absolute inset-x-0 -top-40 mx-auto h-96 max-w-4xl rounded-full bg-accent-soft opacity-70 blur-3xl"
+			>
+			</div>
+			<div class="relative mx-auto max-w-6xl px-6 py-24 sm:py-32">
+				<p
+					class="inline-flex items-center gap-2 rounded-full border border-line bg-surface px-3 py-1 text-sm text-muted"
+				>
+					<span class="size-2 rounded-full bg-emerald-500" aria-hidden="true"></span>
+					Connected to {site.name}
+				</p>
+				<h1 class="mt-6 max-w-3xl text-4xl font-semibold tracking-tight text-balance sm:text-6xl">
+					Your Rush CMS site is up and running.
+				</h1>
+				<p class="mt-6 max-w-2xl text-lg text-pretty text-muted">
+					Collection lists, entries, menus, the sitemap and redirects all come from your CMS. This
+					front page is yours to replace: it is a plain Astro view with no CMS content.
+				</p>
+				<div class="mt-10 flex flex-wrap gap-3">
+					<a href="#next-steps" class="button button-primary">See what is next</a>
+					{
+						collections[0] && (
+							<a href={urls.collection(collections[0], locale)} class="button button-secondary">
+								Browse {collections[0].name}
+							</a>
+						)
+					}
+				</div>
+			</div>
+		</section>
+
+		<section aria-labelledby="content-heading" class="mx-auto max-w-6xl px-6 py-20">
+			<h2 id="content-heading" class="text-2xl font-semibold tracking-tight">Your content</h2>
+			{
+				collections.length > 0 ? (
+					<ul class="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+						{collections.map((collection) => (
+							<li>
+								<a href={urls.collection(collection, locale)} class="card group block h-full">
+									<span class="block text-lg font-medium group-hover:text-accent">
+										{collection.name}
+									</span>
+									<span class="mt-1 block text-sm text-muted">
+										{urls.collection(collection, locale)}
+									</span>
+								</a>
+							</li>
+						))}
+					</ul>
+				) : (
+					<p class="mt-4 max-w-2xl text-muted">
+						No collection has a route yet. Create a collection in Rush CMS, or check the routes
+						in astro.config.ts.
+					</p>
+				)
+			}
+		</section>
+
+		<section
+			id="next-steps"
+			aria-labelledby="next-steps-heading"
+			class="border-y border-line bg-surface"
+		>
+			<div class="mx-auto max-w-6xl px-6 py-20">
+				<h2 id="next-steps-heading" class="text-2xl font-semibold tracking-tight">What next</h2>
+				<ol class="mt-8 grid gap-6 md:grid-cols-2">
+					{
+						steps.map((step, index) => (
+							<li class="flex gap-4">
+								<span
+									aria-hidden="true"
+									class="flex size-9 shrink-0 items-center justify-center rounded-full bg-accent font-semibold text-accent-ink"
+								>
+									{index + 1}
+								</span>
+								<div>
+									<h3 class="font-medium">{step.title}</h3>
+									<p class="mt-1 text-muted">{step.body}</p>
+									<code class="mt-3 inline-block rounded-md bg-canvas px-2 py-1 font-mono text-sm">
+										{step.code}
+									</code>
+								</div>
+							</li>
+						))
+					}
+				</ol>
+			</div>
+		</section>
+
+		<section aria-labelledby="edit-heading" class="mx-auto max-w-6xl px-6 py-20">
+			<div class="grid gap-10 md:grid-cols-[1fr_auto] md:items-center">
+				<div>
+					<h2 id="edit-heading" class="text-2xl font-semibold tracking-tight">Edit this page</h2>
+					<p class="mt-4 max-w-2xl text-muted">
+						This page lives in <code class="font-mono text-ink">src/views/home.astro</code>. Replace
+						it with your own design, or render the homepage you build in Rush CMS from
+						<code class="font-mono text-ink">page.homepage.content</code>. List and entry pages
+						use <code class="font-mono text-ink">src/views/collection.astro</code> and
+						<code class="font-mono text-ink">src/views/entry.astro</code>; give a collection its
+						own views in <code class="font-mono text-ink">src/views/index.ts</code>.
+					</p>
+				</div>
+				<p class="rounded-xl border border-dashed border-line px-5 py-4 text-sm text-muted">
+					Documentation: coming soon
+				</p>
+			</div>
+		</section>
+	</div>
+</Base>

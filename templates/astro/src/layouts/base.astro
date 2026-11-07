@@ -1,0 +1,51 @@
+---
+import { getNavigation, getRush, getUrls } from '@rushcms/astro'
+import PreviewBanner from '@rushcms/astro/components/preview-banner.astro'
+import { optional, toBcp47 } from '@rushcms/client'
+import type { Alternate, LocaleCode } from '@rushcms/client'
+import SiteFooter from '../components/site-footer.astro'
+import SiteHeader from '../components/site-header.astro'
+import { inLocale } from '../lib/locale'
+import '../styles/global.css'
+
+type Props = {
+	locale: LocaleCode
+	title?: string | undefined
+	translations?: Alternate[]
+}
+
+const { locale, title, translations = [] } = Astro.props
+const context = inLocale(Astro, locale)
+const site = await getRush(context).site.get()
+const home = getUrls(Astro).homepage(locale)
+// TODO: create a navigation with the key "main" in Rush CMS, or change the key here.
+const main = (await optional(getNavigation(context, 'main'))) ?? []
+// TODO: create a navigation with the key "footer" in Rush CMS, or change the key here.
+const footer = (await optional(getNavigation(context, 'footer'))) ?? []
+---
+
+<!doctype html>
+<html lang={toBcp47(locale)}>
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<meta name="color-scheme" content="light dark" />
+		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+		{title !== undefined && <title>{title}</title>}
+		<slot name="head" />
+	</head>
+	<body class="flex min-h-screen flex-col bg-canvas font-sans text-ink antialiased">
+		<a
+			href="#content"
+			class="sr-only rounded-md bg-accent px-4 py-2 font-medium text-accent-ink focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-50"
+		>
+			Skip to content
+		</a>
+		<PreviewBanner />
+		<SiteHeader name={site.name} home={home} links={main} locale={locale} translations={translations} />
+		<main id="content" tabindex="-1" class="flex-1 focus:outline-none">
+			<slot />
+		</main>
+		<SiteFooter name={site.name} links={footer} />
+	</body>
+</html>

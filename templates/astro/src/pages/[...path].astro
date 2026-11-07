@@ -1,0 +1,32 @@
+---
+import { getUrls } from '@rushcms/astro'
+import type { SitePageProps } from '@rushcms/astro'
+import { routePage } from '../lib/route-page'
+import Home from '../views/home.astro'
+import { viewsFor } from '../views/index'
+import NotFound from '../views/not-found.astro'
+
+export * from '@rushcms/astro/site-paths'
+
+type Props = SitePageProps
+
+const page = await routePage(Astro)
+if (page instanceof Response) {
+	return page
+}
+if (page.kind === 'missing') {
+	Astro.response.status = 404
+}
+const collection =
+	page.kind === 'collection'
+		? page.collection
+		: page.kind === 'found'
+			? page.entry.collection
+			: undefined
+const { list: List, entry: Entry } = viewsFor(collection, getUrls(Astro))
+---
+
+{page.kind === 'homepage' && <Home page={page} />}
+{page.kind === 'collection' && <List page={page} />}
+{page.kind === 'found' && <Entry entry={page.entry} locale={page.locale} />}
+{page.kind === 'missing' && <NotFound />}

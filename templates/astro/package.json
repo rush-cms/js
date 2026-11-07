@@ -1,0 +1,28 @@
+{
+	"name": "rush-cms-template-astro",
+	"version": "0.0.0",
+	"private": true,
+	"type": "module",
+	"engines": {
+		"node": ">=24"
+	},
+	"scripts": {
+		"dev": "astro dev",
+		"build": "astro build",
+		"preview": "node ./dist/server/entry.mjs",
+		"check": "astro check"
+	},
+	"dependencies": {
+		"@astrojs/node": "11.1.10",
+		"@rushcms/astro": "workspace:*",
+		"@rushcms/client": "workspace:*",
+		"@tailwindcss/typography": "0.5.20",
+		"@tailwindcss/vite": "4.3.5",
+		"astro": "7.4.6",
+		"tailwindcss": "4.3.5"
+	},
+	"devDependencies": {
+		"@astrojs/check": "0.9.12",
+		"typescript": "npm:@typescript/typescript6@6.0.2"
+	}
+}

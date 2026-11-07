@@ -1,0 +1,22 @@
+---
+import { getRush, getUrls } from '@rushcms/astro'
+import Base from '../layouts/base.astro'
+import { inLocale, localeOfPath } from '../lib/locale'
+
+const locale = await localeOfPath(Astro, Astro.url.pathname)
+const site = await getRush(inLocale(Astro, locale)).site.get()
+---
+
+<Base locale={locale} title={`Page not found | ${site.name}`}>
+	<meta slot="head" name="robots" content="noindex" />
+	<div lang="en" class="mx-auto flex max-w-3xl flex-col items-start px-6 py-24 sm:py-32">
+		<p class="font-mono text-sm text-accent">404</p>
+		<h1 class="mt-4 text-4xl font-semibold tracking-tight sm:text-5xl">Page not found</h1>
+		<p class="mt-6 text-lg text-muted">
+			The page you are looking for does not exist or is no longer available.
+		</p>
+		<a href={getUrls(Astro).homepage(locale)} class="button button-primary mt-10">
+			Back to the home page
+		</a>
+	</div>
+</Base>

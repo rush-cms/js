@@ -1,0 +1,17 @@
+---
+import type { SitePageProps } from '@rushcms/astro'
+import { routePage } from '../lib/route-page'
+import NotFound from '../views/not-found.astro'
+
+export const prerender = false
+
+type Props = SitePageProps
+
+const page = await routePage(Astro)
+if (page instanceof Response) {
+	return page
+}
+Astro.response.status = 404
+---
+
+<NotFound />

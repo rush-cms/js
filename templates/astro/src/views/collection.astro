@@ -1,0 +1,91 @@
+---
+import { getRush, getUrls } from '@rushcms/astro'
+import RushImage from '@rushcms/astro/components/rush-image.astro'
+import { toBcp47 } from '@rushcms/client'
+import type { Alternate } from '@rushcms/client'
+import Base from '../layouts/base.astro'
+import { formatDate, inLocale } from '../lib/locale'
+import type { ListViewProps } from './index'
+
+type Props = ListViewProps
+
+const { page } = Astro.props
+const { collection, locale, entries } = page
+const urls = getUrls(Astro)
+const site = await getRush(inLocale(Astro, locale)).site.get()
+const lastPage = Math.max(1, entries.meta.last_page)
+const previous = page.page > 1 ? urls.collection(collection, locale, page.page - 1) : undefined
+const next = page.page < lastPage ? urls.collection(collection, locale, page.page + 1) : undefined
+const canonical = Astro.site && new URL(urls.collection(collection, locale, page.page), Astro.site)
+const heading = page.page > 1 ? `${collection.name} (${page.page}/${lastPage})` : collection.name
+const translations: Alternate[] = urls.locales.flatMap((code) => {
+	const ref = urls.collectionRef(collection.id, code)
+	const url = ref === undefined ? undefined : urls.collection(ref, code)
+	return url === undefined ? [] : [{ locale: code, hreflang: toBcp47(code), url }]
+})
+---
+
+<Base locale={locale} title={`${heading} | ${site.name}`} translations={translations}>
+	{canonical && <link slot="head" rel="canonical" href={canonical.href} />}
+	<div class="mx-auto max-w-6xl px-6 py-16">
+		<header class="max-w-3xl">
+			<h1 class="text-4xl font-semibold tracking-tight">{collection.name}</h1>
+			{
+				lastPage > 1 && (
+					<p class="mt-2 text-muted">
+						Page {page.page} of {lastPage}
+					</p>
+				)
+			}
+		</header>
+		{
+			entries.items.length > 0 ? (
+				<ul class="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+					{entries.items.map((entry) => (
+						<li>
+							<article class="card group relative flex h-full flex-col">
+								{entry.featured_image?.url && (
+									<RushImage
+										media={entry.featured_image}
+										class="mb-4 aspect-video w-full rounded-lg object-cover"
+									/>
+								)}
+								<h2 class="text-lg font-medium group-hover:text-accent">
+									<a href={urls.servedPath(entry, locale)} class="after:absolute after:inset-0">
+										{entry.title}
+									</a>
+								</h2>
+								{entry.excerpt && <p class="mt-2 line-clamp-3 text-muted">{entry.excerpt}</p>}
+								<p class="mt-auto pt-4 text-sm text-muted">
+									<time datetime={entry.published_at}>
+										{formatDate(entry.published_at, locale)}
+									</time>
+								</p>
+							</article>
+						</li>
+					))}
+				</ul>
+			) : (
+				<p class="mt-12 text-muted">Nothing has been published here yet.</p>
+			)
+		}
+		{
+			lastPage > 1 && (
+				<nav aria-label="Pagination" class="mt-12 flex items-center justify-between gap-4">
+					{previous ? (
+						<a href={previous} rel="prev" class="button button-secondary">
+							Previous page
+						</a>
+					) : (
+						<span />
+					)}
+					{next && (
+						<a href={next} rel="next" class="button button-secondary">
+							Next page
+						</a>
+					)}
+				</nav>
+			)
+		}
+	</div>
+</Base>

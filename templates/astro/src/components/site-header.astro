@@ -1,0 +1,36 @@
+---
+import type { Alternate, LocaleCode, NavigationLink } from '@rushcms/client'
+import LanguageSwitcher from './language-switcher.astro'
+import NavLinks from './nav-links.astro'
+
+type Props = {
+	name: string
+	home: string
+	links: NavigationLink[]
+	locale: LocaleCode
+	translations: Alternate[]
+}
+
+const { name, home, links, locale, translations } = Astro.props
+---
+
+<header class="relative z-30 border-b border-line bg-surface/80 backdrop-blur">
+	<div
+		class="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-x-8 gap-y-3 px-6 py-4"
+	>
+		<a href={home} class="flex items-center gap-2 text-lg font-semibold tracking-tight">
+			<img src="/favicon.svg" alt="" width="28" height="28" />
+			<span>{name}</span>
+		</a>
+		<div class="flex flex-wrap items-center gap-x-6 gap-y-2">
+			{
+				links.length > 0 && (
+					<nav aria-label="Main" class="site-nav">
+						<NavLinks links={links} />
+					</nav>
+				)
+			}
+			<LanguageSwitcher locale={locale} translations={translations} />
+		</div>
+	</div>
+</header>

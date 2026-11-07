@@ -1,0 +1,66 @@
+---
+import { getUrls } from '@rushcms/astro'
+import RichText from '@rushcms/astro/components/rich-text.astro'
+import RushImage from '@rushcms/astro/components/rush-image.astro'
+import Seo from '@rushcms/astro/components/seo.astro'
+import { alternates, toBcp47 } from '@rushcms/client'
+import Base from '../layouts/base.astro'
+import { formatDate, languageName } from '../lib/locale'
+import { isRichText } from '../lib/rich-text'
+import type { EntryViewProps } from './index'
+
+type Props = EntryViewProps
+
+const { entry, locale } = Astro.props
+const urls = getUrls(Astro)
+const list = urls.collectionRef(entry.collection.id, locale)
+const documents = Object.values(entry.data).filter(isRichText)
+---
+
+<Base locale={locale} translations={alternates(entry, urls)}>
+	<Seo slot="head" entry={entry} />
+	<article lang={toBcp47(entry.locale)} class="mx-auto max-w-3xl px-6 py-16">
+		<header>
+			{
+				list && (
+					<p class="text-sm">
+						<a href={urls.collection(list, locale)} class="text-muted hover:text-accent">
+							&larr; Back to the list
+						</a>
+					</p>
+				)
+			}
+			<h1 class="mt-6 text-4xl font-semibold tracking-tight text-balance sm:text-5xl">
+				{entry.title}
+			</h1>
+			<p class="mt-4 text-sm text-muted">
+				<time datetime={entry.published_at}>{formatDate(entry.published_at, entry.locale)}</time>
+				{entry.author && <span> &middot; {entry.author.name}</span>}
+			</p>
+			{
+				entry.fallback && (
+					<p lang="en" class="mt-6 rounded-lg border border-line bg-surface px-4 py-3 text-sm">
+						Not translated yet: shown in {languageName(entry.locale)}.
+					</p>
+				)
+			}
+			{entry.excerpt && <p class="mt-8 text-xl text-pretty text-muted">{entry.excerpt}</p>}
+		</header>
+		{
+			entry.featured_image?.url && (
+				<figure class="mt-10">
+					<RushImage media={entry.featured_image} class="w-full rounded-xl" loading="eager" />
+				</figure>
+			)
+		}
+		{
+			documents.length > 0 && (
+				<div class="prose prose-lg mt-10 max-w-none">
+					{documents.map((content) => (
+						<RichText content={content} media={entry.media} />
+					))}
+				</div>
+			)
+		}
+	</article>
+</Base>
