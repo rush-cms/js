@@ -27,6 +27,9 @@ Requires Node 24 or later.
       localePaths: { pt_BR: '', en: 'en' }
     ```
 
+    When an AI coding agent starts the dev server, Astro runs it in the background and writes this error to
+    `.astro/dev.log` instead of the terminal.
+
 3. Paste that line over `localePaths: {}` in `astro.config.ts` and run `npm run dev` again. The default locale has
    no URL prefix; every other locale gets its own. Change the prefixes now if you like: they are part of your URLs.
 
