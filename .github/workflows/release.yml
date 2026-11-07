@@ -7,15 +7,21 @@ on:
 concurrency: ${{ github.workflow }}-${{ github.ref }}
 
 permissions:
-    contents: write
-    pull-requests: write
+    contents: read
     id-token: write
 
 jobs:
     release:
         runs-on: ubuntu-latest
         steps:
+            - id: app-token
+              uses: actions/create-github-app-token@v3
+              with:
+                  client-id: Iv23lihAjBIqteoeVfmw
+                  private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
             - uses: actions/checkout@v7
+              with:
+                  token: ${{ steps.app-token.outputs.token }}
             - uses: oven-sh/setup-bun@v2
               with:
                   bun-version: 1.4.4
@@ -28,6 +34,7 @@ jobs:
               with:
                   publish-script: bun run release
                   version-script: bun run version-packages
+                  github-token: ${{ steps.app-token.outputs.token }}
               env:
-                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+                  GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
                   NPM_CONFIG_PROVENANCE: 'true'
