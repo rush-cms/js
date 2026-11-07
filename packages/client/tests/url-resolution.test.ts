@@ -20,7 +20,6 @@ import {
 	ROUTE_ANY,
 	collectionSlugs,
 	collisions,
-	nonEmptySubsets,
 	routeKeyFor,
 	substitute,
 	templatesOf,

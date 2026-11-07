@@ -18,10 +18,10 @@ import {
 	ROUTE_ANY,
 	VALUE,
 	collisions,
-	nonEmptySubsets,
 	templatesOf,
 	thrownBy
 } from './fixtures/url-oracle'
+import { nonEmptySubsets } from './fixtures/subsets'
 import type { Template } from './fixtures/url-oracle'
 
 type Instance = {
