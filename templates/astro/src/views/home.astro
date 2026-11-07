@@ -1,5 +1,5 @@
 ---
-import { getRush, getUrls } from '@rushcms/astro'
+import { getRush, getUrls, homepageTitle } from '@rushcms/astro'
 import Seo from '@rushcms/astro/components/seo.astro'
 import Base from '../layouts/base.astro'
 import type { HomeViewProps } from './index'
@@ -18,7 +18,7 @@ const urls = getUrls(Astro)
 const rush = getRush(Astro)
 const site = await rush.site.get()
 const collections = (await rush.collections.list()).filter((collection) => urls.routed(collection))
-const title = homepage?.meta?.title === undefined ? site.name : undefined
+const title = homepageTitle(homepage) === undefined ? site.name : undefined
 
 const steps: Step[] = [
 	{
@@ -144,9 +144,9 @@ const steps: Step[] = [
 					<h2 id="edit-heading" class="text-2xl font-semibold tracking-tight">Edit this page</h2>
 					<p class="mt-4 max-w-2xl text-muted">
 						This page lives in <code class="font-mono text-ink">src/views/home.astro</code>. Replace
-						it with your own design, or render the homepage you build in Rush CMS from
+						it with your own design, or render the homepage you build in Rush CMS from{' '}
 						<code class="font-mono text-ink">page.homepage.content</code>. List and entry pages
-						use <code class="font-mono text-ink">src/views/collection.astro</code> and
+						use <code class="font-mono text-ink">src/views/collection.astro</code> and{' '}
 						<code class="font-mono text-ink">src/views/entry.astro</code>; give a collection its
 						own views in <code class="font-mono text-ink">src/views/index.ts</code>.
 					</p>

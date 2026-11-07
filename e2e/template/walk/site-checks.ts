@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
-import { join } from 'node:path'
+import { readFileSync } from 'node:fs'
+import { join, relative } from 'node:path'
 import type { Page, Walker } from '../../walk-kit/browser.ts'
 import { openOk } from '../../walk-kit/browser.ts'
 import { alternateLinks, attribute, textOf } from '../../walk-kit/dom.ts'
@@ -7,8 +8,9 @@ import { loadedImages, richText } from '../../walk-kit/rich-text.ts'
 import type { RenderedRichText } from '../../walk-kit/rich-text.ts'
 import { SITE_URL } from './env.ts'
 import { httpStatus } from './http.ts'
-import { PREVIEW_OUT_DIR, fileCount, filesContaining } from './project.ts'
+import { PREVIEW_OUT_DIR, fileCount, filesContaining, filesUnder } from './project.ts'
 import type { Project } from './project.ts'
+import { gluedText } from './text-spacing.ts'
 
 export const FRONT_HEADING = 'Your Rush CMS site is up and running.'
 
@@ -84,6 +86,9 @@ const NOT_FOUND_HEADING = 'Page not found'
 const SITEMAP_LOC = /<loc>([^<]+)<\/loc>/g
 const NOT_FOUND = 404
 const FEATURED = 'article > figure img'
+const BUILT_PAGES = 'dist/client'
+const FRONT_FILE = 'index.html'
+const FRONT_PHRASES = ['you build in Rush CMS from <code', 'collection.astro</code> and <code']
 
 async function linksIn(page: Page, container: string): Promise<RenderedLink[]> {
 	return page.$$eval(`${container} a`, (links) =>
@@ -310,4 +315,20 @@ export function tokenAbsent(project: Project, token: string): Promise<string> {
 		return `${dir} (${fileCount(path)} files)`
 	})
 	return Promise.resolve(`delivery token found in none of ${checked.join(', ')}`)
+}
+
+export function textSpacing(project: Project): Promise<string> {
+	const dir = join(project.path, BUILT_PAGES)
+	const pages = filesUnder(dir).filter((file) => file.endsWith('.html'))
+	const glued = pages.flatMap((file) =>
+		gluedText(readFileSync(file, 'utf8')).map((part) => `${relative(dir, file)}: ${part}`)
+	)
+	assert.deepEqual(glued, [], 'a word character right before <code>, <a> or <span>')
+	const front = readFileSync(join(dir, FRONT_FILE), 'utf8')
+	for (const phrase of FRONT_PHRASES) {
+		assert.ok(front.includes(phrase), `${FRONT_FILE} shows "${phrase}"`)
+	}
+	return Promise.resolve(
+		`${pages.length} built HTML files in ${BUILT_PAGES}: no word character before <code>, <a> or <span>; ${FRONT_FILE} shows ${FRONT_PHRASES.map((phrase) => `"${phrase}"`).join(', ')}`
+	)
 }

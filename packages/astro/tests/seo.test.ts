@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import Seo from '../src/components/seo.astro'
-import type { RushCollections } from '@rushcms/client'
+import { createUrls } from '@rushcms/client'
+import type { Homepage, RushCollections } from '@rushcms/client'
+import { homepageSeo, homepageTitle } from '../src/seo-model'
+import type { SeoSettings } from '../src/seo-model'
 import type { SeoFieldMap } from '../src/config'
 import { entryExample, homepageExample } from '../../client/tests/fixtures/contract'
 import { linkHrefs, metaContent, renderComponent } from './fixtures/render'
@@ -240,5 +243,45 @@ describe('Seo for the homepage', () => {
 		const homepage = { ...homepageExample(), locale: 'en', fallback: true }
 		const html = await renderComponent(Seo, { props: { homepage }, locals: localesFor() })
 		expect(linkHrefs(html, 'canonical')).toEqual(['https://site.example/en'])
+	})
+})
+
+const TITLE_CHARS = [' ', '\t', '\n', '\r', '\u00a0', '\u2003', 'a']
+
+function titlesUpTo(length: number): string[] {
+	return length === 0
+		? ['']
+		: [
+				...titlesUpTo(length - 1),
+				...titlesUpTo(length - 1)
+					.filter((title) => title.length === length - 1)
+					.flatMap((title) => TITLE_CHARS.map((char) => `${title}${char}`))
+			]
+}
+
+const SEO_SETTINGS: SeoSettings = {
+	urls: createUrls({ localePaths: LOCALE_PATHS }),
+	seo: {},
+	defaultLocale: 'en',
+	site: new URL('https://site.example')
+}
+
+describe('homepageTitle', () => {
+	it('is the meta title unless it is missing, not a string or blank, as in homepageSeo', () => {
+		const titles = titlesUpTo(4)
+		expect(titles.length).toBe(2801)
+		for (const title of titles) {
+			const homepage: Homepage = { ...homepageExample(), meta: { title } }
+			const expected = /\S/.test(title) ? title : undefined
+			expect(homepageTitle(homepage)).toBe(expected)
+			expect(homepageSeo(homepage, SEO_SETTINGS).title).toBe(expected)
+		}
+	})
+
+	it('is undefined without a homepage, meta or title', () => {
+		expect(homepageTitle(undefined)).toBeUndefined()
+		expect(homepageTitle({ ...homepageExample(), meta: {} })).toBeUndefined()
+		const untyped: unknown = { ...homepageExample(), meta: { title: 7 } }
+		expect(homepageTitle(untyped as Homepage)).toBeUndefined()
 	})
 })

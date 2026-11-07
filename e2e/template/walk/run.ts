@@ -40,6 +40,7 @@ import {
 	notFoundPages,
 	pageChrome,
 	sitemapAndRobots,
+	textSpacing,
 	tokenAbsent
 } from './site-checks.ts'
 import type {
@@ -92,7 +93,7 @@ type NamedCheck = {
 }
 
 const SENT = 'Thank you, your message was sent.'
-const DEV_NOTICE = 'This notice appears only in'
+const DEV_NOTICE = 'This notice appears only in <code'
 const FORM_MARKUP = 'data-rush-form="contact"'
 
 function link(label: string, href: string): RenderedLink {
@@ -419,7 +420,8 @@ function serverChecks(
 		{
 			name: 'delivery token absent from the client bundles',
 			run: () => tokenAbsent(project, setup.delivery.token)
-		}
+		},
+		{ name: 'built pages keep the spaces in their text', run: () => textSpacing(project) }
 	]
 	return checks
 }

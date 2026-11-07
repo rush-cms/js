@@ -23,8 +23,8 @@ Breaking changes and how to migrate:
   `collection slug "<slug>" equals the locale prefix "<prefix>"` (a pattern puts `{collection}` right after `{locale}`,
   a locale has the `''` prefix and another locale's prefix equals a collection slug in that locale);
   `routes "<a>" and "<b>" produce the same URLs`. Migration: fix the route or the prefix the message names.
-- `isRecord` is no longer exported from the package root. Migration: import it from `@rushcms/client/internal`, an
-  undocumented subpath for the Rush packages; prefer `isRichText` or your own check in application code.
+- `isRecord` is no longer exported from the package root. Migration: use `isRichText` for rich text fields, or your
+  own type guard for other values.
 - `urls.collection(collection, locale)` takes a third argument, `page`. Page 1 or omitted is the index URL as before;
   page `n > 1` is `<index>/<segment>/<n>` (`/blog/page/2`); anything that is not a positive integer throws.
   Migration: none for existing calls; use it instead of building pagination URLs by hand.
@@ -41,6 +41,8 @@ Additions:
 - `pageSegments` (`RushPageSegments`, a locale code to a segment, default `page`) in `createUrls`; an empty segment or
   one containing `/` throws.
 - `urls.routed(collection)`: whether a `routes` key matches a collection.
+- `urls.collectionKeys` also takes a collection (`CollectionRef`): its id, its slug and its slug in every locale of
+  `collections`, the keys a `routes` key or a per-collection map can use.
 - `navigationLinks(items, urls, locale)` and the `NavigationLink` type: label, `href`, `target`, `rel` (the
   deduplicated union of `nofollow`, `noreferrer`, `noopener` for `_blank` and the tokens of the item's `rel`
   attribute), `className`, the other attributes as strings and `children`. An item with no target, or an unrouted one,

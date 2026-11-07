@@ -1,8 +1,17 @@
 import { describe, expect, it } from 'vitest'
 import { alternates, createUrls, toBcp47 } from '../src/index'
-import type { Entry, Navigation, RushLocalePaths, RushRoutes, UrlConfig } from '../src/index'
+import type {
+	CollectionRef,
+	Entry,
+	Navigation,
+	RushCollections,
+	RushLocalePaths,
+	RushRoutes,
+	UrlConfig
+} from '../src/index'
 import { entryExample, responseExample } from './fixtures/contract'
 import { navigationItem } from './fixtures/navigation'
+import { LOCALES } from './fixtures/url-oracle'
 import type { EntrySummary } from './fixtures/navigation'
 
 const LOCALE_PATHS: RushLocalePaths = { en: 'en', pt_BR: 'pt', es: 'es' }
@@ -287,6 +296,80 @@ describe('collection pages and id route keys', () => {
 		expect(() => urlsFor({ routes: { billets: '/{locale}/b/{slug}' } }).entry(entry)).toThrow(
 			'collection "artigos" has no route'
 		)
+	})
+})
+
+type KeyCase = {
+	collections: RushCollections
+	ref: CollectionRef
+	expected: Set<string>
+}
+
+const KEY_ID = 'c1'
+const KEY_SLUGS = [undefined, 'a', 'b', 'c']
+const REF_SLUGS = ['a', 'z']
+
+function slugChoices(count: number): (string | undefined)[][] {
+	return count === 0
+		? [[]]
+		: slugChoices(count - 1).flatMap((rest) => KEY_SLUGS.map((slug) => [slug, ...rest]))
+}
+
+function keyCases(): KeyCase[] {
+	return slugChoices(LOCALES.length).flatMap((slugs) => {
+		const collections: RushCollections = Object.fromEntries(
+			LOCALES.map((locale, index) => {
+				const slug = slugs[index]
+				return [
+					locale,
+					slug === undefined
+						? []
+						: [
+								{ id: KEY_ID, slug },
+								{ id: 'c2', slug: 'x' }
+							]
+				]
+			})
+		)
+		const known = slugs.filter((slug) => slug !== undefined)
+		return [KEY_ID, 'other'].flatMap((id) =>
+			REF_SLUGS.map((slug) => ({
+				collections,
+				ref: { id, slug },
+				expected: new Set([id, slug, ...(id === KEY_ID ? known : [])])
+			}))
+		)
+	})
+}
+
+describe('collectionKeys', () => {
+	it('names an entry collection by id, slug, translation slugs and every locale slug', () => {
+		const entry = entryExample()
+		const urls = urlsFor({
+			collections: { fr: [{ id: entry.collection.id, slug: 'billets' }] }
+		})
+		expect(new Set(urls.collectionKeys(entry))).toEqual(
+			new Set([
+				entry.collection.id,
+				entry.collection.slug,
+				...Object.values(entry.translations).map((item) => item.collection_slug),
+				'billets'
+			])
+		)
+	})
+
+	it('names a collection ref by its id, its slug and every locale slug, once each', () => {
+		const cases = keyCases()
+		expect(cases.length).toBe(256)
+		for (const { collections, ref, expected } of cases) {
+			const urls = urlsFor({ collections })
+			const keys = urls.collectionKeys(ref)
+			expect(keys.length).toBe(new Set(keys).size)
+			expect(new Set(keys)).toEqual(expected)
+			expect(keys[0]).toBe(ref.id)
+			const entry: Entry = { ...entryExample(), collection: ref, translations: {} }
+			expect(urls.collectionKeys(entry)).toEqual(keys)
+		}
 	})
 })
 

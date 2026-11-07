@@ -32,15 +32,10 @@ const generic: CollectionViews = { list: GenericList, entry: GenericEntry }
 // TODO: map a collection id or slug (any locale) to its own views, e.g. `posts: { entry: PostView }`.
 const views: ViewMap = {}
 
-function keysOf(collection: CollectionRef, urls: RushUrls): string[] {
-	const slugs = urls.locales.map((locale) => urls.collectionRef(collection.id, locale)?.slug)
-	return [collection.id, collection.slug, ...slugs].filter((key) => key !== undefined)
-}
-
 export function viewsFor(collection: CollectionRef | undefined, urls: RushUrls): CollectionViews {
 	const key =
 		collection === undefined
 			? undefined
-			: keysOf(collection, urls).find((candidate) => Object.hasOwn(views, candidate))
+			: urls.collectionKeys(collection).find((candidate) => Object.hasOwn(views, candidate))
 	return { ...generic, ...(key === undefined ? {} : views[key]) }
 }

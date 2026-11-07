@@ -153,19 +153,19 @@ request.
 Misconfigurations throw when `createUrls` runs (`route "<key>" must contain {locale}`,
 `route "<key>" matches no collection`, `routes "<a>" and "<b>" produce the same URLs`, …).
 
-| Helper                                                 | Returns                                                                         |
-| ------------------------------------------------------ | ------------------------------------------------------------------------------- |
-| `routed(collection)`                                   | Whether a `routes` key matches the collection                                   |
-| `entry(entry)` / `translation(entry, locale)`          | The path of the entry in its own locale / in a translation's locale             |
-| `servedPath(entry, requestedLocale)`                   | The path that answers for an entry as fetched for a locale, fallbacks included  |
-| `moved(params)`                                        | The redirect target of a `moved` error, from its params alone                   |
-| `collection(collection, locale, page?)`                | The list path of a collection (page 1 when omitted, else `<index>/<segment>/n`) |
-| `match(pathname)`                                      | The entry, collection page or homepage a path names (`undefined` when none)     |
-| `homepage(locale)` / `navigationItem(item, locale)`    | The homepage path / a navigation item's target (`undefined` without one)        |
-| `localeOf(param)` / `localeParam(locale)`              | The locale of a URL prefix (exact match) / the prefix of a locale               |
-| `entryParams(collection, locale, slug)`                | The route params of an entry path                                               |
-| `collectionRef(key, locale)` / `collectionKeys(entry)` | A collection in a locale by any key / every key that names a collection         |
-| `hasCollectionSegment(collection)`                     | Whether the collection's pattern has a `{collection}` segment                   |
+| Helper                                                  | Returns                                                                                      |
+| ------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `routed(collection)`                                    | Whether a `routes` key matches the collection                                                |
+| `entry(entry)` / `translation(entry, locale)`           | The path of the entry in its own locale / in a translation's locale                          |
+| `servedPath(entry, requestedLocale)`                    | The path that answers for an entry as fetched for a locale, fallbacks included               |
+| `moved(params)`                                         | The redirect target of a `moved` error, from its params alone                                |
+| `collection(collection, locale, page?)`                 | The list path of a collection (page 1 when omitted, else `<index>/<segment>/n`)              |
+| `match(pathname)`                                       | The entry, collection page or homepage a path names (`undefined` when none)                  |
+| `homepage(locale)` / `navigationItem(item, locale)`     | The homepage path / a navigation item's target (`undefined` without one)                     |
+| `localeOf(param)` / `localeParam(locale)`               | The locale of a URL prefix (exact match) / the prefix of a locale                            |
+| `entryParams(collection, locale, slug)`                 | The route params of an entry path                                                            |
+| `collectionRef(key, locale)` / `collectionKeys(source)` | A collection in a locale by any key / every key that names the collection of an entry or ref |
+| `hasCollectionSegment(collection)`                      | Whether the collection's pattern has a `{collection}` segment                                |
 
 `entry`, `translation`, `servedPath`, `collection` and `moved` throw `collection "<slug>" has no route` for a
 collection without a route; check with `routed`. `servedPath` throws for an entry that was not fetched for that

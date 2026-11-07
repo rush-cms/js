@@ -8,10 +8,9 @@ import type { ListViewProps } from './index'
 type Props = ListViewProps
 
 const { page } = Astro.props
-const { collection, locale, entries } = page
+const { collection, locale, entries, lastPage } = page
 const urls = getUrls(Astro)
 const site = await getRush(Astro).site.get()
-const lastPage = Math.max(1, entries.meta.last_page)
 const previous = page.page > 1 ? urls.collection(collection, locale, page.page - 1) : undefined
 const next = page.page < lastPage ? urls.collection(collection, locale, page.page + 1) : undefined
 const canonical = Astro.site && new URL(urls.collection(collection, locale, page.page), Astro.site)

@@ -119,6 +119,10 @@ export function entrySeo(entry: Entry, settings: SeoSettings): SeoTags {
 	return withImage(tags, entryImage(entry, fields.image), site)
 }
 
+export function homepageTitle(homepage: Homepage | undefined): string | undefined {
+	return filled(homepage?.meta?.title)
+}
+
 export function homepageSeo(homepage: Homepage, settings: SeoSettings): SeoTags {
 	const { urls, site } = settings
 	const meta = homepage.meta
@@ -129,7 +133,7 @@ export function homepageSeo(homepage: Homepage, settings: SeoSettings): SeoTags 
 		alternateLocales: ogAlternateLocales(homepage),
 		links: absoluteLinks(hreflangLinks(homepage, urls, settings.defaultLocale), site)
 	}
-	withText(tags, filled(meta?.title), filled(meta?.description))
+	withText(tags, homepageTitle(homepage), filled(meta?.description))
 	const image = filled(meta?.og_image)
 	return withImage(tags, image === undefined ? undefined : { url: image }, site)
 }

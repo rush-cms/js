@@ -31,7 +31,7 @@ export type RushUrls = {
 	collectionRef(key: string, locale: LocaleCode): CollectionRef | undefined
 	routed(collection: CollectionRef): boolean
 	hasCollectionSegment(collection: CollectionRef): boolean
-	collectionKeys(entry: Entry): string[]
+	collectionKeys(source: Entry | CollectionRef): string[]
 	collection(collection: CollectionRef, locale: LocaleCode, page?: number): string
 	entry(entry: Entry): string
 	servedPath(entry: Entry, requestedLocale: LocaleCode): string
@@ -150,6 +150,10 @@ function routeOf(routes: RouteTable, keys: string[]): string[] | undefined {
 	return key === undefined ? undefined : routes.get(key)
 }
 
+function isEntry(source: Entry | CollectionRef): source is Entry {
+	return 'translations' in source
+}
+
 function keysOf(index: CollectionIndex, id: string, slugs: string[]): string[] {
 	return [...new Set([id, ...slugs, ...(index.slugsById.get(id)?.values() ?? [])])]
 }
@@ -261,15 +265,19 @@ export function createUrls(config: UrlConfig): RushUrls {
 		return `/${filled.join('/')}`
 	}
 
-	function collectionKeys(entry: Entry): string[] {
+	function entryKeys(entry: Entry): string[] {
 		return keysOf(index, entry.collection.id, [
 			entry.collection.slug,
 			...Object.values(entry.translations).map((item) => item.collection_slug)
 		])
 	}
 
+	function collectionKeys(source: Entry | CollectionRef): string[] {
+		return isEntry(source) ? entryKeys(source) : refKeys(source)
+	}
+
 	function entryPath(entry: Entry, parts: UrlParts): string {
-		return build(segmentsFor(entry.collection, collectionKeys(entry)), parts)
+		return build(segmentsFor(entry.collection, entryKeys(entry)), parts)
 	}
 
 	function translation(entry: Entry, locale: LocaleCode): string {

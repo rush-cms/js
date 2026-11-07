@@ -1,6 +1,5 @@
 ---
-import { getUrls } from '@rushcms/astro'
-import { toBcp47 } from '@rushcms/client'
+import { getUrls, homepageAlternates } from '@rushcms/astro'
 import type { Alternate, LocaleCode } from '@rushcms/client'
 import { languageName } from '../lib/locale'
 
@@ -10,12 +9,10 @@ type Props = {
 }
 
 const { locale, translations } = Astro.props
-const urls = getUrls(Astro)
-const links = urls.locales.map((code) => ({
-	locale: code,
-	hreflang: toBcp47(code),
-	label: languageName(code),
-	url: translations.find((translation) => translation.locale === code)?.url ?? urls.homepage(code)
+const links = homepageAlternates(getUrls(Astro)).map((home) => ({
+	...home,
+	label: languageName(home.locale),
+	url: translations.find((translation) => translation.locale === home.locale)?.url ?? home.url
 }))
 ---
 

@@ -287,7 +287,7 @@ describe('collectSitePaths', () => {
 		expect(byPath.get('/')).toMatchObject({ kind: 'homepage', locale: 'pt_BR' })
 		expect(byPath.get('/en')).toEqual({ kind: 'homepage', locale: 'en', homepage: undefined })
 		const third = byPath.get('/en/blog/page/3')
-		expect(third).toMatchObject({ kind: 'collection', locale: 'en', page: 3 })
+		expect(third).toMatchObject({ kind: 'collection', locale: 'en', page: 3, lastPage: 3 })
 		expect(third).toMatchObject({
 			collection: { slug: 'blog', items_per_page: ITEMS_PER_PAGE }
 		})
@@ -382,14 +382,21 @@ describe('resolvePage', () => {
 	it('answers the last list page and missing past it', async () => {
 		expect(await resolveAt(`/en/blog/page/${LAST_PAGE}`)).toMatchObject({
 			kind: 'collection',
-			page: LAST_PAGE
+			page: LAST_PAGE,
+			lastPage: LAST_PAGE
 		})
 		expect(await resolveAt(`/en/blog/page/${LAST_PAGE + 1}`)).toEqual({ kind: 'missing' })
 	})
 
 	it('answers page 1 of an empty collection', async () => {
 		const resolved = await resolveAt('/artigos', { ...articlesCatalog(), entries: {} })
-		expect(resolved).toMatchObject({ kind: 'collection', locale: 'pt_BR', page: 1 })
+		expect(resolved).toMatchObject({
+			kind: 'collection',
+			locale: 'pt_BR',
+			page: 1,
+			lastPage: 1
+		})
+		expect(resolved).toMatchObject({ entries: { meta: { last_page: 0 } } })
 		expect(await resolveAt('/artigos/page/2', { ...articlesCatalog(), entries: {} })).toEqual({
 			kind: 'missing'
 		})

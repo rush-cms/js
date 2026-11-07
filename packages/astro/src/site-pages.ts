@@ -29,6 +29,7 @@ export type CollectionPage = {
 	locale: LocaleCode
 	collection: Collection
 	page: number
+	lastPage: number
 	entries: EntryListPage
 }
 
@@ -88,11 +89,8 @@ async function collectionPage(
 		page,
 		per_page: collection.items_per_page
 	})
-	return { kind: 'collection', locale, collection, page, entries }
-}
-
-function lastPage(page: CollectionPage): number {
-	return Math.max(FIRST_PAGE, page.entries.meta.last_page)
+	const lastPage = Math.max(FIRST_PAGE, entries.meta.last_page)
+	return { kind: 'collection', locale, collection, page, lastPage, entries }
 }
 
 async function collectionPages(
@@ -101,7 +99,7 @@ async function collectionPages(
 	locale: LocaleCode
 ): Promise<CollectionPage[]> {
 	const first = await collectionPage(client, collection, locale, FIRST_PAGE)
-	const rest = Array.from({ length: lastPage(first) - FIRST_PAGE }, (_, index) =>
+	const rest = Array.from({ length: first.lastPage - FIRST_PAGE }, (_, index) =>
 		collectionPage(client, collection, locale, FIRST_PAGE + 1 + index)
 	)
 	return [first, ...(await Promise.all(rest))]
@@ -185,7 +183,7 @@ async function resolveCollection(
 		return MISSING
 	}
 	const found = await collectionPage(client, collection, locale, match.page)
-	return found.page > lastPage(found) ? MISSING : found
+	return found.page > found.lastPage ? MISSING : found
 }
 
 function resolveMatchedEntry(

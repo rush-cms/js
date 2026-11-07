@@ -297,8 +297,10 @@ Set `site` in `astro.config`: absolute URLs are built from it and `<Seo>` throws
   field that is empty falls back to the default.
 - Canonical always points at the original translation, so a fallback page (an entry shown in a locale it is not
   translated to) is canonical to the original locale's URL.
-- `<Seo homepage>` reads `meta.title`, `meta.description` and `meta.og_image`; it emits no hreflang links (the
-  homepage response lists no translations).
+- `<Seo homepage>` reads `meta.title`, `meta.description` and `meta.og_image` (a blank value emits no tag), lists
+  hreflang links for the homepage's `translations` and points canonical at the homepage's own locale.
+  `homepageTitle(homepage)` returns the title it would emit, or `undefined` (no homepage, or a missing or blank
+  `meta.title`), so a page can fall back to a title of its own only then.
 
 ## Forms component
 
@@ -387,9 +389,9 @@ its own options object, which would arrive as `rush`.
 - otherwise, from `urls.match(Astro.url.pathname)`, fetched with the client of the matched locale (drafts in a
   preview session):
     - `{ kind: 'homepage', locale, homepage }`: `homepage` is `undefined` when the locale has none;
-    - `{ kind: 'collection', locale, collection, page, entries }`: `entries` is the `entries.list` page (`items`,
-      `meta`); a page past `meta.last_page` is `missing` (page 1 always exists), and so is a collection the API no
-      longer has;
+    - `{ kind: 'collection', locale, collection, page, lastPage, entries }`: `entries` is the `entries.list` page
+      (`items`, `meta`) and `lastPage` is `meta.last_page`, at least 1 (an empty collection has page 1); a page past
+      `lastPage` is `missing`, and so is a collection the API no longer has;
     - an entry through `resolveEntry`: `{ kind: 'found', entry, locale }`, `moved` or `missing`;
 - `{ kind: 'missing' }` for a path no route names.
 
@@ -505,14 +507,16 @@ export const GET = (context) => sitemapResponse({ context, collections: ['artigo
 
 `sitemapResponse` answers `application/xml` with the URLs the dispatcher renders, each listed once:
 
-- the homepage of every locale (the dispatcher always renders a front page), with `lastmod` from the CMS homepage when
-  the locale has its own (not a fallback) and no `lastmod` otherwise;
+- the homepage of each locale whose CMS homepage is its own (not a fallback), with `lastmod` from that homepage. A
+  locale served by another locale's homepage, or answering `404` while another locale has one, is skipped, matching
+  `<Seo homepage>`, whose canonical points at the homepage's own locale. When the site has no CMS homepage in any
+  locale, the front page of every locale is listed without `lastmod` (the dispatcher renders a static front page);
 - page 1 of every listed collection in every locale it exists in, without `lastmod` (later list pages are never
-  listed);
+  listed), except an index whose URL is a homepage URL: the dispatcher renders the homepage there;
 - canonical entry URLs only (fallback pages are excluded), with `lastmod` from `updated_at`.
 
-Homepage and collection URLs carry `xhtml:link` alternates to the same page in every locale, entries to their
-translations; each adds `x-default` pointing at the site's default locale when that locale has the page.
+Homepage and collection URLs carry `xhtml:link` alternates to the same page in the other listed locales, entries to
+their translations; each adds `x-default` pointing at the site's default locale when that locale's page is listed.
 `homepageAlternates(urls)` and `collectionAlternates(collection, urls)` (a collection id or slug) return the same
 alternates as `Alternate[]` for a language switcher. Without `collections` it lists every collection that has a
 route; naming a collection without a route throws.

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { SITE_URL } from './env.ts'
 import { runScript } from './project.ts'
 import type { Project } from './project.ts'
+import { gluedText } from './text-spacing.ts'
 
 export type DevPage = {
 	path: string
@@ -25,6 +26,11 @@ export async function devPages(project: Project, pages: DevPage[]): Promise<stri
 			for (const text of page.excludes) {
 				assert.ok(!html.includes(text), `${page.path} hides ${text}`)
 			}
+			assert.deepEqual(
+				gluedText(html),
+				[],
+				`${page.path} keeps the spaces before inline elements`
+			)
 			seen.push(
 				`${page.path} ${response.status} (${page.includes.map((text) => `"${text}"`).join(', ')})`
 			)
