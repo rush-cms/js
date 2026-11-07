@@ -24,8 +24,21 @@ type Options = {
 	install: boolean
 }
 
-type Parsed =
-	{ kind: 'help' } | { kind: 'invalid'; message: string } | { kind: 'ready'; options: Options }
+type HelpRequest = {
+	kind: 'help'
+}
+
+type InvalidArguments = {
+	kind: 'invalid'
+	message: string
+}
+
+type ReadyArguments = {
+	kind: 'ready'
+	options: Options
+}
+
+type Parsed = HelpRequest | InvalidArguments | ReadyArguments
 
 function messageOf(error: unknown): string {
 	return error instanceof Error ? error.message : String(error)
