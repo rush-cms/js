@@ -320,11 +320,91 @@ const form = await getRush(Astro).forms.get('contact')
 preview cookie session is active, with a link to `/_rush/preview/exit` that returns to the current page. `label` and
 `exitLabel` props set its texts.
 
+## Dispatcher route
+
+The recommended setup is one page for every URL the SDK builds (homepages, collection list pages, entries) plus an
+on-demand `404.astro` for old URLs. Changing URLs then only means changing `routes`, `localePaths` or
+`pageSegments`; no page file encodes a URL shape. `src/pages/[...path].astro`:
+
+```astro
+---
+import { resolvePage } from '@rushcms/astro'
+import type { SitePageProps } from '@rushcms/astro'
+
+export * from '@rushcms/astro/site-paths'
+
+type Props = SitePageProps
+
+const page = await resolvePage(Astro)
+if (page.kind === 'moved') {
+	return Astro.redirect(page.location, page.permanent ? 301 : 302)
+}
+if (page.kind === 'missing') {
+	return new Response(null, { status: 404 })
+}
+---
+```
+
+`src/pages/404.astro`:
+
+```astro
+---
+import { resolvePage } from '@rushcms/astro'
+
+export const prerender = false
+
+const page = await resolvePage(Astro)
+if (page.kind === 'moved') {
+	return Astro.redirect(page.location, page.permanent ? 301 : 302)
+}
+Astro.response.status = 404
+---
+```
+
+`sitePaths(rush?)` returns `{ params: { path }, props: { page } }` for the homepage of every locale, every list page
+of every routed collection in every locale (pages `1..meta.last_page`, `per_page` set to the collection's
+`items_per_page`) and every entry of every routed collection (as `entryPaths`, fallback pages included). `path` has
+no leading slash and is `undefined` for `/`. A URL is listed once: when a root pages route (`'/{locale}/{slug}'`)
+makes a list page 1 equal to a homepage URL, the homepage wins. Pass a client as `rush` to override the default one.
+
+`@rushcms/astro/site-paths` exports `getStaticPaths` alone, which calls `sitePaths()`. Re-export it with `export *`:
+Astro warns `getStaticPaths() ignored in dynamic page` whenever an on-demand page's code contains the text
+`getStaticPaths`, and every page is on demand in a preview deployment, so the re-export keeps preview builds free of
+that warning while production builds still prerender every path. `export const getStaticPaths = () => sitePaths()`
+works too, with the warning in preview builds. Never write `export const getStaticPaths = sitePaths`: Astro passes
+its own options object, which would arrive as `rush`.
+
+`resolvePage(Astro)` returns one of:
+
+- the `page` prop from `getStaticPaths` when present, without a request;
+- otherwise, from `urls.match(Astro.url.pathname)`, fetched with the client of the matched locale (drafts in a
+  preview session):
+    - `{ kind: 'homepage', locale, homepage }`: `homepage` is `undefined` when the locale has none;
+    - `{ kind: 'collection', locale, collection, page, entries }`: `entries` is the `entries.list` page (`items`,
+      `meta`); a page past `meta.last_page` is `missing` (page 1 always exists), and so is a collection the API no
+      longer has;
+    - an entry through `resolveEntry`: `{ kind: 'found', entry, locale }`, `moved` or `missing`;
+- `{ kind: 'missing' }` for a path no route names.
+
+In a production build every listed path is prerendered and the Node server hands every other path to `404.astro`,
+which redirects retired slugs and other locales' slugs (`moved`) and answers `404` otherwise. In a preview
+deployment the dispatcher itself renders on demand, so the same `resolvePage` call fetches drafts and answers
+`moved` there. Static pages such as `src/pages/[...locale]/contact.astro` take precedence over the dispatcher's
+rest parameter.
+
 ## Entry pages
 
+A page file per URL shape (`resolveEntry` with `entryPaths`) remains valid only when every locale has a prefix. With
+a `''` prefix the shapes become ambiguous on demand (every route of a preview deployment, and the catch-all of a
+production build): Astro ranks routes by their segments, not by `localePaths`, so `[...locale]/[collection]/[slug]`
+also answers `/en/blog` as `{ collection: 'en', slug: 'blog' }` next to `[...locale]/[collection]/index.astro`, the
+rest parameter swallows extra segments, and a `404` from the first route does not fall through to the next. Use the
+[dispatcher route](#dispatcher-route) for such sites.
+
 One page file serves a collection both prerendered (production) and on demand (the preview deployment, where every
-route is rendered on demand and `getStaticPaths` props never arrive). With the setup above
-(`routes: { artigos: '/{locale}/blog/{slug}' }`, `pt_BR` without prefix), `src/pages/[...locale]/blog/[slug].astro`:
+route is rendered on demand and `getStaticPaths` props never arrive). With
+`localePaths: { pt_BR: 'pt', en: 'en' }` and `routes: { artigos: '/{locale}/blog/{slug}' }`,
+`src/pages/[locale]/blog/[slug].astro`:
 
 ```astro
 ---

@@ -1,4 +1,3 @@
-import { optional } from '@rushcms/client'
 import type { Entry, Homepage, LocaleCode, RushClient, RushUrls } from '@rushcms/client'
 import { absoluteLinks, hreflangLinks } from './alternate-links'
 import type { HreflangLink } from './alternate-links'
@@ -6,6 +5,7 @@ import { getRush } from './get-rush'
 import { localizedEntries } from './localized-entries'
 import { runtimeOf } from './runtime'
 import type { RushContext } from './runtime'
+import { findHomepage } from './site-pages'
 import { absoluteUrl, requireSite } from './site-origin'
 
 export type SitemapContext = RushContext & {
@@ -62,7 +62,7 @@ async function entryUrls(collection: string, source: SitemapSource): Promise<Sit
 }
 
 async function homepageIn(client: RushClient, locale: LocaleCode): Promise<Homepage | undefined> {
-	const homepage = await optional(client.homepage.get({ locale }))
+	const homepage = await findHomepage(client, locale)
 	return homepage?.fallback === false ? homepage : undefined
 }
 

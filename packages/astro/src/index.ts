@@ -14,6 +14,20 @@ export type {
 	EntryRouteProps
 } from './entry-route'
 export type { EntryStaticPath } from './paths'
+export { resolvePage, sitePaths } from './site-pages'
+export type {
+	CollectionPage,
+	EntryListPage,
+	HomepagePage,
+	PageResolution,
+	SitePage,
+	SitePageContext,
+	SitePageProps,
+	SitePageRoute,
+	SitePathParams,
+	SitePathProps,
+	SiteStaticPath
+} from './site-pages'
 export { sitemapResponse } from './sitemap'
 export type { SitemapContext, SitemapOptions } from './sitemap'
 export type { RushContext } from './runtime'

@@ -1,5 +1,6 @@
 import type { Entry, RouteParams, RushClient, RushUrls } from '@rushcms/client'
 import { localizedEntries } from './localized-entries'
+import type { LocalizedEntry } from './localized-entries'
 
 export type EntryStaticPath = {
 	params: RouteParams
@@ -10,10 +11,27 @@ function paramsKey(params: RouteParams): string {
 	return JSON.stringify(Object.entries(params).sort(([a], [b]) => a.localeCompare(b)))
 }
 
-function preferred(current: EntryStaticPath | undefined, next: EntryStaticPath): EntryStaticPath {
-	return current !== undefined && (!current.props.entry.fallback || next.props.entry.fallback)
+function preferred(current: LocalizedEntry | undefined, next: LocalizedEntry): LocalizedEntry {
+	return current !== undefined && (!current.entry.fallback || next.entry.fallback)
 		? current
 		: next
+}
+
+function paramsOf(urls: RushUrls, { locale, entry }: LocalizedEntry): RouteParams {
+	return urls.entryParams(entry.collection, locale, entry.slug)
+}
+
+export async function collectEntryPages(
+	collection: string,
+	client: RushClient,
+	urls: RushUrls
+): Promise<LocalizedEntry[]> {
+	const pages = new Map<string, LocalizedEntry>()
+	for await (const next of localizedEntries(collection, client, urls)) {
+		const key = paramsKey(paramsOf(urls, next))
+		pages.set(key, preferred(pages.get(key), next))
+	}
+	return [...pages.values()]
 }
 
 export async function collectEntryPaths(
@@ -21,16 +39,8 @@ export async function collectEntryPaths(
 	client: RushClient,
 	urls: RushUrls
 ): Promise<EntryStaticPath[]> {
-	const paths = new Map<string, EntryStaticPath>()
-	for await (const { locale, entry } of localizedEntries(collection, client, urls)) {
-		const next: EntryStaticPath = {
-			params: urls.entryParams(entry.collection, locale, entry.slug),
-			props: { entry }
-		}
-		const key = paramsKey(next.params)
-		paths.set(key, preferred(paths.get(key), next))
-	}
-	return [...paths.values()]
+	const pages = await collectEntryPages(collection, client, urls)
+	return pages.map((page) => ({ params: paramsOf(urls, page), props: { entry: page.entry } }))
 }
 
 export async function entryPaths(

@@ -4,6 +4,7 @@ export default defineConfig({
 	entry: {
 		index: 'src/index.ts',
 		middleware: 'src/middleware.ts',
+		'site-paths': 'src/site-paths.ts',
 		'components-runtime': 'src/components-runtime.ts',
 		'form-enhance': 'src/form-enhance.ts',
 		'routes/forms': 'src/routes/forms.ts',

@@ -34,7 +34,7 @@ export type EntryMissing = {
 
 export type EntryResolution = EntryFound | EntryMoved | EntryMissing
 
-const MISSING: EntryMissing = { kind: 'missing' }
+export const MISSING: EntryMissing = { kind: 'missing' }
 
 const MISSING_CODES = ['not_found', 'not_translated', 'locale_not_served'] as const
 

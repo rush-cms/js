@@ -68,12 +68,16 @@ export function apiError(status: number, body: Record<string, unknown>): Respons
 	return Response.json(body, { status })
 }
 
-export function siteExample(): Record<string, unknown> {
-	const example = responseExample('SiteOk')
+export function exampleData(name: string): Record<string, unknown> {
+	const example = responseExample(name)
 	if (!isRecord(example) || !isRecord(example.data)) {
-		throw new Error('SiteOk example has no data object')
+		throw new Error(`${name} example has no data object`)
 	}
 	return example.data
+}
+
+export function siteExample(): Record<string, unknown> {
+	return exampleData('SiteOk')
 }
 
 export function asRequest(stub: StubRequest): Request {

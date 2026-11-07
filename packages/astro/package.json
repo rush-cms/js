@@ -24,6 +24,10 @@
 			"types": "./dist/middleware.d.ts",
 			"default": "./dist/middleware.js"
 		},
+		"./site-paths": {
+			"types": "./dist/site-paths.d.ts",
+			"default": "./dist/site-paths.js"
+		},
 		"./components-runtime": {
 			"types": "./dist/components-runtime.d.ts",
 			"default": "./dist/components-runtime.js"
