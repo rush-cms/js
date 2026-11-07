@@ -7,7 +7,7 @@ it.
 
 Requires Node 24 or later and a Rush CMS v2 API serving the public API contract 1.0.0 (`/api/v1/{site_id}/…`, pinned
 as [`openapi/public.json`](https://github.com/rush-cms/js/blob/main/openapi/public.json)). Versions 2.x talk to the
-Rush CMS v1 (Laravel) API and share nothing with 3.x.
+Rush CMS v1 (Laravel) API and share nothing with 3.x or later.
 
 ```bash
 npm install @rushcms/client
@@ -135,34 +135,67 @@ const etagStore: EtagStore = {
 
 ## URLs
 
-`createUrls({ routes, localePaths, collections })` builds site paths from API objects without any request.
+`createUrls({ routes, localePaths, collections, pageSegments })` builds site paths from API objects without any
+request.
 
 - `localePaths` maps every CMS locale code to its URL prefix; at most one prefix is `''` (no prefix).
-- `routes` maps a collection id or any locale's collection slug to a pattern with `{locale}`, `{collection}` and
-  `{slug}` (the last segment). The default pattern is `/{locale}/{collection}/{slug}`.
+- `routes` maps a collection id, any locale's collection slug or `'*'` to a pattern with `{locale}`, `{collection}`
+  and `{slug}` (the last segment). There is no implicit route: a collection with no matching key has no URL. `'*'`
+  matches every collection no other key matches (a specific key wins), so
+  `routes: { '*': '/{locale}/{collection}/{slug}' }` gives every collection the generic shape.
+- Every pattern contains `{locale}` (it collapses for the `''` prefix); the `'*'` pattern contains `{collection}`.
 - `collections` (`RushCollections`, built by `listCollectionsByLocale(client, locales)`) lists the collections of
-  every locale, so a route keyed by one locale's slug applies in every locale.
+  every locale, so a route keyed by one locale's slug applies in every locale. With it, `createUrls` also rejects a
+  route key that matches no collection, a collection slug equal to a locale prefix next to `{locale}/{collection}`
+  and two routes that produce the same URLs; `match` needs it.
+- `pageSegments` maps a CMS locale code to the segment of list pages after the first (default `page`).
 
-| Helper                                                 | Returns                                                                        |
-| ------------------------------------------------------ | ------------------------------------------------------------------------------ |
-| `entry(entry)` / `translation(entry, locale)`          | The path of the entry in its own locale / in a translation's locale            |
-| `servedPath(entry, requestedLocale)`                   | The path that answers for an entry as fetched for a locale, fallbacks included |
-| `moved(params)`                                        | The redirect target of a `moved` error, from its params alone                  |
-| `collection(collection, locale)`                       | The listing path of a collection                                               |
-| `homepage(locale)` / `navigationItem(item, locale)`    | The homepage path / a navigation item's target (`undefined` without one)       |
-| `localeOf(param)` / `localeParam(locale)`              | The locale of a URL prefix (exact match) / the prefix of a locale              |
-| `entryParams(collection, locale, slug)`                | The route params of an entry path                                              |
-| `collectionRef(key, locale)` / `collectionKeys(entry)` | A collection in a locale by any key / every key that names a collection        |
-| `hasCollectionSegment(collection)`                     | Whether the collection's pattern has a `{collection}` segment                  |
+Misconfigurations throw when `createUrls` runs (`route "<key>" must contain {locale}`,
+`route "<key>" matches no collection`, `routes "<a>" and "<b>" produce the same URLs`, …).
+
+| Helper                                                 | Returns                                                                         |
+| ------------------------------------------------------ | ------------------------------------------------------------------------------- |
+| `routed(collection)`                                   | Whether a `routes` key matches the collection                                   |
+| `entry(entry)` / `translation(entry, locale)`          | The path of the entry in its own locale / in a translation's locale             |
+| `servedPath(entry, requestedLocale)`                   | The path that answers for an entry as fetched for a locale, fallbacks included  |
+| `moved(params)`                                        | The redirect target of a `moved` error, from its params alone                   |
+| `collection(collection, locale, page?)`                | The list path of a collection (page 1 when omitted, else `<index>/<segment>/n`) |
+| `match(pathname)`                                      | The entry, collection page or homepage a path names (`undefined` when none)     |
+| `homepage(locale)` / `navigationItem(item, locale)`    | The homepage path / a navigation item's target (`undefined` without one)        |
+| `localeOf(param)` / `localeParam(locale)`              | The locale of a URL prefix (exact match) / the prefix of a locale               |
+| `entryParams(collection, locale, slug)`                | The route params of an entry path                                               |
+| `collectionRef(key, locale)` / `collectionKeys(entry)` | A collection in a locale by any key / every key that names a collection         |
+| `hasCollectionSegment(collection)`                     | Whether the collection's pattern has a `{collection}` segment                   |
+
+`entry`, `translation`, `servedPath`, `collection` and `moved` throw `collection "<slug>" has no route` for a
+collection without a route; check with `routed`. `servedPath` throws for an entry that was not fetched for that
+locale, `translation` for a locale the entry has no translation in, and `collection` for a page that is not a positive
+integer.
+
+`match(pathname)` is the inverse of the builders for the same configuration: it returns
+`{ kind: 'entry', locale, collection, slug }`, `{ kind: 'collection', locale, collection, page }`,
+`{ kind: 'homepage', locale }` or `undefined`. It decodes each segment once, ignores a trailing or repeated slash and
+gives `undefined` for upper-case or code-form locale segments (`/EN/blog`, `/pt_BR/blog`).
 
 `alternates(entry | homepage, urls)` returns `{ locale, hreflang, url }` for every translation, in `localePaths`
 order, built from `translatedLocales(entry | homepage)` (the locales it has a translation in) and
 `translatedUrl(entry | homepage, locale, urls)` (its path in one of them), both exported for language switchers that
-need more than the alternates. `toBcp47(code)` turns `pt_BR` into `pt-BR`. `servedPath` throws for an entry that
-was not fetched for that locale, `translation` and `translatedUrl` for a locale the entry has no translation in.
+need more than the alternates. `toBcp47(code)` turns `pt_BR` into `pt-BR`.
 
-The [`@rushcms/astro` README](https://github.com/rush-cms/js/tree/main/packages/astro#entry-pages) shows these helpers
-in entry pages, redirects and sitemaps.
+The [`@rushcms/astro` README](https://github.com/rush-cms/js/tree/main/packages/astro#routes) shows these helpers in
+routes, entry pages, redirects and sitemaps.
+
+## Navigation and content helpers
+
+- `navigationLinks(items, urls, locale)` turns the items of a navigation into `NavigationLink[]`: `label`, `href`,
+  `target`, `rel` (the deduplicated union of `nofollow`, `noreferrer`, `noopener` for `_blank` and the tokens of the
+  item's `rel` attribute), `className`, the other attributes as strings and `children`. An item whose target has no
+  route keeps no `href` and stays only when it has children.
+- `optional(promise)` resolves `undefined` when the request fails with `not_found` and rethrows anything else, for
+  content a site may not have yet (a navigation, the homepage, a form).
+- `isRichText(value)` tells whether a value is a TipTap document (`RichText`), for rendering entry data generically.
+
+`@rushcms/client/internal` is an undocumented subpath for the other Rush packages and may change in any release.
 
 ## License
 

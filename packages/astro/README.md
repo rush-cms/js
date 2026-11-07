@@ -112,6 +112,9 @@ The integration middleware answers `404` before any page renders when a route ha
 only on the site's locale segment.
 Static builds share one memoized client per locale; on-demand requests and `astro dev` never memoize.
 
+The helpers that take `Astro` read `locals`, `params`, `currentLocale`, `isPrerendered` and `url` (`RushContext`); a
+context built by hand, in a script or a test, must carry all five.
+
 With Astro `i18n`, every route gets a `currentLocale`, and routes outside a locale segment get Astro's
 `defaultLocale`. Each Astro locale must therefore match a `localePaths` prefix or code: with
 `localePaths: { pt_BR: '', en: 'en' }`, declare `locales: [{ path: 'pt', codes: ['pt-BR'] }, 'en']` (or use `pt_BR` /
