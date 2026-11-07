@@ -19,6 +19,7 @@ export type Media = Schemas['Media']
 export type PaginationMeta = Schemas['PaginationMeta']
 export type Perspective = Schemas['Perspective']
 export type LocaleCode = Schemas['LocaleCode']
+export type RichText = Schemas['RichText']
 
 export type RushFetch = (input: string, init: RequestInit) => Promise<Response>
 

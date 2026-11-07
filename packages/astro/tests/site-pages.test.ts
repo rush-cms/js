@@ -41,7 +41,6 @@ const ITEMS_PER_PAGE = 2
 const ENTRY_COUNT = 5
 const LAST_PAGE = 3
 const WALK_PAGE_SIZE = '100'
-const SITE = 'https://site.example'
 const ENTRY_LIST = /^\/collections\/([^/]+)\/entries$/
 const ENTRY_ITEM = /^\/collections\/([^/]+)\/entries\/([^/]+)$/
 const COLLECTION_ITEM = /^\/collections\/([^/]+)$/
@@ -240,8 +239,7 @@ function pageContext(
 	previewToken?: string
 ): SitePageContext {
 	return {
-		...routeContext({ locals: rushLocals(stub.api, config, previewToken) }),
-		url: new URL(pathname, SITE),
+		...routeContext({ locals: rushLocals(stub.api, config, previewToken), path: pathname }),
 		props: page === undefined ? {} : { page }
 	}
 }

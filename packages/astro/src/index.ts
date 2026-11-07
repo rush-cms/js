@@ -1,5 +1,5 @@
 export { rush as default } from './integration'
-export { getRush, getUrls } from './get-rush'
+export { getLocale, getRush, getUrls } from './get-rush'
 export { getNavigation } from './navigation'
 export type { RushAstroOptions, SeoFieldMap } from './config'
 export { entryPaths } from './paths'
@@ -29,5 +29,6 @@ export type {
 	SiteStaticPath
 } from './site-pages'
 export { sitemapResponse } from './sitemap'
+export { collectionAlternates, homepageAlternates } from './alternate-links'
 export type { SitemapContext, SitemapOptions } from './sitemap'
 export type { RushContext } from './runtime'

@@ -4,12 +4,15 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { renderSitemap, sitemapResponse } from '../src/sitemap'
 import type { SitemapContext } from '../src/sitemap'
 import { entryExample, homepageExample } from '../../client/tests/fixtures/contract'
+import { COLLECTION_SLUGS } from '../../client/tests/fixtures/slugs'
 import { SITE_PREFIX, apiError, entryListsByLocale, envelope, startStubApi } from './fixtures/api'
 import type { StubApi } from './fixtures/api'
 import {
 	ARTICLES,
 	LOCALE_PATHS,
 	NEWS,
+	SITE_ORIGIN,
+	collectionsOf,
 	newsOnly,
 	routeContext,
 	rushLocals,
@@ -22,9 +25,20 @@ type Catalog = {
 	collections?: CollectionRef[]
 }
 
-const SITE = new URL('https://site.example')
-const SITE_CONFIG = siteConfig({ localePaths: LOCALE_PATHS, defaultLocale: 'en' })
+const SITE = new URL(SITE_ORIGIN)
+const SITE_CONFIG = siteConfig({
+	localePaths: LOCALE_PATHS,
+	defaultLocale: 'en',
+	collections: collectionsOf(ARTICLES, COLLECTION_SLUGS)
+})
 const NEWS_ONLY_CONFIG = newsOnly(SITE_CONFIG)
+const ROOT_NEWS_CONFIG: RushSiteConfig = {
+	...NEWS_ONLY_CONFIG,
+	routes: { [NEWS.slug]: '/{locale}/{slug}' }
+}
+const HOMEPAGES = ['pt', 'en', 'es'].map((prefix) => `${SITE_ORIGIN}/${prefix}`)
+const INDEXES = ['pt/artigos', 'en/blog', 'es/articulos'].map((path) => `${SITE_ORIGIN}/${path}`)
+const NEWS_INDEXES = ['pt', 'en', 'es'].map((prefix) => `${SITE_ORIGIN}/${prefix}/news`)
 const NOT_FOUND = { error: 'not found', code: 'not_found', params: { resource: 'homepage' } }
 
 let stub: StubApi
@@ -121,6 +135,8 @@ describe('sitemap', () => {
 	it('lists canonical entry urls with lastmod from updated_at', async () => {
 		const xml = await sitemap({ entries: { pt_BR: [PT], en: [EN] }, homepages: {} }, ['blog'])
 		expect(locs(xml)).toEqual([
+			...HOMEPAGES,
+			...INDEXES,
 			'https://site.example/pt/artigos/ola-mundo',
 			'https://site.example/en/blog/hello-world'
 		])
@@ -137,7 +153,11 @@ describe('sitemap', () => {
 			{ entries: { pt_BR: [PT], en: [FALLBACK], es: [FALLBACK] }, homepages: {} },
 			['blog']
 		)
-		expect(locs(xml)).toEqual(['https://site.example/pt/artigos/ola-mundo'])
+		expect(locs(xml)).toEqual([
+			...HOMEPAGES,
+			...INDEXES,
+			'https://site.example/pt/artigos/ola-mundo'
+		])
 		expect(xml).not.toContain('so-pt')
 	})
 
@@ -158,42 +178,64 @@ describe('sitemap', () => {
 		)
 	})
 
-	it('includes the homepage of every locale that has its own, with alternates', async () => {
+	it('lists the homepage of every locale, with lastmod only from its own CMS homepage', async () => {
 		const pt = { ...homepageExample(), updated_at: '2026-05-05T05:00:00Z' }
-		const en = { ...pt, locale: 'en', updated_at: '2026-06-06T06:00:00Z' }
 		const fallbackEs = { ...pt, locale: 'pt_BR', fallback: true }
-		const xml = await sitemap({ entries: {}, homepages: { pt_BR: pt, en, es: fallbackEs } }, [
-			'blog'
-		])
-		expect(locs(xml)).toEqual(['https://site.example/pt', 'https://site.example/en'])
-		const block = blockFor(xml, 'https://site.example/pt')
-		expect(block).toContain('<lastmod>2026-05-05T05:00:00Z</lastmod>')
-		expect(block).toContain('hreflang="pt-BR" href="https://site.example/pt"')
-		expect(block).toContain('hreflang="en" href="https://site.example/en"')
-		expect(block).toContain('hreflang="x-default" href="https://site.example/en"')
-		expect(block).not.toContain('hreflang="es"')
+		const xml = await sitemap({ entries: {}, homepages: { pt_BR: pt, es: fallbackEs } }, [])
+		expect(locs(xml)).toEqual(HOMEPAGES)
+		expect(blockFor(xml, 'https://site.example/pt')).toContain(
+			'<lastmod>2026-05-05T05:00:00Z</lastmod>'
+		)
+		expect(blockFor(xml, 'https://site.example/en')).not.toContain('<lastmod>')
+		expect(blockFor(xml, 'https://site.example/es')).not.toContain('<lastmod>')
 	})
 
-	it('takes homepage alternates from the translations list', async () => {
-		const pt = { ...homepageExample(), translations: ['pt_BR', 'es'] }
-		const xml = await sitemap({ entries: {}, homepages: { pt_BR: pt } }, [])
-		const block = blockFor(xml, 'https://site.example/pt')
-		expect(block).toContain('hreflang="pt-BR" href="https://site.example/pt"')
-		expect(block).toContain('hreflang="es" href="https://site.example/es"')
-		expect(block).not.toContain('hreflang="en"')
-		expect(block).not.toContain('x-default')
-	})
-
-	it('skips a locale without a homepage', async () => {
+	it('gives every homepage alternates across all locales plus x-default', async () => {
 		const pt = { ...homepageExample(), translations: ['pt_BR'] }
 		const xml = await sitemap({ entries: {}, homepages: { pt_BR: pt } }, [])
-		expect(locs(xml)).toEqual(['https://site.example/pt'])
-		expect(blockFor(xml, 'https://site.example/pt')).not.toContain('x-default')
+		for (const loc of HOMEPAGES) {
+			const block = blockFor(xml, loc)
+			expect(block).toContain('hreflang="pt-BR" href="https://site.example/pt"')
+			expect(block).toContain('hreflang="en" href="https://site.example/en"')
+			expect(block).toContain('hreflang="es" href="https://site.example/es"')
+			expect(block).toContain('hreflang="x-default" href="https://site.example/en"')
+		}
+	})
+
+	it('lists page 1 of every collection in every locale, with alternates and no lastmod', async () => {
+		const xml = await sitemap({ entries: {}, homepages: {} })
+		expect(locs(xml)).toEqual([...HOMEPAGES, ...INDEXES])
+		expect(xml).not.toContain('/page/')
+		for (const loc of INDEXES) {
+			const block = blockFor(xml, loc)
+			expect(block).not.toContain('<lastmod>')
+			expect(block).toContain('hreflang="pt-BR" href="https://site.example/pt/artigos"')
+			expect(block).toContain('hreflang="en" href="https://site.example/en/blog"')
+			expect(block).toContain('hreflang="es" href="https://site.example/es/articulos"')
+			expect(block).toContain('hreflang="x-default" href="https://site.example/en/blog"')
+		}
+	})
+
+	it('lists a collection index once when it shares the homepage URL', async () => {
+		const pt = { ...homepageExample(), updated_at: '2026-05-05T05:00:00Z' }
+		const xml = await sitemap(
+			{ entries: {}, homepages: { pt_BR: pt }, collections: [NEWS] },
+			undefined,
+			ROOT_NEWS_CONFIG
+		)
+		expect(locs(xml)).toEqual(HOMEPAGES)
+		expect(blockFor(xml, 'https://site.example/pt')).toContain(
+			'<lastmod>2026-05-05T05:00:00Z</lastmod>'
+		)
 	})
 
 	it('walks every collection of the site when none is named', async () => {
 		const xml = await sitemap({ entries: { pt_BR: [PT] }, homepages: {} })
-		expect(locs(xml)).toEqual(['https://site.example/pt/artigos/ola-mundo'])
+		expect(locs(xml)).toEqual([
+			...HOMEPAGES,
+			...INDEXES,
+			'https://site.example/pt/artigos/ola-mundo'
+		])
 	})
 
 	it('walks only the collections that have a route when none is named', async () => {
@@ -213,12 +255,25 @@ describe('sitemap', () => {
 			undefined,
 			NEWS_ONLY_CONFIG
 		)
-		expect(locs(xml)).toEqual(['https://site.example/en/news/launch'])
+		expect(locs(xml)).toEqual([
+			...HOMEPAGES,
+			...NEWS_INDEXES,
+			'https://site.example/en/news/launch'
+		])
 		expect(
 			stub.requests.filter((request) => request.path.endsWith('/entries')).map((r) => r.path)
 		).toEqual(
 			['news', 'news', 'news'].map((slug) => `${SITE_PREFIX}/collections/${slug}/entries`)
 		)
+	})
+
+	it('lists only the named collections', async () => {
+		const xml = await sitemap(
+			{ entries: {}, homepages: {}, collections: [{ id: ARTICLES, slug: 'blog' }, NEWS] },
+			['news'],
+			NEWS_ONLY_CONFIG
+		)
+		expect(locs(xml)).toEqual([...HOMEPAGES, ...NEWS_INDEXES])
 	})
 
 	it('throws for a named collection that has no route', async () => {

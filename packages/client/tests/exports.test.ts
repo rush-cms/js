@@ -21,6 +21,7 @@ describe('package exports', () => {
 		expect(root).not.toHaveProperty('isRecord')
 		expect(root).toHaveProperty('navigationLinks')
 		expect(root).toHaveProperty('optional')
+		expect(root).toHaveProperty('isRichText')
 		expect(Object.keys(internal).sort()).toEqual(['isRecord', 'suggestLocalePaths'])
 	})
 })

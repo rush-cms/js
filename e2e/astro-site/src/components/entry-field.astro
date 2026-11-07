@@ -1,20 +1,13 @@
 ---
 import RichText from '@rushcms/astro/components/rich-text.astro'
 import Callout from './callout.astro'
-import { isRecord } from '@rushcms/client/internal'
+import { isRichText } from '@rushcms/client'
 import type { Entry } from '@rushcms/client'
-import type { ComponentProps } from 'astro/types'
-
-type RichTextContent = NonNullable<ComponentProps<typeof RichText>['content']>
 
 type Props = {
 	name: string
 	value: unknown
 	media: Entry['media']
-}
-
-function isRichText(value: unknown): value is RichTextContent {
-	return isRecord(value) && value['type'] === 'doc' && Array.isArray(value['content'])
 }
 
 const { name, value, media } = Astro.props

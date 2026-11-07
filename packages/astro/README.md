@@ -101,8 +101,12 @@ const entry = await rush.entries.get('artigos', Astro.params.slug)
 
 `getRush(Astro)` returns a client bound to the route's locale: the `locale` route param, matched against the
 `localePaths` prefixes only (`pt_BR` or `pt-BR` in the URL never match), else `Astro.currentLocale` (with Astro
-`i18n`), matched by prefix or CMS code (`pt-BR`, `pt_BR`, any case). A value that matches nothing throws; without
-either, the locale with the `''` prefix is used, else the site's default locale.
+`i18n`), matched by prefix or CMS code (`pt-BR`, `pt_BR`, any case). A value that matches nothing throws. Without
+either (the `[...path]` dispatcher, `404.astro`, `/sitemap.xml`), the locale comes from the request path: the locale of
+`urls.match(Astro.url.pathname)`, else the locale whose non-empty prefix equals the first path segment (`/en/contact`
+→ `en`), else the locale with the `''` prefix, else the site's default locale. `getLocale(Astro)` returns that locale
+(for `<html lang>` or a home link on a `404` page); `getNavigation` and every helper that takes `Astro` resolve the
+locale the same way.
 The integration middleware answers `404` before any page renders when a route has a `locale` param that is not a
 `localePaths` prefix (`/pt_BR/…`, `/PT/…`), so on-demand routes never reach that throw; name a route param `locale`
 only on the site's locale segment.
@@ -496,6 +500,16 @@ import { sitemapResponse } from '@rushcms/astro'
 export const GET = (context) => sitemapResponse({ context, collections: ['artigos'] })
 ```
 
-`sitemapResponse` answers `application/xml` with canonical URLs only (fallback pages are excluded), `lastmod` from
-`updated_at` and `xhtml:link` alternates from the entry translations, plus the homepage of each locale that has one.
-Without `collections` it lists every collection that has a route; naming a collection without a route throws.
+`sitemapResponse` answers `application/xml` with the URLs the dispatcher renders, each listed once:
+
+- the homepage of every locale (the dispatcher always renders a front page), with `lastmod` from the CMS homepage when
+  the locale has its own (not a fallback) and no `lastmod` otherwise;
+- page 1 of every listed collection in every locale it exists in, without `lastmod` (later list pages are never
+  listed);
+- canonical entry URLs only (fallback pages are excluded), with `lastmod` from `updated_at`.
+
+Homepage and collection URLs carry `xhtml:link` alternates to the same page in every locale, entries to their
+translations; each adds `x-default` pointing at the site's default locale when that locale has the page.
+`homepageAlternates(urls)` and `collectionAlternates(collection, urls)` (a collection id or slug) return the same
+alternates as `Alternate[]` for a language switcher. Without `collections` it lists every collection that has a
+route; naming a collection without a route throws.

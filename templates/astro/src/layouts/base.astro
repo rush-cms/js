@@ -5,7 +5,6 @@ import { optional, toBcp47 } from '@rushcms/client'
 import type { Alternate, LocaleCode } from '@rushcms/client'
 import SiteFooter from '../components/site-footer.astro'
 import SiteHeader from '../components/site-header.astro'
-import { inLocale } from '../lib/locale'
 import '../styles/global.css'
 
 type Props = {
@@ -15,13 +14,12 @@ type Props = {
 }
 
 const { locale, title, translations = [] } = Astro.props
-const context = inLocale(Astro, locale)
-const site = await getRush(context).site.get()
+const site = await getRush(Astro).site.get()
 const home = getUrls(Astro).homepage(locale)
 // TODO: create a navigation with the key "main" in Rush CMS, or change the key here.
-const main = (await optional(getNavigation(context, 'main'))) ?? []
+const main = (await optional(getNavigation(Astro, 'main'))) ?? []
 // TODO: create a navigation with the key "footer" in Rush CMS, or change the key here.
-const footer = (await optional(getNavigation(context, 'footer'))) ?? []
+const footer = (await optional(getNavigation(Astro, 'footer'))) ?? []
 ---
 
 <!doctype html>

@@ -1,10 +1,8 @@
 ---
-import { getRush, getUrls } from '@rushcms/astro'
+import { collectionAlternates, getRush, getUrls } from '@rushcms/astro'
 import RushImage from '@rushcms/astro/components/rush-image.astro'
-import { toBcp47 } from '@rushcms/client'
-import type { Alternate } from '@rushcms/client'
 import Base from '../layouts/base.astro'
-import { formatDate, inLocale } from '../lib/locale'
+import { formatDate } from '../lib/locale'
 import type { ListViewProps } from './index'
 
 type Props = ListViewProps
@@ -12,17 +10,13 @@ type Props = ListViewProps
 const { page } = Astro.props
 const { collection, locale, entries } = page
 const urls = getUrls(Astro)
-const site = await getRush(inLocale(Astro, locale)).site.get()
+const site = await getRush(Astro).site.get()
 const lastPage = Math.max(1, entries.meta.last_page)
 const previous = page.page > 1 ? urls.collection(collection, locale, page.page - 1) : undefined
 const next = page.page < lastPage ? urls.collection(collection, locale, page.page + 1) : undefined
 const canonical = Astro.site && new URL(urls.collection(collection, locale, page.page), Astro.site)
 const heading = page.page > 1 ? `${collection.name} (${page.page}/${lastPage})` : collection.name
-const translations: Alternate[] = urls.locales.flatMap((code) => {
-	const ref = urls.collectionRef(collection.id, code)
-	const url = ref === undefined ? undefined : urls.collection(ref, code)
-	return url === undefined ? [] : [{ locale: code, hreflang: toBcp47(code), url }]
-})
+const translations = collectionAlternates(collection.id, urls)
 ---
 
 <Base locale={locale} title={`${heading} | ${site.name}`} translations={translations}>

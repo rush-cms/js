@@ -18,16 +18,21 @@ import {
 
 let stub: StubApi
 
-function contextFor(routes: RushRoutes, previewToken?: string) {
+function localsFor(routes: RushRoutes, previewToken?: string): object {
 	const config = siteConfig({
 		routes,
 		collections: collectionsOf(ARTICLES, COLLECTION_SLUGS),
 		memo: false
 	})
-	return routeContext({
-		locals: rushLocals(stub.api, config, previewToken),
-		params: { locale: 'en' }
-	})
+	return rushLocals(stub.api, config, previewToken)
+}
+
+function contextFor(routes: RushRoutes, previewToken?: string) {
+	return routeContext({ locals: localsFor(routes, previewToken), params: { locale: 'en' } })
+}
+
+function requestedLocales(): (string | null)[] {
+	return stub.requests.map((request) => request.query.get('locale'))
 }
 
 beforeAll(async () => {
@@ -62,6 +67,21 @@ describe('getNavigation', () => {
 		expect(stub.requests.map((request) => `${request.path}?${request.query}`)).toEqual([
 			`${SITE_PREFIX}/navigations/main?locale=en`
 		])
+	})
+
+	it('takes the locale from the request path on a dispatcher route', async () => {
+		const locals = localsFor(GENERIC_ROUTES)
+		await getNavigation(routeContext({ locals, path: '/en/blog' }), 'main')
+		await getNavigation(routeContext({ locals, path: '/artigos' }), 'main')
+		expect(requestedLocales()).toEqual(['en', 'pt_BR'])
+	})
+
+	it('takes the locale from the request path on a 404 page', async () => {
+		const locals = localsFor(GENERIC_ROUTES)
+		for (const pathname of ['/en/no/such/page', '/es/x', '/xx/contact', '/EN/blog']) {
+			await getNavigation(routeContext({ locals, path: pathname }), 'main')
+		}
+		expect(requestedLocales()).toEqual(['en', 'es', 'pt_BR', 'pt_BR'])
 	})
 
 	it('drops the items whose target collection has no route', async () => {

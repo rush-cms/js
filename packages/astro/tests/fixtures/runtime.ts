@@ -13,11 +13,14 @@ export type RouteContextInit = {
 	isPrerendered?: boolean
 	params?: RouteParams
 	props?: EntryRouteProps
+	path?: string
 }
 
 export type RecordingLogger = AstroRuntimeLogger & {
 	readonly warnings: string[]
 }
+
+export const SITE_ORIGIN = 'https://site.example'
 
 export const LOCALE_PATHS = { pt_BR: 'pt', en: 'en', es: 'es' }
 
@@ -98,6 +101,7 @@ export function routeContext(init: RouteContextInit): EntryRouteContext {
 		currentLocale: init.currentLocale,
 		isPrerendered: init.isPrerendered ?? false,
 		params: init.params ?? {},
-		props: init.props ?? {}
+		props: init.props ?? {},
+		url: new URL(init.path ?? '/', SITE_ORIGIN)
 	}
 }

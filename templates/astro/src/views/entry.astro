@@ -3,10 +3,9 @@ import { getUrls } from '@rushcms/astro'
 import RichText from '@rushcms/astro/components/rich-text.astro'
 import RushImage from '@rushcms/astro/components/rush-image.astro'
 import Seo from '@rushcms/astro/components/seo.astro'
-import { alternates, toBcp47 } from '@rushcms/client'
+import { alternates, isRichText, toBcp47 } from '@rushcms/client'
 import Base from '../layouts/base.astro'
 import { formatDate, languageName } from '../lib/locale'
-import { isRichText } from '../lib/rich-text'
 import type { EntryViewProps } from './index'
 
 type Props = EntryViewProps

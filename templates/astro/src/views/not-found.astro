@@ -1,10 +1,9 @@
 ---
-import { getRush, getUrls } from '@rushcms/astro'
+import { getLocale, getRush, getUrls } from '@rushcms/astro'
 import Base from '../layouts/base.astro'
-import { inLocale, localeOfPath } from '../lib/locale'
 
-const locale = await localeOfPath(Astro, Astro.url.pathname)
-const site = await getRush(inLocale(Astro, locale)).site.get()
+const locale = getLocale(Astro)
+const site = await getRush(Astro).site.get()
 ---
 
 <Base locale={locale} title={`Page not found | ${site.name}`}>

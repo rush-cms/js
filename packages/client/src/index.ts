@@ -18,6 +18,7 @@ export { RushError, isRushError } from './errors'
 export { navigationLinks } from './navigation-links'
 export type { NavigationLink, NavigationLinkAttributes } from './navigation-links'
 export { optional } from './optional'
+export { isRichText } from './rich-text'
 export type {
 	ClientErrorCode,
 	ContractErrorCode,
@@ -58,6 +59,7 @@ export type {
 	Perspective,
 	PerspectiveOptions,
 	RequestOptions,
+	RichText,
 	RushClient,
 	RushClientConfig,
 	RushFetch,

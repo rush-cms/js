@@ -11,6 +11,7 @@ import type {
 } from '@rushcms/client'
 import { MISSING, resolveEntry } from './entry-route'
 import type { EntryFound, EntryMissing, EntryMoved, EntryRouteContext } from './entry-route'
+import { firstByKey } from './first-by-key'
 import { collectEntryPages } from './paths'
 import { runtimeOf } from './runtime'
 import type { RushContext, RushRuntime } from './runtime'
@@ -51,7 +52,6 @@ export type SiteStaticPath = {
 export type SitePageProps = Partial<SitePathProps>
 
 export type SitePageRoute = {
-	url: URL
 	props: SitePageProps
 }
 
@@ -117,13 +117,10 @@ async function routedCollections(
 }
 
 function collectionKeys(lists: LocaleCollections[]): string[] {
-	const keys = new Map<string, string>()
-	for (const collection of lists.flatMap((list) => list.collections)) {
-		if (!keys.has(collection.id)) {
-			keys.set(collection.id, collection.slug)
-		}
-	}
-	return [...keys.values()]
+	return firstByKey(
+		lists.flatMap((list) => list.collections),
+		(collection) => collection.id
+	).map((collection) => collection.slug)
 }
 
 function urlOf(page: SitePage, urls: RushUrls): string {
@@ -161,14 +158,14 @@ export async function collectSitePaths(
 	const entries = entryPages
 		.flat()
 		.map(({ locale, entry }): EntryFound => ({ kind: 'found', entry, locale }))
-	const paths = new Map<string, SiteStaticPath>()
-	for (const page of [...homepages, ...listPages.flat(), ...entries]) {
-		const url = urlOf(page, urls)
-		if (!paths.has(url)) {
-			paths.set(url, { params: { path: pathParam(url) }, props: { page } })
-		}
-	}
-	return [...paths.values()]
+	const pages = [...homepages, ...listPages.flat(), ...entries].map((page) => ({
+		url: urlOf(page, urls),
+		page
+	}))
+	return firstByKey(pages, ({ url }) => url).map(({ url, page }) => ({
+		params: { path: pathParam(url) },
+		props: { page }
+	}))
 }
 
 export async function sitePaths(rush?: RushClient): Promise<SiteStaticPath[]> {
@@ -201,6 +198,7 @@ function resolveMatchedEntry(
 		currentLocale: context.currentLocale,
 		isPrerendered: context.isPrerendered,
 		params: context.params,
+		url: context.url,
 		props: NO_PROPS
 	}
 	return resolveEntry(entryContext, {

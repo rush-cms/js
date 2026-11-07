@@ -2,7 +2,6 @@
 import { getRush, getUrls } from '@rushcms/astro'
 import Seo from '@rushcms/astro/components/seo.astro'
 import Base from '../layouts/base.astro'
-import { inLocale } from '../lib/locale'
 import type { HomeViewProps } from './index'
 
 type Props = HomeViewProps
@@ -16,7 +15,7 @@ type Step = {
 const { page } = Astro.props
 const { locale, homepage } = page
 const urls = getUrls(Astro)
-const rush = getRush(inLocale(Astro, locale))
+const rush = getRush(Astro)
 const site = await rush.site.get()
 const collections = (await rush.collections.list()).filter((collection) => urls.routed(collection))
 const title = homepage?.meta?.title === undefined ? site.name : undefined

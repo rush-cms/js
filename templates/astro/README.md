@@ -32,12 +32,12 @@ Requires Node 24 or later.
 
 4. Open <http://localhost:4321>, then work through the `TODO` comments (your editor's TODO list finds them all).
 
-| Command           | What it does                                           |
-| ----------------- | ------------------------------------------------------ |
-| `npm run dev`     | Development server with live content                   |
-| `npm run build`   | Production build in `dist/`                            |
-| `npm run preview` | Runs the built server (`node ./dist/server/entry.mjs`) |
-| `npm run check`   | Type-checks the project with `astro check`             |
+| Command           | What it does                                                          |
+| ----------------- | --------------------------------------------------------------------- |
+| `npm run dev`     | Development server with live content                                  |
+| `npm run build`   | Production build in `dist/`                                           |
+| `npm run preview` | Runs the built server with the variables of `.env`, when there is one |
+| `npm run check`   | Type-checks the project with `astro check`                            |
 
 ## Routes and views
 
@@ -107,9 +107,9 @@ with a link to leave the preview. See
 - `npm run build` fetches every page from the API and writes `dist/`. Static pages change only when you build again,
   so rebuild after publishing content.
 - Run the server with `node ./dist/server/entry.mjs` (`HOST` and `PORT` set where it listens). It reads the `RUSH_`
-  variables from the process environment, not from `.env`: set them on your host, or start it locally with
-  `node --env-file=.env ./dist/server/entry.mjs`. The server answers the 404 page, redirects, the contact page and
-  form posts (`/_rush/forms/<key>`).
+  variables from the process environment, not from `.env`: set them on your host. `npm run preview` starts it
+  locally with `.env` loaded (`node --env-file-if-exists=.env ./dist/server/entry.mjs`). The server answers the 404
+  page, redirects, the contact page and form posts (`/_rush/forms/<key>`).
 - Set `site` to your production URL: canonical links, `hreflang` links and the sitemap use it.
 - List your domains in `security.allowedDomains`, or form posts and preview links fail on them.
 - Set `trustedProxies` to the number of reverse proxies in front of the server, so form posts are rate-limited per

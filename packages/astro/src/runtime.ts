@@ -6,7 +6,10 @@ import { fallbackFetch } from './preview-session'
 import type { PreviewSession } from './preview-session'
 import type { RushApiSettings } from './settings'
 
-export type RushContext = Pick<APIContext, 'locals' | 'currentLocale' | 'isPrerendered' | 'params'>
+export type RushContext = Pick<
+	APIContext,
+	'locals' | 'currentLocale' | 'isPrerendered' | 'params' | 'url'
+>
 
 export type RushRuntimeSettings = {
 	api: RushApiSettings
@@ -41,9 +44,10 @@ function normalized(code: string): string {
 export type LocaleRequest = {
 	segment: string | undefined
 	current: string | undefined
+	path: string | undefined
 }
 
-const NO_LOCALE: LocaleRequest = { segment: undefined, current: undefined }
+const NO_LOCALE: LocaleRequest = { segment: undefined, current: undefined, path: undefined }
 
 function matchLocale(urls: RushUrls, requested: string): LocaleCode | undefined {
 	return (
@@ -56,7 +60,15 @@ export function localeRequest(
 	context: RushContext,
 	segment: string | undefined = context.params.locale
 ): LocaleRequest {
-	return { segment, current: context.currentLocale }
+	return { segment, current: context.currentLocale, path: context.url.pathname }
+}
+
+function pathLocale(urls: RushUrls, path: string | undefined): LocaleCode | undefined {
+	if (path === undefined) {
+		return undefined
+	}
+	const first = path.split('/').find((part) => part !== '')
+	return urls.match(path)?.locale ?? (first === undefined ? undefined : urls.localeOf(first))
 }
 
 export function findLocale(
@@ -70,7 +82,7 @@ export function findLocale(
 	if (request.current !== undefined) {
 		return matchLocale(urls, request.current)
 	}
-	return urls.localeOf(undefined) ?? defaultLocale
+	return pathLocale(urls, request.path) ?? urls.localeOf(undefined) ?? defaultLocale
 }
 
 export function resolveLocale(

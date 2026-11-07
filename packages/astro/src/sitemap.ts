@@ -1,6 +1,13 @@
-import type { Entry, Homepage, LocaleCode, RushClient, RushUrls } from '@rushcms/client'
-import { absoluteLinks, hreflangLinks } from './alternate-links'
+import type { Alternate, Entry, LocaleCode, RushClient, RushUrls } from '@rushcms/client'
+import {
+	absoluteLinks,
+	alternateLinks,
+	collectionAlternates,
+	homepageAlternates,
+	hreflangLinks
+} from './alternate-links'
 import type { HreflangLink } from './alternate-links'
+import { firstByKey } from './first-by-key'
 import { getRush } from './get-rush'
 import { localizedEntries } from './localized-entries'
 import { runtimeOf } from './runtime'
@@ -19,7 +26,7 @@ export type SitemapOptions = {
 
 export type SitemapUrl = {
 	loc: string
-	lastmod: string
+	lastmod: string | undefined
 	links: HreflangLink[]
 }
 
@@ -61,25 +68,37 @@ async function entryUrls(collection: string, source: SitemapSource): Promise<Sit
 	return found
 }
 
-async function homepageIn(client: RushClient, locale: LocaleCode): Promise<Homepage | undefined> {
-	const homepage = await findHomepage(client, locale)
-	return homepage?.fallback === false ? homepage : undefined
+function localizedUrls(
+	list: Alternate[],
+	source: SitemapSource,
+	lastmods: (string | undefined)[] = []
+): SitemapUrl[] {
+	const links = absoluteLinks(alternateLinks(list, source.defaultLocale), source.site)
+	return list.map((alternate, index) => ({
+		loc: absoluteUrl(alternate.url, source.site),
+		lastmod: lastmods[index],
+		links
+	}))
+}
+
+async function homepageLastmod(
+	source: SitemapSource,
+	locale: LocaleCode
+): Promise<string | undefined> {
+	const homepage = await findHomepage(source.client, locale)
+	return homepage?.fallback === false ? homepage.updated_at : undefined
 }
 
 async function homepageUrls(source: SitemapSource): Promise<SitemapUrl[]> {
-	const pages = await Promise.all(
-		source.urls.locales.map((locale) => homepageIn(source.client, locale))
+	const list = homepageAlternates(source.urls)
+	const lastmods = await Promise.all(
+		list.map((alternate) => homepageLastmod(source, alternate.locale))
 	)
-	return pages
-		.filter((page): page is Homepage => page !== undefined)
-		.map((page) => ({
-			loc: absoluteUrl(source.urls.homepage(page.locale), source.site),
-			lastmod: page.updated_at,
-			links: absoluteLinks(
-				hreflangLinks(page, source.urls, source.defaultLocale),
-				source.site
-			)
-		}))
+	return localizedUrls(list, source, lastmods)
+}
+
+function indexUrls(collection: string, source: SitemapSource): SitemapUrl[] {
+	return localizedUrls(collectionAlternates(collection, source.urls), source)
 }
 
 function renderLink(link: HreflangLink): string {
@@ -90,7 +109,7 @@ function renderUrl(url: SitemapUrl): string {
 	return [
 		'<url>',
 		`<loc>${escapeXml(url.loc)}</loc>`,
-		`<lastmod>${escapeXml(url.lastmod)}</lastmod>`,
+		...(url.lastmod === undefined ? [] : [`<lastmod>${escapeXml(url.lastmod)}</lastmod>`]),
 		...url.links.map(renderLink),
 		'</url>'
 	].join('')
@@ -118,7 +137,14 @@ export async function collectSitemap(
 ): Promise<SitemapUrl[]> {
 	const names = collections ?? (await allCollections(source))
 	const groups = await Promise.all(names.map((name) => entryUrls(name, source)))
-	return [...(await homepageUrls(source)), ...groups.flat()]
+	return firstByKey(
+		[
+			...(await homepageUrls(source)),
+			...names.flatMap((name) => indexUrls(name, source)),
+			...groups.flat()
+		],
+		(url) => url.loc
+	)
 }
 
 export async function sitemapResponse(options: SitemapOptions): Promise<Response> {
