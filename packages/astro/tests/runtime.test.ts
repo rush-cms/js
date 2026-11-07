@@ -7,6 +7,7 @@ import { SITE_PREFIX, envelope, siteExample, startStubApi } from './fixtures/api
 import type { StubApi } from './fixtures/api'
 import {
 	OFFLINE_API,
+	collectionsOf,
 	recordingLogger,
 	routeContext,
 	rushLocals,
@@ -127,7 +128,10 @@ describe('resolveLocale', () => {
 
 describe('getRush', () => {
 	it('binds the client to the route locale and the configured urls', async () => {
-		const config = siteConfig({ routes: { blog: '/{locale}/blog/{slug}' } })
+		const config = siteConfig({
+			routes: { blog: '/{locale}/blog/{slug}' },
+			collections: collectionsOf('articles', { en: 'blog' })
+		})
 		const client = getRush(
 			routeContext({ locals: rushLocals(stub.api, config), currentLocale: 'es' })
 		)

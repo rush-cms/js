@@ -1,5 +1,5 @@
 import { isRushError } from '@rushcms/client'
-import type { CollectionRef, Entry, LocaleCode, RushUrls } from '@rushcms/client'
+import type { CollectionRef, Entry, LocaleCode, MovedParams, RushUrls } from '@rushcms/client'
 import type { EntryStaticPath } from './paths'
 import { findLocale, localeRequest, runtimeOf } from './runtime'
 import type { RushContext, RushRuntime } from './runtime'
@@ -47,11 +47,13 @@ type EntryRequest = {
 
 function fixedCollection(
 	urls: RushUrls,
-	key: string,
-	locale: LocaleCode
+	ref: CollectionRef | undefined
 ): CollectionRef | undefined {
-	const ref = urls.collectionRef(key, locale)
 	return ref !== undefined && !urls.hasCollectionSegment(ref) ? ref : undefined
+}
+
+function movedTarget(params: MovedParams): CollectionRef {
+	return { id: params.collection_id, slug: params.collection_slug }
 }
 
 function isMissing(err: unknown): boolean {
@@ -65,7 +67,11 @@ async function fetchEntry(
 ): Promise<EntryResolution> {
 	const { locale, slug } = request
 	const permanent = !runtime.previewMode
-	const fixed = fixedCollection(runtime.urls, request.collection, locale)
+	const ref = runtime.urls.collectionRef(request.collection, locale)
+	if (ref !== undefined && !runtime.urls.routed(ref)) {
+		return MISSING
+	}
+	const fixed = fixedCollection(runtime.urls, ref)
 	try {
 		const entry = await runtime
 			.clientIn(context, locale)
@@ -75,7 +81,9 @@ async function fetchEntry(
 			: { kind: 'found', entry, locale }
 	} catch (err) {
 		if (isRushError(err, 'moved')) {
-			return { kind: 'moved', location: runtime.urls.moved(err.params), permanent }
+			return runtime.urls.routed(movedTarget(err.params))
+				? { kind: 'moved', location: runtime.urls.moved(err.params), permanent }
+				: MISSING
 		}
 		if (isMissing(err)) {
 			return MISSING

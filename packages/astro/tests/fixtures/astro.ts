@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { isRecord } from '@rushcms/client'
+import { isRecord } from '@rushcms/client/internal'
 import type {
 	AstroIntegration,
 	AstroIntegrationMiddleware,

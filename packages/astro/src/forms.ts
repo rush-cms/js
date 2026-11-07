@@ -1,4 +1,5 @@
-import { RushError, isRecord, isRushError } from '@rushcms/client'
+import { RushError, isRushError } from '@rushcms/client'
+import { isRecord } from '@rushcms/client/internal'
 import type { FormSubmitData, FormSubmitOptions } from '@rushcms/client'
 import type { APIContext } from 'astro'
 import { seeOther } from './http'

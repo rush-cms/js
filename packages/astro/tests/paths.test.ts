@@ -1,12 +1,12 @@
 import { createClient, createUrls } from '@rushcms/client'
 import type { Entry, RushClient } from '@rushcms/client'
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { collectEntryPaths } from '../src/paths'
 import { entryExample } from '../../client/tests/fixtures/contract'
 import { SITE_PREFIX, entryListsByLocale, startStubApi } from './fixtures/api'
 import type { StubApi } from './fixtures/api'
 import { COLLECTION_SLUGS } from '../../client/tests/fixtures/slugs'
-import { LOCALE_PATHS, collectionsOf } from './fixtures/runtime'
+import { GENERIC_ROUTES, LOCALE_PATHS, collectionsOf } from './fixtures/runtime'
 
 const COLLECTIONS = collectionsOf(entryExample().collection.id, COLLECTION_SLUGS)
 
@@ -45,6 +45,10 @@ beforeAll(async () => {
 	stub = await startStubApi()
 })
 
+afterEach(() => {
+	stub.requests.length = 0
+})
+
 afterAll(async () => {
 	await stub.close()
 })
@@ -56,7 +60,7 @@ describe('entryPaths', () => {
 			en: [own('en', 'hello')],
 			es: [own('es', 'hola')]
 		})
-		const urls = createUrls({ localePaths: LOCALE_PATHS })
+		const urls = createUrls({ localePaths: LOCALE_PATHS, routes: GENERIC_ROUTES })
 		const paths = await collectEntryPaths('blog', clientOf(), urls)
 		expect(paths.map((path) => path.params)).toEqual([
 			{ locale: 'pt', collection: 'artigos', slug: 'ola' },
@@ -93,7 +97,7 @@ describe('entryPaths', () => {
 
 	it('gives a fallback page the collection slug of the requested locale', async () => {
 		served({ pt_BR: [], en: [fallbackInto('en', 'ola')], es: [fallbackInto('es', 'ola')] })
-		const urls = createUrls({ localePaths: LOCALE_PATHS })
+		const urls = createUrls({ localePaths: LOCALE_PATHS, routes: GENERIC_ROUTES })
 		const paths = await collectEntryPaths('blog', clientOf(), urls)
 		expect(paths.map((path) => path.params)).toEqual([
 			{ locale: 'en', collection: 'blog', slug: 'ola' },
@@ -104,7 +108,7 @@ describe('entryPaths', () => {
 	it('keeps the own entry when a fallback page would take the same path', async () => {
 		const mine = own('en', 'shared')
 		const borrowed = fallbackInto('en', 'shared')
-		const urls = createUrls({ localePaths: LOCALE_PATHS })
+		const urls = createUrls({ localePaths: LOCALE_PATHS, routes: GENERIC_ROUTES })
 		for (const order of [
 			[borrowed, mine],
 			[mine, borrowed]
@@ -115,6 +119,17 @@ describe('entryPaths', () => {
 			expect(paths[0]?.props.entry.id).toBe(mine.id)
 		}
 	})
+
+	it.each(['blog', 'unknown'])(
+		'throws for the collection "%s" that has no route before any request',
+		async (collection) => {
+			const urls = createUrls({ localePaths: LOCALE_PATHS, collections: COLLECTIONS })
+			await expect(collectEntryPaths(collection, clientOf(), urls)).rejects.toThrow(
+				`collection "${collection}" has no route`
+			)
+			expect(stub.requests).toEqual([])
+		}
+	)
 
 	it('leaves the locale param undefined for the empty prefix', async () => {
 		served({ pt_BR: [own('pt_BR', 'ola')], en: [], es: [] })

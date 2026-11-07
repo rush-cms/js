@@ -7,6 +7,9 @@ const DOM_TEST = 'tests/form-enhance.test.ts'
 export default getViteConfig({
 	resolve: {
 		alias: {
+			'@rushcms/client/internal': fileURLToPath(
+				new URL('../client/src/internal.ts', import.meta.url)
+			),
 			'@rushcms/client': fileURLToPath(new URL('../client/src/index.ts', import.meta.url)),
 			'@rushcms/astro/components-runtime': fileURLToPath(
 				new URL('./src/components-runtime.ts', import.meta.url)

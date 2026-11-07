@@ -1,4 +1,4 @@
-import { isRecord } from '@rushcms/client'
+import { isRecord } from '@rushcms/client/internal'
 import { formStatusOf, messageFor } from './form-model'
 import type { FormMessages, MessageParams } from './form-model'
 import type { FormStatus } from './forms'

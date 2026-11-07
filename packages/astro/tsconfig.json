@@ -4,6 +4,7 @@
 		"types": ["node"],
 		"paths": {
 			"@rushcms/client": ["../client/src/index.ts"],
+			"@rushcms/client/internal": ["../client/src/internal.ts"],
 			"@rushcms/astro/components-runtime": ["./src/components-runtime.ts"],
 			"@rushcms/astro/form-enhance": ["./src/form-enhance.ts"]
 		}

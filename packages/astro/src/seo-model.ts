@@ -1,4 +1,5 @@
-import { isRecord, toBcp47, translatedLocales } from '@rushcms/client'
+import { toBcp47, translatedLocales } from '@rushcms/client'
+import { isRecord } from '@rushcms/client/internal'
 import type { Entry, Homepage, LocaleCode, Media, RushUrls } from '@rushcms/client'
 import type { SeoFieldMap } from './config'
 import { absoluteLinks, hreflangLinks } from './alternate-links'

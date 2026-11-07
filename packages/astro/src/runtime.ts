@@ -24,6 +24,7 @@ export type RushRuntime = {
 	readonly trustedProxies: number
 	readonly seo: Readonly<Record<string, SeoFieldMap>>
 	readonly urls: RushUrls
+	locale(context: RushContext): LocaleCode
 	client(context: RushContext): RushClient
 	clientIn(context: RushContext, locale: LocaleCode): RushClient
 	onDemandClient(): RushClient
@@ -120,6 +121,10 @@ export function createRushRuntime(settings: RushRuntimeSettings): RushRuntime {
 		return shareable && context.isPrerendered ? sharedClient(locale) : create(locale, false)
 	}
 
+	function locale(context: RushContext): LocaleCode {
+		return resolveLocale(urls, config.defaultLocale, localeRequest(context))
+	}
+
 	return {
 		previewMode: config.preview,
 		get previewActive() {
@@ -129,8 +134,8 @@ export function createRushRuntime(settings: RushRuntimeSettings): RushRuntime {
 		trustedProxies: config.trustedProxies,
 		seo: config.seo,
 		urls,
-		client: (context) =>
-			clientIn(context, resolveLocale(urls, config.defaultLocale, localeRequest(context))),
+		locale,
+		client: (context) => clientIn(context, locale(context)),
 		clientIn,
 		onDemandClient: () => create(resolveLocale(urls, config.defaultLocale, NO_LOCALE), false),
 		preview: (token, fallback) =>

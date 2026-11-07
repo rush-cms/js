@@ -1,6 +1,8 @@
 import { fileURLToPath } from 'node:url'
-import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
+import type { AstroIntegration } from 'astro'
 import type { RushLocalePaths } from '@rushcms/client'
+import type { SiteLocales } from '@rushcms/client/internal'
 import rush from '../src/index'
 import type { RushAstroOptions } from '../src/index'
 import { SITE_PREFIX, envelope, siteExample, startStubApi } from './fixtures/api'
@@ -13,13 +15,14 @@ import {
 	runStartHook
 } from './fixtures/astro'
 import type { ProjectDir } from './fixtures/astro'
+import type { RushSiteConfig } from '../src/config'
 import { installedPackage } from '../../../scripts/installed-package'
+import { ARTICLES } from './fixtures/runtime'
 
 const COLD_IMPORT_TIMEOUT_MS = 60_000
 
 const MANIFEST_PATH = fileURLToPath(new URL('../package.json', import.meta.url))
 
-const ARTICLES = '01JC3E28JT97KB6CQ643DZVMXX'
 const PAGES = '01JCQKFBF5KZNWJ47TAN9ZT24M'
 
 const COLLECTION_SLUGS: Record<string, Record<string, string>> = {
@@ -76,15 +79,31 @@ async function preloadSetupDependencies(): Promise<void> {
 	await Promise.all([import('astro/config'), import('vite')])
 }
 
+function serveSite(site: Partial<SiteLocales> = {}): void {
+	stub.handle((request) =>
+		request.path === `${SITE_PREFIX}/site`
+			? envelope({ ...siteExample(), ...site })
+			: envelope(collectionsFor(request.query.get('locale') ?? ''))
+	)
+}
+
+async function builtConfig(
+	integration: AstroIntegration,
+	env: Record<string, string> = {}
+): Promise<RushSiteConfig> {
+	const { plugin } = await runSetup(integration, useProject(apiEnv(env)))
+	await runStartHook(integration, 'astro:build:start')
+	return loadVirtualConfig(plugin)
+}
+
 beforeAll(async () => {
 	await preloadSetupDependencies()
 	stub = await startStubApi()
-	stub.handle((request) =>
-		request.path === `${SITE_PREFIX}/site`
-			? envelope(siteExample())
-			: envelope(collectionsFor(request.query.get('locale') ?? ''))
-	)
 }, COLD_IMPORT_TIMEOUT_MS)
+
+beforeEach(() => {
+	serveSite()
+})
 
 afterEach(() => {
 	stub.requests.length = 0
@@ -191,17 +210,14 @@ describe('trustedProxies', () => {
 
 	it('carries the hop count into the site config', async () => {
 		const integration = rush(options(ALL_LOCALES, { trustedProxies: 2 }))
-		const { plugin } = await runSetup(integration, useProject(apiEnv()))
-		await runStartHook(integration, 'astro:build:start')
-		expect((await loadVirtualConfig(plugin)).trustedProxies).toBe(2)
+		expect((await builtConfig(integration)).trustedProxies).toBe(2)
 	})
 })
 
 describe('site check at build and dev start', () => {
 	it('fails the build when localePaths misses a site locale, listing both sets', async () => {
 		const integration = rush(options({ pt_BR: '', en: 'en' }))
-		await runSetup(integration, useProject(apiEnv()))
-		await expect(runStartHook(integration, 'astro:build:start')).rejects.toThrow(
+		await expect(builtConfig(integration)).rejects.toThrow(
 			'localePaths locales [pt_BR, en] differ from the site locales [en, pt_BR, es]'
 		)
 	})
@@ -212,6 +228,44 @@ describe('site check at build and dev start', () => {
 		await expect(runStartHook(integration, 'astro:server:setup')).rejects.toThrow(
 			'localePaths locales [pt_BR, en, fr] differ from the site locales [en, pt_BR, es]'
 		)
+	})
+
+	it('prints a paste-ready localePaths suggestion when the locales differ', async () => {
+		serveSite({ default_locale: 'pt_BR', locales: ['pt_BR', 'en', 'es'] })
+		await expect(builtConfig(rush(options({})))).rejects.toThrow(
+			new Error(
+				"@rushcms/astro: localePaths locales [] differ from the site locales [pt_BR, en, es]. Set in astro.config:\n  localePaths: { pt_BR: '', en: 'en', es: 'es' }"
+			)
+		)
+	})
+
+	it('quotes only the suggested keys that are not identifiers', async () => {
+		serveSite({ default_locale: 'en', locales: ['en', 'pt-BR', 'pt-PT', 'es_419'] })
+		await expect(builtConfig(rush(options({ en: '' })))).rejects.toThrow(
+			new Error(
+				"@rushcms/astro: localePaths locales [en] differ from the site locales [en, pt-BR, pt-PT, es_419]. Set in astro.config:\n  localePaths: { en: '', 'pt-BR': 'pt-br', 'pt-PT': 'pt-pt', es_419: 'es' }"
+			)
+		)
+	})
+
+	it('fails the build when a route key matches no site collection', async () => {
+		const routes = { artigos: '/{locale}/blog/{slug}', artcles: '/{locale}/a/{slug}' }
+		await expect(builtConfig(rush(options(ALL_LOCALES, { routes })))).rejects.toThrow(
+			new Error('route "artcles" matches no collection')
+		)
+	})
+
+	it('rejects invalid page segments before touching the API', async () => {
+		const integration = rush(options(ALL_LOCALES, { pageSegments: { en: '' } }))
+		await expect(runSetup(integration, useProject(apiEnv()))).rejects.toThrow(
+			'pageSegments segment for "en" must not be empty'
+		)
+		expect(stub.requests).toEqual([])
+	})
+
+	it('carries the page segments into the site config', async () => {
+		const integration = rush(options(ALL_LOCALES, { pageSegments: { pt_BR: 'pagina' } }))
+		expect((await builtConfig(integration)).pageSegments).toEqual({ pt_BR: 'pagina' })
 	})
 
 	it('fails when an API variable is missing', async () => {
@@ -231,10 +285,7 @@ describe('site check at build and dev start', () => {
 				seo: { artigos: { description: 'summary' } }
 			})
 		)
-		const { plugin } = await runSetup(integration, useProject(apiEnv()))
-		await runStartHook(integration, 'astro:build:start')
-		const config = await loadVirtualConfig(plugin)
-		expect(config).toEqual({
+		expect(await builtConfig(integration)).toEqual({
 			routes: { artigos: '/{locale}/blog/{slug}', pages: '/{locale}/{slug}' },
 			localePaths: ALL_LOCALES,
 			collections: {
@@ -251,6 +302,7 @@ describe('site check at build and dev start', () => {
 					{ id: PAGES, slug: 'paginas' }
 				]
 			},
+			pageSegments: {},
 			defaultLocale: 'en',
 			seo: { artigos: { description: 'summary' } },
 			memo: true,
@@ -320,8 +372,6 @@ describe('preview deployment mode', () => {
 
 	it('marks the site config of a preview build', async () => {
 		const integration = rush(options(ALL_LOCALES))
-		const { plugin } = await runSetup(integration, useProject(apiEnv({ RUSH_PREVIEW: 'true' })))
-		await runStartHook(integration, 'astro:build:start')
-		expect((await loadVirtualConfig(plugin)).preview).toBe(true)
+		expect((await builtConfig(integration, { RUSH_PREVIEW: 'true' })).preview).toBe(true)
 	})
 })

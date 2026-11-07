@@ -1,4 +1,4 @@
-import { isRecord } from '@rushcms/client'
+import { isRecord } from '@rushcms/client/internal'
 import type { Entry, LocaleCode } from '@rushcms/client'
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { entryExample, responseExample } from '../../client/tests/fixtures/contract'
@@ -8,7 +8,16 @@ import { resolveEntry } from '../src/index'
 import type { EntryRoute } from '../src/index'
 import { SITE_PREFIX, apiError, envelope, startStubApi } from './fixtures/api'
 import type { StubApi, StubHandler, StubRequest } from './fixtures/api'
-import { collectionsOf, routeContext, rushLocals, siteConfig } from './fixtures/runtime'
+import {
+	ARTICLES,
+	GENERIC_ROUTES,
+	PREVIEW_TOKEN,
+	collectionsOf,
+	newsOnly,
+	routeContext,
+	rushLocals,
+	siteConfig
+} from './fixtures/runtime'
 import type { RouteContextInit } from './fixtures/runtime'
 
 type MissingCase = {
@@ -21,8 +30,6 @@ type FixedRouteCase = {
 	requested: string
 }
 
-const ARTICLES = entryExample().collection.id
-const PREVIEW_TOKEN = 'rush_prv_e30.c2ln'
 const ENTRY_ROUTE = `${SITE_PREFIX}/collections/blog/entries/hello-world`
 const ENTRY_PATH = /^\/api\/v1\/[^/]+\/collections\/([^/]+)\/entries\/([^/]+)$/
 const FIXED_ROUTE: EntryRoute = { collection: 'artigos' }
@@ -118,7 +125,30 @@ afterAll(() => stub.close())
 
 const BLOG_PARAMS = { locale: 'en', collection: 'blog', slug: 'hello-world' }
 
-const UNROUTED_CONFIG: RushSiteConfig = siteConfig({ ...CONFIG, routes: {} })
+const GENERIC_CONFIG: RushSiteConfig = siteConfig({ ...CONFIG, routes: GENERIC_ROUTES })
+
+const NEWS_ONLY_CONFIG: RushSiteConfig = newsOnly(CONFIG)
+
+describe('resolveEntry with unrouted collections', () => {
+	it('answers missing when the moved target collection has no route', async () => {
+		serving(() => apiError(404, movedBody()))
+		const resolved = await resolveIn(
+			{ locals: rushLocals(stub.api, NEWS_ONLY_CONFIG), params: { locale: 'en', slug: 'x' } },
+			{ collection: 'news' }
+		)
+		expect(resolved).toEqual({ kind: 'missing' })
+		expect(stub.requests).toHaveLength(1)
+	})
+
+	it('answers missing without a request for a collection param that has no route', async () => {
+		const resolved = await resolveIn({
+			locals: rushLocals(stub.api, NEWS_ONLY_CONFIG),
+			params: BLOG_PARAMS
+		})
+		expect(resolved).toEqual({ kind: 'missing' })
+		expect(stub.requests).toHaveLength(0)
+	})
+})
 
 describe('resolveEntry with getStaticPaths props', () => {
 	it('returns the prerendered entry without calling the API', async () => {
@@ -137,7 +167,7 @@ describe('resolveEntry on demand', () => {
 	it('fetches the entry by the route params in the param locale', async () => {
 		serving(serveEntryAt(ENTRY_ROUTE))
 		const resolved = await resolveIn({
-			locals: rushLocals(stub.api, UNROUTED_CONFIG),
+			locals: rushLocals(stub.api, GENERIC_CONFIG),
 			params: BLOG_PARAMS
 		})
 		expect(resolved.kind === 'found' && resolved.entry.locale).toBe('en')
@@ -148,7 +178,7 @@ describe('resolveEntry on demand', () => {
 	it('reads drafts with the preview token in a preview deployment without props', async () => {
 		serving(serveEntryAt(ENTRY_ROUTE))
 		const resolved = await resolveIn({
-			locals: rushLocals(stub.api, UNROUTED_CONFIG, PREVIEW_TOKEN),
+			locals: rushLocals(stub.api, GENERIC_CONFIG, PREVIEW_TOKEN),
 			params: BLOG_PARAMS
 		})
 		expect(resolved.kind).toBe('found')
@@ -266,7 +296,7 @@ describe('resolveEntry route overrides and locales', () => {
 	it('keeps a collection segment of a {collection} route unmapped so the API corrects it', async () => {
 		serving(resolvingSlugs)
 		const resolved = await resolveIn({
-			locals: rushLocals(stub.api, UNROUTED_CONFIG),
+			locals: rushLocals(stub.api, GENERIC_CONFIG),
 			params: { locale: 'en', collection: 'artigos', slug: 'hello-world' }
 		})
 		expect(resolved).toEqual({

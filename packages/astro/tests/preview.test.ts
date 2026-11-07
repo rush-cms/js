@@ -8,7 +8,7 @@ import { createRushRuntime } from '../src/runtime'
 import type { RushSiteConfig } from '../src/config'
 import { SITE_PREFIX, apiError, envelope, siteExample, startStubApi } from './fixtures/api'
 import type { StubApi, StubHandler, StubRequest } from './fixtures/api'
-import { collectionsOf, routeContext, rushLocals, siteConfig } from './fixtures/runtime'
+import { ARTICLES, collectionsOf, routeContext, rushLocals, siteConfig } from './fixtures/runtime'
 import { COLLECTION_SLUGS } from '../../client/tests/fixtures/slugs'
 
 type ParamCase = {
@@ -24,7 +24,6 @@ type RejectionCase = {
 
 const ORIGIN = 'https://preview.example'
 const NOW = 1_800_000_000
-const ARTICLES = '01JC3E28JT97KB6CQ643DZVMXX'
 const ENTRY_PATH = `${SITE_PREFIX}/collections/blog/entries/hello-world`
 const SECURE_FLAGS = 'Path=/; Max-Age=3600; HttpOnly; SameSite=Lax; Secure'
 
@@ -193,7 +192,10 @@ describe('GET /_rush/preview', () => {
 			}
 		}
 		stub.handle(serveEntry(hostile))
-		const config = previewConfig({ routes: { artigos: '/{slug}' } })
+		const config = previewConfig({
+			localePaths: { pt_BR: 'pt', en: '', es: 'es' },
+			routes: { artigos: '/{locale}/{slug}' }
+		})
 		const response = await startPreview(previewContext(entryQuery(), config))
 		expect(response.status).toBe(400)
 		expect(response.headers.get('set-cookie')).toBeNull()

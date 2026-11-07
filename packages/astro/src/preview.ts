@@ -1,4 +1,5 @@
-import { isRecord, isRushError } from '@rushcms/client'
+import { isRushError } from '@rushcms/client'
+import { isRecord } from '@rushcms/client/internal'
 import type { LocaleCode, RouteParams, RushClient, RushUrls } from '@rushcms/client'
 import type { APIContext } from 'astro'
 import { seeOther } from './http'

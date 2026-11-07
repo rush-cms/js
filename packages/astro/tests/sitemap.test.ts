@@ -1,18 +1,30 @@
-import type { Entry, Homepage } from '@rushcms/client'
+import type { CollectionRef, Entry, Homepage } from '@rushcms/client'
+import type { RushSiteConfig } from '../src/config'
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { renderSitemap, sitemapResponse } from '../src/sitemap'
 import type { SitemapContext } from '../src/sitemap'
 import { entryExample, homepageExample } from '../../client/tests/fixtures/contract'
 import { SITE_PREFIX, apiError, entryListsByLocale, envelope, startStubApi } from './fixtures/api'
 import type { StubApi } from './fixtures/api'
-import { LOCALE_PATHS, routeContext, rushLocals, siteConfig } from './fixtures/runtime'
+import {
+	ARTICLES,
+	LOCALE_PATHS,
+	NEWS,
+	newsOnly,
+	routeContext,
+	rushLocals,
+	siteConfig
+} from './fixtures/runtime'
 
 type Catalog = {
 	entries: Record<string, Entry[]>
 	homepages: Record<string, Homepage>
+	collections?: CollectionRef[]
 }
 
 const SITE = new URL('https://site.example')
+const SITE_CONFIG = siteConfig({ localePaths: LOCALE_PATHS, defaultLocale: 'en' })
+const NEWS_ONLY_CONFIG = newsOnly(SITE_CONFIG)
 const NOT_FOUND = { error: 'not found', code: 'not_found', params: { resource: 'homepage' } }
 
 let stub: StubApi
@@ -41,14 +53,13 @@ function serve(catalog: Catalog): void {
 			return homepage === undefined ? apiError(404, NOT_FOUND) : envelope(homepage)
 		}
 		if (request.path === `${SITE_PREFIX}/collections`) {
-			return envelope([{ id: entryExample().collection.id, slug: 'blog' }])
+			return envelope(catalog.collections ?? [{ id: ARTICLES, slug: 'blog' }])
 		}
 		return entryLists(request)
 	})
 }
 
-function contextFor(site: URL | undefined): SitemapContext {
-	const config = siteConfig({ localePaths: LOCALE_PATHS, defaultLocale: 'en' })
+function contextFor(site: URL | undefined, config: RushSiteConfig = SITE_CONFIG): SitemapContext {
 	return { ...routeContext({ locals: rushLocals(stub.api, config) }), site }
 }
 
@@ -64,10 +75,14 @@ function blockFor(xml: string, loc: string): string {
 	return urlBlocks(xml).find((block) => block.includes(`<loc>${loc}</loc>`)) ?? ''
 }
 
-async function sitemap(catalog: Catalog, collections?: string[]): Promise<string> {
+async function sitemap(
+	catalog: Catalog,
+	collections?: string[],
+	config: RushSiteConfig = SITE_CONFIG
+): Promise<string> {
 	serve(catalog)
 	const response = await sitemapResponse({
-		context: contextFor(SITE),
+		context: contextFor(SITE, config),
 		...(collections === undefined ? {} : { collections })
 	})
 	return response.text()
@@ -179,6 +194,38 @@ describe('sitemap', () => {
 	it('walks every collection of the site when none is named', async () => {
 		const xml = await sitemap({ entries: { pt_BR: [PT] }, homepages: {} })
 		expect(locs(xml)).toEqual(['https://site.example/pt/artigos/ola-mundo'])
+	})
+
+	it('walks only the collections that have a route when none is named', async () => {
+		const launch = entry({
+			id: 'news-launch',
+			locale: 'en',
+			slug: 'launch',
+			collection: NEWS,
+			translations: { en: { slug: 'launch', collection_slug: 'news' } }
+		})
+		const xml = await sitemap(
+			{
+				entries: { en: [launch] },
+				homepages: {},
+				collections: [{ id: ARTICLES, slug: 'blog' }, NEWS]
+			},
+			undefined,
+			NEWS_ONLY_CONFIG
+		)
+		expect(locs(xml)).toEqual(['https://site.example/en/news/launch'])
+		expect(
+			stub.requests.filter((request) => request.path.endsWith('/entries')).map((r) => r.path)
+		).toEqual(
+			['news', 'news', 'news'].map((slug) => `${SITE_PREFIX}/collections/${slug}/entries`)
+		)
+	})
+
+	it('throws for a named collection that has no route', async () => {
+		serve({ entries: {}, homepages: {} })
+		await expect(
+			sitemapResponse({ context: contextFor(SITE, NEWS_ONLY_CONFIG), collections: ['blog'] })
+		).rejects.toThrow('collection "blog" has no route')
 	})
 
 	it('escapes xml in urls', () => {

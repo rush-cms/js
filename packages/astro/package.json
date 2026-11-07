@@ -12,6 +12,9 @@
 		"cms"
 	],
 	"sideEffects": false,
+	"engines": {
+		"node": ">=24"
+	},
 	"exports": {
 		".": {
 			"types": "./dist/index.d.ts",

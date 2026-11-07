@@ -2,7 +2,7 @@ import { createServer } from 'node:http'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { parameterExample, responseExample } from '../../../client/tests/fixtures/contract'
-import { isRecord } from '@rushcms/client'
+import { isRecord } from '@rushcms/client/internal'
 import type { Entry } from '@rushcms/client'
 import type { RushApiSettings } from '../../src/settings'
 

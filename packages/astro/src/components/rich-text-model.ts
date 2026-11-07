@@ -1,5 +1,5 @@
 import type { components } from '@rushcms/client'
-import { isRecord } from '@rushcms/client'
+import { isRecord } from '@rushcms/client/internal'
 import type { AstroComponentFactory } from 'astro/runtime/server/index.js'
 
 type Schemas = components['schemas']

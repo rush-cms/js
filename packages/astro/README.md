@@ -20,7 +20,8 @@ export default defineConfig({
 	integrations: [
 		rush({
 			localePaths: { pt_BR: '', en: 'en' },
-			routes: { artigos: '/{locale}/blog/{slug}' },
+			routes: { artigos: '/{locale}/blog/{slug}', '*': '/{locale}/{collection}/{slug}' },
+			pageSegments: { pt_BR: 'pagina' },
 			seo: { artigos: { title: 'headline', description: 'summary', image: 'cover' } },
 			trustedProxies: 1
 		})
@@ -31,9 +32,35 @@ export default defineConfig({
 | Option           | Description                                                                                  |
 | ---------------- | -------------------------------------------------------------------------------------------- |
 | `localePaths`    | Required. CMS locale code → URL prefix; at most one `''`; exactly the site's active locales. |
-| `routes`         | Collection id or slug (any locale) → URL pattern with `{locale}`, `{collection}`, `{slug}`.  |
+| `routes`         | Collection id, slug (any locale) or `'*'` → URL pattern (see [Routes](#routes)).             |
+| `pageSegments`   | CMS locale code → segment of collection list pages after the first (default `page`).         |
 | `seo`            | Per collection, the data fields used for title, description and image.                       |
 | `trustedProxies` | Required. Reverse proxies in front of the server that append to `X-Forwarded-For`.           |
+
+## Routes
+
+A collection has URLs only when a `routes` key matches it; there is no implicit route. A key is a collection id, a
+collection slug of any locale, or `'*'`, which matches every collection no other key matches (a specific key always
+wins). A collection without a matching key has no entry pages, no list page, no sitemap entries and no navigation
+links. `routes: { '*': '/{locale}/{collection}/{slug}' }` gives every collection the generic shape; replacing `'*'`
+with one key per public collection keeps data-only collections off the site.
+
+Every pattern contains `{locale}` (it collapses for the `''` prefix, so a single-locale site has no locale segment and
+adding a locale later changes no URL); `{slug}`, when present, is the last segment; the `'*'` pattern contains
+`{collection}`. The list page of a collection is its pattern without `{slug}`; page `n > 1` appends
+`<segment>/<n>`, where the segment is `pageSegments[locale]` or `page` (`/blog/pagina/2`, `/en/blog/page/2`), built by
+`urls.collection(collection, locale, page)`.
+
+Mistakes fail when Astro loads the config (pattern rules, an empty `pageSegments` value or one with `/`) or at build
+and dev start, once the site's collections are known:
+
+- `route "<key>" must contain {locale}`, `route "*" must contain {collection}`;
+- `route "<key>" matches no collection`: a typo, or a slug renamed in the CMS;
+- `collection slug "<slug>" equals the locale prefix "<prefix>"`: a pattern puts `{collection}` right after
+  `{locale}`, a locale has the `''` prefix, and that locale's slug of a collection equals another locale's prefix;
+- `routes "<a>" and "<b>" produce the same URLs`: two routes whose URLs cannot be told apart.
+
+A collection slug equal to a fixed page of the site (`contact`, `sitemap.xml`) is not detected.
 
 ## Environment
 
@@ -48,9 +75,18 @@ Declared through `astro:env`; the token is a secret and never reaches the client
 | `RUSH_PREVIEW`   | server, boolean | Preview deployment mode (default `false`)                    |
 
 At build and dev start the integration reads `/site` and `/collections` once per locale. It fails when the set of
-`localePaths` keys differs from the site's locales, listing both sets. The collection slugs of every locale are kept
-in the site config, so a `routes` or `seo` key (a collection id or any locale's slug) and the collection segment of
-an entry page resolve in every locale.
+`localePaths` keys differs from the site's locales, listing both sets and a value to paste:
+
+```text
+@rushcms/astro: localePaths locales [] differ from the site locales [pt_BR, en, es]. Set in astro.config:
+  localePaths: { pt_BR: '', en: 'en', es: 'es' }
+```
+
+The suggestion gives the default locale the `''` prefix and every other locale its lower-case language subtag, or its
+full lower-case code with `-` when two locales share that subtag (`pt-br`, `pt-pt`). The collection slugs of every
+locale are kept in the site config, so a `routes` or `seo` key (a collection id or any locale's slug) and the
+collection segment of an entry page resolve in every locale, and the routes are checked against them (see
+[Routes](#routes)).
 
 ## Pages
 
@@ -76,6 +112,38 @@ With Astro `i18n`, every route gets a `currentLocale`, and routes outside a loca
 `defaultLocale`. Each Astro locale must therefore match a `localePaths` prefix or code: with
 `localePaths: { pt_BR: '', en: 'en' }`, declare `locales: [{ path: 'pt', codes: ['pt-BR'] }, 'en']` (or use `pt_BR` /
 `pt-BR` as the code), not a bare `pt`. The forms route does not depend on the page locale.
+
+## Navigation
+
+```astro
+---
+import { getNavigation } from '@rushcms/astro'
+import { optional } from '@rushcms/client'
+
+const main = (await optional(getNavigation(Astro, 'main'))) ?? []
+---
+
+<nav>
+	{
+		main.map((link) => (
+			<a href={link.href} target={link.target} rel={link.rel} class={link.className} {...link.attributes}>
+				{link.label}
+			</a>
+		))
+	}
+</nav>
+```
+
+`getNavigation(Astro, key)` fetches the navigation `key` in the page's locale (found as for `getRush`, drafts in a
+preview session) and returns `navigationLinks(items, getUrls(Astro), locale)` from `@rushcms/client`. Each link has
+`label`, `href` (entry and collection targets built from `routes`), `target`, `rel` (`nofollow`, `noreferrer`,
+`noopener` for `_blank` and the tokens of the item's `rel` attribute, without duplicates), `className`, the other
+`attributes` as strings, and `children`. An item whose target has no route keeps no `href` and stays only when it has
+children.
+
+Like every helper, it throws a `RushError` with code `not_found` for an unknown key. `optional(promise)` from
+`@rushcms/client` resolves `undefined` on a `404` and rethrows anything else, for content a site may not have yet (a
+navigation, the homepage, a form).
 
 ## Forms
 
@@ -292,7 +360,8 @@ const { entry, locale } = resolved
   collection segment); `location` is built from the error params alone, without a second request. `permanent` is
   `false` in a preview deployment, where content (and slugs) still change: answer `302` there, `301` otherwise.
 - `{ kind: 'missing' }`: `not_found`, `not_translated`, `locale_not_served`, a locale segment that is not a
-  `localePaths` prefix (codes such as `pt_BR` do not match), or a missing collection or slug.
+  `localePaths` prefix (codes such as `pt_BR` do not match), a missing collection or slug, a collection that has no
+  route, or a `moved` answer whose target collection has no route.
 
 The locale is found as for `getRush`, but a value that matches nothing gives `missing` instead of throwing.
 `route` overrides the `locale`, `collection` and `slug` params, for routes with a fixed collection segment (as above)
@@ -301,7 +370,8 @@ or a catch-all route that splits the path itself. Other API errors are thrown.
 `entryPaths(collection, rush?)` walks the collection (an id or any locale's slug) in every `localePaths` locale and returns
 `{ params, props: { entry } }`; `params` holds the `locale` (undefined for the empty prefix), `collection` and `slug`
 of the route pattern that applies to the collection. Entries served as a fallback produce a page under the requested
-locale too. Pass a client as `rush` to override the default one.
+locale too. It throws, before any request, for a collection that has no route. Pass a client as `rush` to override
+the default one.
 
 A static build only answers the paths it generated, so old URLs (retired slugs, another locale's slug) get Astro's
 not-found page. To redirect them, add an on-demand catch-all route (`export const prerender = false`) that splits the
@@ -313,13 +383,18 @@ and answering `404` otherwise. For a fixed segment, pass the route key as `colle
 Links come from `getUrls(Astro)`, the URL helpers of `@rushcms/client` built from the options passed to `rush()`
 and the site's collections. `createUrls({ routes, localePaths, collections })` builds the same helpers anywhere else
 (`getStaticPaths`, scripts), where `collections` is `await listCollectionsByLocale(client, locales)` from
-`@rushcms/client`, each locale's `collections.list({ locale })` reduced to `id` and `slug`. Without `collections`, a route keyed by one locale's slug is found only through the slugs an
-entry carries in its `translations`, so collection pages, navigation targets and `moved` locations in other locales
-fall back to the default pattern.
+`@rushcms/client`, each locale's `collections.list({ locale })` reduced to `id` and `slug`. Without `collections`,
+route keys are not checked, `urls.match` throws, and a route keyed by one locale's slug is found only through the
+slugs an entry carries in its `translations`, so collection pages, navigation targets and `moved` locations in other
+locales fall back to `'*'` or have no route. Every helper that builds a URL for a collection without a route throws
+`collection "<slug>" has no route`; `urls.navigationItem` returns `undefined` instead.
 
 | Helper                          | Returns                                                                                 |
 | ------------------------------- | --------------------------------------------------------------------------------------- |
+| `urls.routed(c)`                | Whether a `routes` key matches collection `c`.                                          |
 | `urls.entry(entry)`             | The canonical URL (the served translation's own locale).                                |
+| `urls.collection(c, l, page?)`  | The list page URL of `c` in `l` (page 1 when omitted).                                  |
+| `urls.match(pathname)`          | The entry, collection page or homepage a path names (`undefined` when none).            |
 | `urls.servedPath(e, requested)` | The URL that answers `200` for `e` as fetched for `requested`, fallback pages included. |
 | `urls.translation(e, l)`        | The URL of `e`'s translation in `l` (throws when there is none).                        |
 | `urls.moved(params)`            | The URL from `moved` error params, routed by `collection_id` then `collection_slug`.    |
@@ -343,4 +418,4 @@ export const GET = (context) => sitemapResponse({ context, collections: ['artigo
 
 `sitemapResponse` answers `application/xml` with canonical URLs only (fallback pages are excluded), `lastmod` from
 `updated_at` and `xhtml:link` alternates from the entry translations, plus the homepage of each locale that has one.
-Without `collections` it lists every collection of the site.
+Without `collections` it lists every collection that has a route; naming a collection without a route throws.

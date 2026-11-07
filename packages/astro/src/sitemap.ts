@@ -1,4 +1,4 @@
-import { isRushError } from '@rushcms/client'
+import { optional } from '@rushcms/client'
 import type { Entry, Homepage, LocaleCode, RushClient, RushUrls } from '@rushcms/client'
 import { absoluteLinks, hreflangLinks } from './alternate-links'
 import type { HreflangLink } from './alternate-links'
@@ -62,15 +62,8 @@ async function entryUrls(collection: string, source: SitemapSource): Promise<Sit
 }
 
 async function homepageIn(client: RushClient, locale: LocaleCode): Promise<Homepage | undefined> {
-	try {
-		const homepage = await client.homepage.get({ locale })
-		return homepage.fallback ? undefined : homepage
-	} catch (err) {
-		if (isRushError(err) && err.status === 404) {
-			return undefined
-		}
-		throw err
-	}
+	const homepage = await optional(client.homepage.get({ locale }))
+	return homepage?.fallback === false ? homepage : undefined
 }
 
 async function homepageUrls(source: SitemapSource): Promise<SitemapUrl[]> {
@@ -114,7 +107,9 @@ export function renderSitemap(urls: SitemapUrl[]): string {
 
 async function allCollections(source: SitemapSource): Promise<string[]> {
 	const collections = await source.client.collections.list({ locale: source.defaultLocale })
-	return collections.map((collection) => collection.slug)
+	return collections
+		.filter((collection) => source.urls.routed(collection))
+		.map((collection) => collection.slug)
 }
 
 export async function collectSitemap(
