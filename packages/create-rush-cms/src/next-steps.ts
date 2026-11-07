@@ -32,8 +32,8 @@ export function nextSteps(input: NextStepsInput): string[] {
 	const steps = [
 		`cd ${quoted(input.dir)}`,
 		...(input.installed ? [] : [installCommand(input.packageManager)]),
-		'Fill .env with your Rush CMS API URL and token',
-		`${devCommand(input.packageManager)}, then paste the localePaths line the first-run error prints into the site config`,
+		'Fill .env with your Rush CMS API URL, site id and delivery token',
+		`${devCommand(input.packageManager)}, then paste the localePaths line the first-run error prints into astro.config.ts`,
 		'Search the project for TODO markers and fill them in'
 	]
 	return ['', 'Next steps:', ...steps.map((step, index) => `  ${index + 1}. ${step}`)]
