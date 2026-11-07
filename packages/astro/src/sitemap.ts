@@ -1,4 +1,4 @@
-import type { Alternate, Entry, LocaleCode, RushClient, RushUrls } from '@rushcms/client'
+import type { Alternate, Entry, Homepage, LocaleCode, RushClient, RushUrls } from '@rushcms/client'
 import {
 	absoluteLinks,
 	alternateLinks,
@@ -35,6 +35,11 @@ export type SitemapSource = {
 	urls: RushUrls
 	defaultLocale: LocaleCode
 	site: URL
+}
+
+type ListedHomepage = {
+	alternate: Alternate
+	lastmod: string
 }
 
 const XML_ESCAPES: Record<string, string> = {
@@ -81,24 +86,35 @@ function localizedUrls(
 	}))
 }
 
-async function homepageLastmod(
-	source: SitemapSource,
-	locale: LocaleCode
-): Promise<string | undefined> {
-	const homepage = await findHomepage(source.client, locale)
-	return homepage?.fallback === false ? homepage.updated_at : undefined
+function ownHomepages(list: Alternate[], homepages: (Homepage | undefined)[]): ListedHomepage[] {
+	return list.flatMap((alternate, index) => {
+		const homepage = homepages[index]
+		return homepage?.fallback === false ? [{ alternate, lastmod: homepage.updated_at }] : []
+	})
 }
 
 async function homepageUrls(source: SitemapSource): Promise<SitemapUrl[]> {
 	const list = homepageAlternates(source.urls)
-	const lastmods = await Promise.all(
-		list.map((alternate) => homepageLastmod(source, alternate.locale))
+	const homepages = await Promise.all(
+		list.map((alternate) => findHomepage(source.client, alternate.locale))
 	)
-	return localizedUrls(list, source, lastmods)
+	if (homepages.every((homepage) => homepage === undefined)) {
+		return localizedUrls(list, source)
+	}
+	const listed = ownHomepages(list, homepages)
+	return localizedUrls(
+		listed.map((item) => item.alternate),
+		source,
+		listed.map((item) => item.lastmod)
+	)
 }
 
 function indexUrls(collection: string, source: SitemapSource): SitemapUrl[] {
-	return localizedUrls(collectionAlternates(collection, source.urls), source)
+	const homepages = new Set(homepageAlternates(source.urls).map((alternate) => alternate.url))
+	const list = collectionAlternates(collection, source.urls).filter(
+		(alternate) => !homepages.has(alternate.url)
+	)
+	return localizedUrls(list, source)
 }
 
 function renderLink(link: HreflangLink): string {
