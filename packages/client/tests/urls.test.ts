@@ -1,14 +1,18 @@
 import { describe, expect, it } from 'vitest'
 import { alternates, createUrls, toBcp47 } from '../src/index'
-import type { Entry, Navigation, RushLocalePaths, UrlConfig } from '../src/index'
+import type { Entry, Navigation, RushLocalePaths, RushRoutes, UrlConfig } from '../src/index'
 import { entryExample, responseExample } from './fixtures/contract'
 import { navigationItem } from './fixtures/navigation'
 import type { EntrySummary } from './fixtures/navigation'
 
 const LOCALE_PATHS: RushLocalePaths = { en: 'en', pt_BR: 'pt', es: 'es' }
 
+const ANY_PATTERN = '/{locale}/{collection}/{slug}'
+
+const ANY_ROUTES: RushRoutes = { '*': ANY_PATTERN }
+
 function urlsFor(config: Partial<UrlConfig> = {}) {
-	return createUrls({ localePaths: LOCALE_PATHS, ...config })
+	return createUrls({ localePaths: LOCALE_PATHS, routes: ANY_ROUTES, ...config })
 }
 
 describe('toBcp47', () => {
@@ -19,7 +23,7 @@ describe('toBcp47', () => {
 })
 
 describe('entry urls', () => {
-	it('uses the default pattern with each translation own collection slug', () => {
+	it('uses the * route with each translation own collection slug', () => {
 		const urls = urlsFor()
 		const entry = entryExample()
 		expect(urls.entry(entry)).toBe('/pt/artigos/ola-mundo')
@@ -44,13 +48,8 @@ describe('entry urls', () => {
 		expect(urls.translation(entry, 'es')).toBe('/es/articulos/hola-mundo')
 	})
 
-	it('supports a pattern without a locale placeholder', () => {
-		const urls = urlsFor({ routes: { artigos: '/{slug}' } })
-		expect(urls.entry(entryExample())).toBe('/ola-mundo')
-	})
-
 	it('throws a plain error naming a locale missing from localePaths', () => {
-		const urls = createUrls({ localePaths: { en: 'en' } })
+		const urls = createUrls({ localePaths: { en: 'en' }, routes: ANY_ROUTES })
 		expect(() => urls.entry(entryExample())).toThrow(/pt_BR/)
 		expect(() => urls.homepage('fr')).toThrow(/"fr"/)
 	})
@@ -61,6 +60,103 @@ describe('entry urls', () => {
 
 	it('throws for two empty prefixes', () => {
 		expect(() => createUrls({ localePaths: { en: '', pt_BR: '' } })).toThrow(/empty prefix/)
+	})
+})
+
+describe('explicit routes', () => {
+	const entry = entryExample()
+	const other = { id: 'other', slug: 'docs' }
+	const blog = { id: entry.collection.id, slug: 'blog' }
+
+	it('gives a collection without a route no url', () => {
+		const urls = urlsFor({ routes: {} })
+		const unrouted = `collection "${entry.collection.slug}" has no route`
+		expect(urls.routed(entry.collection)).toBe(false)
+		expect(() => urls.entry(entry)).toThrow(unrouted)
+		expect(() => urls.translation(entry, 'en')).toThrow(unrouted)
+		expect(() => urls.servedPath(entry, 'pt_BR')).toThrow(unrouted)
+		expect(() => urls.collection(entry.collection, 'en')).toThrow(unrouted)
+		expect(() => urls.entryParams(entry.collection, 'en', 'x')).toThrow(unrouted)
+		expect(() => urls.hasCollectionSegment(entry.collection)).toThrow(unrouted)
+		expect(() =>
+			urls.moved({
+				locale: 'en',
+				slug: 'x',
+				collection_id: other.id,
+				collection_slug: other.slug
+			})
+		).toThrow('collection "docs" has no route')
+	})
+
+	it('gives navigation items of an unrouted collection no href', () => {
+		const urls = urlsFor({ routes: { blog: '/{locale}/posts/{slug}' } })
+		const summary: EntrySummary = {
+			id: 'e',
+			locale: 'en',
+			slug: 'x',
+			fallback: false,
+			collection: other
+		}
+		expect(urls.navigationItem(navigationItem({ entry: summary }), 'en')).toBeUndefined()
+		expect(urls.navigationItem(navigationItem({ collection: other }), 'en')).toBeUndefined()
+		expect(urls.routed(other)).toBe(false)
+		expect(urls.routed(blog)).toBe(true)
+	})
+
+	it('routes every collection through *', () => {
+		const urls = urlsFor()
+		expect(urls.routed(entry.collection)).toBe(true)
+		expect(urls.routed(other)).toBe(true)
+		expect(urls.collection(other, 'es')).toBe('/es/docs')
+	})
+
+	it('prefers a specific key over *', () => {
+		const urls = urlsFor({ routes: { blog: '/{locale}/blog/{slug}', ...ANY_ROUTES } })
+		expect(urls.entry(entry)).toBe('/pt/blog/ola-mundo')
+		expect(urls.collection(blog, 'en')).toBe('/en/blog')
+		expect(urls.collection(other, 'en')).toBe('/en/docs')
+	})
+})
+
+describe('route configuration errors', () => {
+	const collections = { en: [{ id: entryExample().collection.id, slug: 'blog' }] }
+
+	it('requires {locale} in every pattern', () => {
+		expect(() => urlsFor({ routes: { blog: '/blog/{slug}' } })).toThrow(
+			'route "blog" must contain {locale}'
+		)
+		expect(() => urlsFor({ routes: { '*': '/{collection}/{slug}' } })).toThrow(
+			'route "*" must contain {locale}'
+		)
+	})
+
+	it('requires {collection} in the * pattern', () => {
+		expect(() => urlsFor({ routes: { '*': '/{locale}/{slug}' } })).toThrow(
+			'route "*" must contain {collection}'
+		)
+	})
+
+	it('rejects a key that names no collection when collections are given', () => {
+		const routes = { blgo: '/{locale}/posts/{slug}', ...ANY_ROUTES }
+		expect(() => urlsFor({ routes, collections })).toThrow('route "blgo" matches no collection')
+		expect(urlsFor({ routes }).routed({ id: 'x', slug: 'blgo' })).toBe(true)
+		expect(urlsFor({ collections }).routed({ id: 'x', slug: 'y' })).toBe(true)
+	})
+
+	it('rejects a collection slug equal to a locale prefix right after an empty locale', () => {
+		const localePaths = { pt_BR: '', en: 'en' }
+		const clashing = { pt_BR: [{ id: 'c', slug: 'en' }], en: [{ id: 'c', slug: 'pt' }] }
+		expect(() => urlsFor({ localePaths, collections: clashing })).toThrow(
+			'collection slug "en" equals the locale prefix "en"'
+		)
+		const fixed = { c: '/{locale}/x/{slug}' }
+		expect(
+			urlsFor({ localePaths, routes: fixed, collections: clashing }).routed({
+				id: 'c',
+				slug: 'en'
+			})
+		).toBe(true)
+		expect(urlsFor({ collections: clashing }).routed({ id: 'c', slug: 'en' })).toBe(true)
 	})
 })
 
@@ -122,7 +218,10 @@ describe('navigationItem from the contract examples', () => {
 
 describe('alternates', () => {
 	it('lists every translation in localePaths order with BCP 47 hreflang', () => {
-		const urls = createUrls({ localePaths: { es: 'es', pt_BR: 'pt', en: 'en' } })
+		const urls = createUrls({
+			localePaths: { es: 'es', pt_BR: 'pt', en: 'en' },
+			routes: ANY_ROUTES
+		})
 		expect(alternates(entryExample(), urls)).toEqual([
 			{ locale: 'es', hreflang: 'es', url: '/es/articulos/hola-mundo' },
 			{ locale: 'pt_BR', hreflang: 'pt-BR', url: '/pt/artigos/ola-mundo' },
@@ -132,7 +231,7 @@ describe('alternates', () => {
 })
 
 describe('collection pages and id route keys', () => {
-	const routes = { blog: '/{locale}/posts/{slug}', docs: '/{locale}/{collection}/{slug}' }
+	const routes = { blog: '/{locale}/posts/{slug}', ...ANY_ROUTES }
 	const idKeyed = urlsFor({
 		routes: { [entryExample().collection.id]: '/{locale}/posts/{slug}' }
 	})
@@ -185,8 +284,8 @@ describe('collection pages and id route keys', () => {
 		const urls = urlsFor({ routes: { billets: '/{locale}/b/{slug}' }, collections })
 		expect(urls.entry(entry)).toBe('/pt/b/ola-mundo')
 		expect(urls.collection({ id: entry.collection.id, slug: 'blog' }, 'en')).toBe('/en/b')
-		expect(urlsFor({ routes: { billets: '/{locale}/b/{slug}' } }).entry(entry)).toBe(
-			'/pt/artigos/ola-mundo'
+		expect(() => urlsFor({ routes: { billets: '/{locale}/b/{slug}' } }).entry(entry)).toThrow(
+			'collection "artigos" has no route'
 		)
 	})
 })
@@ -196,7 +295,10 @@ describe('hardening', () => {
 		const entry = entryExample()
 		const urls = urlsFor({
 			routes: { blog: '/{locale}/posts/{slug}' },
-			collections: { en: [{ id: entry.collection.id, slug: 'missing' }] }
+			collections: {
+				en: [{ id: entry.collection.id, slug: 'missing' }],
+				es: [{ id: entry.collection.id, slug: 'blog' }]
+			}
 		})
 		expect(urls.entry(entry)).toBe('/pt/posts/ola-mundo')
 	})
@@ -207,7 +309,9 @@ describe('hardening', () => {
 	})
 
 	it('ignores inherited keys such as constructor', () => {
-		const urls = urlsFor({ routes: { blog: '/{locale}/posts/{slug}' } })
+		const urls = urlsFor({ routes: { blog: '/{locale}/posts/{slug}', ...ANY_ROUTES } })
+		const bare = urlsFor({ routes: { blog: '/{locale}/posts/{slug}' } })
+		expect(bare.routed({ id: 'constructor', slug: 'toString' })).toBe(false)
 		expect(urls.collection({ id: 'constructor', slug: 'constructor' }, 'en')).toBe(
 			'/en/constructor'
 		)
@@ -246,11 +350,6 @@ describe('entryParams', () => {
 	})
 
 	it('leaves the locale param undefined for an empty prefix and omits unused ones', () => {
-		const urls = urlsFor({
-			localePaths: { en: '', pt_BR: 'pt', es: 'es' },
-			routes: { blog: '/blog/{slug}' }
-		})
-		expect(urls.entryParams(ref, 'en', 'x')).toEqual({ slug: 'x' })
 		const rooted = urlsFor({
 			localePaths: { en: '', pt_BR: 'pt', es: 'es' },
 			routes: { blog: '/{locale}/blog/{slug}' }

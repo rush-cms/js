@@ -6,6 +6,7 @@ import type {
 	MovedParams,
 	RushCollections,
 	RushLocalePaths,
+	RushRoutes,
 	UrlConfig
 } from '../src/index'
 import { entryExample } from './fixtures/contract'
@@ -18,12 +19,38 @@ type RouteKeying = {
 	key?: string
 }
 
+type RoutedOutcome = {
+	kind: 'routed'
+	pattern: string
+}
+
+type UnroutedOutcome = {
+	kind: 'unrouted'
+}
+
+type InvalidOutcome = {
+	kind: 'invalid'
+	message: string
+}
+
+type Outcome = RoutedOutcome | UnroutedOutcome | InvalidOutcome
+
 type ResolutionCase = {
 	label: string
 	config: UrlConfig
-	pattern: string
+	outcome: Outcome
 	entry: Entry
 	requested: LocaleCode
+}
+
+type RoutedCase = ResolutionCase & {
+	pattern: string
+}
+
+type ValidationCase = {
+	label: string
+	config: UrlConfig
+	errors: string[]
 }
 
 type Placeholders = {
@@ -36,20 +63,28 @@ const LOCALES: LocaleCode[] = ['pt_BR', 'en', 'es']
 
 const PREFIXES: Record<LocaleCode, string> = { pt_BR: 'pt', en: 'en', es: 'es' }
 
-const DEFAULT_PATTERN = '/{locale}/{collection}/{slug}'
+const ROUTE_ANY = '*'
 
 const PATTERNS = [
-	DEFAULT_PATTERN,
+	'/{locale}/{collection}/{slug}',
 	'/{locale}/posts/{slug}',
-	'/{slug}',
+	'/{locale}/{slug}',
 	'/{collection}/{locale}/{slug}/',
 	'/blog/{locale}/{slug}'
 ]
 
+const ANY_DECOY = '/{locale}/any/{collection}/{slug}'
+
+const LOCALELESS_PATTERNS = ['/{slug}', '/{collection}/{slug}', '/posts/{slug}']
+
+const UNKNOWN_KEY = 'typo'
+
+const CLASH_ID = 'clash'
+
 const COLLECTION_ID = entryExample().collection.id
 
 const KEYINGS: RouteKeying[] = [
-	{ label: 'default' },
+	{ label: 'unkeyed' },
 	{ label: 'id', key: COLLECTION_ID },
 	...LOCALES.map((locale) => ({ label: locale, key: COLLECTION_SLUGS[locale] ?? '' }))
 ]
@@ -64,6 +99,16 @@ const COLLECTIONS: RushCollections = Object.fromEntries(
 		[
 			{ id: 'other-collection', slug: `other-${locale}` },
 			{ id: COLLECTION_ID, slug: COLLECTION_SLUGS[locale] ?? '' }
+		]
+	])
+)
+
+const CLASHING: RushCollections = Object.fromEntries(
+	LOCALES.map((locale, index) => [
+		locale,
+		[
+			...(COLLECTIONS[locale] ?? []),
+			{ id: CLASH_ID, slug: PREFIXES[LOCALES[(index + 1) % LOCALES.length] ?? ''] ?? '' }
 		]
 	])
 )
@@ -87,14 +132,30 @@ function nonEmptySubsets(items: LocaleCode[]): LocaleCode[][] {
 
 function urlConfig(
 	localePaths: RushLocalePaths,
-	pattern: string,
-	keying: RouteKeying,
+	routes: RushRoutes,
 	collections: RushCollections | undefined
 ): UrlConfig {
-	const routes = keying.key === undefined ? {} : { [keying.key]: pattern }
 	return collections === undefined
 		? { localePaths, routes }
 		: { localePaths, routes, collections }
+}
+
+function routesFor(pattern: string, keying: RouteKeying, any: boolean): RushRoutes {
+	const specific = keying.key === undefined ? {} : { [keying.key]: pattern }
+	const fallback = keying.key === undefined ? pattern : ANY_DECOY
+	return any ? { ...specific, [ROUTE_ANY]: fallback } : specific
+}
+
+function outcomeOf(pattern: string, keying: RouteKeying, any: boolean): Outcome {
+	if (keying.key !== undefined) {
+		return { kind: 'routed', pattern }
+	}
+	if (!any) {
+		return { kind: 'unrouted' }
+	}
+	return pattern.includes('{collection}')
+		? { kind: 'routed', pattern }
+		: { kind: 'invalid', message: `route "*" must contain {collection}` }
 }
 
 function servedEntry(translated: LocaleCode[], requested: LocaleCode): Entry {
@@ -122,14 +183,20 @@ function casesFor(
 	return localePathsVariants().flatMap((localePaths) =>
 		PATTERNS.flatMap((pattern) =>
 			keyings.flatMap((keying) =>
-				nonEmptySubsets(LOCALES).flatMap((translated) =>
-					LOCALES.map((requested) => ({
-						label: `${JSON.stringify(localePaths)} ${pattern} ${keying.label} ${mapped} ${translated.join(',')} → ${requested}`,
-						config: urlConfig(localePaths, pattern, keying, collections),
-						pattern: keying.key === undefined ? DEFAULT_PATTERN : pattern,
-						entry: servedEntry(translated, requested),
-						requested
-					}))
+				[false, true].flatMap((any) =>
+					nonEmptySubsets(LOCALES).flatMap((translated) =>
+						LOCALES.map((requested) => ({
+							label: `${JSON.stringify(localePaths)} ${pattern} ${keying.label} any=${any} ${mapped} ${translated.join(',')} → ${requested}`,
+							config: urlConfig(
+								localePaths,
+								routesFor(pattern, keying, any),
+								collections
+							),
+							outcome: outcomeOf(pattern, keying, any),
+							entry: servedEntry(translated, requested),
+							requested
+						}))
+					)
 				)
 			)
 		)
@@ -156,7 +223,7 @@ function substitute(pattern: string, values: Placeholders): string {
 		.join('/')}`
 }
 
-function expectedIn({ config, pattern }: ResolutionCase, locale: LocaleCode, slug: string): string {
+function expectedIn({ config, pattern }: RoutedCase, locale: LocaleCode, slug: string): string {
 	return substitute(pattern, {
 		locale: config.localePaths[locale] ?? '',
 		collection: COLLECTION_SLUGS[locale] ?? '',
@@ -178,9 +245,11 @@ function summaryOf(entry: Entry, requested: LocaleCode): EntrySummary {
 	}
 }
 
-function assertResolution(resolution: ResolutionCase): void {
+function assertRouted(resolution: RoutedCase): void {
 	const { config, pattern, entry, requested } = resolution
 	const urls = createUrls(config)
+	expect(urls.routed(entry.collection)).toBe(true)
+	expect(urls.hasCollectionSegment(entry.collection)).toBe(pattern.includes('{collection}'))
 	const expected = expectedIn(resolution, requested, entry.slug)
 	expect(urls.servedPath(entry, requested)).toBe(expected)
 	expect(urls.moved(movedTo(entry, requested))).toBe(expected)
@@ -209,6 +278,122 @@ function assertResolution(resolution: ResolutionCase): void {
 	}
 }
 
+function assertUnrouted({ config, entry, requested }: ResolutionCase): void {
+	const urls = createUrls(config)
+	const unrouted = `collection "${entry.collection.slug}" has no route`
+	expect(urls.routed(entry.collection)).toBe(false)
+	expect(() => urls.servedPath(entry, requested)).toThrow(unrouted)
+	expect(() => urls.moved(movedTo(entry, requested))).toThrow(unrouted)
+	for (const locale of Object.keys(entry.translations)) {
+		expect(() => urls.translation(entry, locale)).toThrow(unrouted)
+	}
+	expect(() => urls.collection(entry.collection, requested)).toThrow(unrouted)
+	expect(() => urls.entryParams(entry.collection, requested, entry.slug)).toThrow(unrouted)
+	expect(() => urls.hasCollectionSegment(entry.collection)).toThrow(unrouted)
+	const summary = navigationItem({ entry: summaryOf(entry, requested) })
+	expect(urls.navigationItem(summary, requested)).toBeUndefined()
+	const collectionItem = navigationItem({ collection: entry.collection })
+	expect(urls.navigationItem(collectionItem, requested)).toBeUndefined()
+}
+
+function assertResolution(resolution: ResolutionCase): void {
+	const { outcome } = resolution
+	if (outcome.kind === 'routed') {
+		assertRouted({ ...resolution, pattern: outcome.pattern })
+	} else if (outcome.kind === 'unrouted') {
+		assertUnrouted(resolution)
+	} else {
+		expect(() => createUrls(resolution.config)).toThrow(outcome.message)
+	}
+}
+
+function collectionSlugs(collections: RushCollections): Map<string, Map<LocaleCode, string>> {
+	const slugs = new Map<string, Map<LocaleCode, string>>()
+	for (const [locale, list] of Object.entries(collections)) {
+		for (const { id, slug } of list) {
+			slugs.set(id, new Map([...(slugs.get(id) ?? []), [locale, slug]]))
+		}
+	}
+	return slugs
+}
+
+function patternErrors(key: string, pattern: string): string[] {
+	const locale = pattern.includes('{locale}') ? [] : [`route "${key}" must contain {locale}`]
+	const collection =
+		key === ROUTE_ANY && !pattern.includes('{collection}')
+			? [`route "*" must contain {collection}`]
+			: []
+	return [...locale, ...collection]
+}
+
+function keyErrors(routes: RushRoutes, collections: RushCollections): string[] {
+	const known = new Set(
+		Object.values(collections).flatMap((list) => list.flatMap(({ id, slug }) => [id, slug]))
+	)
+	return Object.keys(routes)
+		.filter((key) => key !== ROUTE_ANY && !known.has(key))
+		.map((key) => `route "${key}" matches no collection`)
+}
+
+function clashErrors(config: UrlConfig, collections: RushCollections): string[] {
+	const routes = config.routes ?? {}
+	const prefixes = Object.values(config.localePaths)
+	const bare = Object.keys(config.localePaths).find((locale) => config.localePaths[locale] === '')
+	return [...collectionSlugs(collections)].flatMap(([id, slugs]) => {
+		const slug = bare === undefined ? undefined : slugs.get(bare)
+		const key = [id, ...slugs.values()].find((candidate) => Object.hasOwn(routes, candidate))
+		const pattern = routes[key ?? ROUTE_ANY] ?? ''
+		const ambiguous =
+			slug !== undefined &&
+			slug !== '' &&
+			prefixes.includes(slug) &&
+			`/${pattern}/`.replace(/\/+/g, '/').includes('/{locale}/{collection}/')
+		return ambiguous ? [`collection slug "${slug}" equals the locale prefix "${slug}"`] : []
+	})
+}
+
+function configErrors(config: UrlConfig): string[] {
+	const routes = config.routes ?? {}
+	const collections = config.collections
+	return [
+		...Object.entries(routes).flatMap(([key, pattern]) => patternErrors(key, pattern)),
+		...(collections === undefined
+			? []
+			: [...keyErrors(routes, collections), ...clashErrors(config, collections)])
+	]
+}
+
+function validationCases(): ValidationCase[] {
+	const anyPatterns = [undefined, ...PATTERNS, ...LOCALELESS_PATTERNS]
+	const keys = [COLLECTION_ID, COLLECTION_SLUGS['en'] ?? '', CLASH_ID, UNKNOWN_KEY]
+	const specifics: RushRoutes[] = [
+		{},
+		...keys.flatMap((key) =>
+			[...PATTERNS, ...LOCALELESS_PATTERNS].map((pattern) => ({ [key]: pattern }))
+		)
+	]
+	return localePathsVariants().flatMap((localePaths) =>
+		[undefined, COLLECTIONS, CLASHING].flatMap((collections) =>
+			specifics.flatMap((specific) =>
+				anyPatterns.map((any) => {
+					const routes = any === undefined ? specific : { ...specific, [ROUTE_ANY]: any }
+					const config = urlConfig(localePaths, routes, collections)
+					return { label: JSON.stringify(config), config, errors: configErrors(config) }
+				})
+			)
+		)
+	)
+}
+
+function thrownBy(config: UrlConfig): string | undefined {
+	try {
+		createUrls(config)
+		return undefined
+	} catch (err) {
+		return err instanceof Error ? err.message : String(err)
+	}
+}
+
 describe('locale params', () => {
 	it.each(localePathsVariants())('round-trips every locale of %j', (localePaths) => {
 		const urls = createUrls({ localePaths })
@@ -233,7 +418,7 @@ describe('every url helper over every route, keying and locale', () => {
 	const cases = [...casesFor(KEYINGS, COLLECTIONS), ...casesFor(UNMAPPED_KEYINGS, undefined)]
 
 	it(`matches the substitution oracle for ${cases.length} generated cases`, () => {
-		expect(cases.length).toBe(5880)
+		expect(cases.length).toBe(11760)
 		for (const resolution of cases) {
 			try {
 				assertResolution(resolution)
@@ -244,8 +429,32 @@ describe('every url helper over every route, keying and locale', () => {
 	})
 })
 
+describe('route configuration over every key, pattern, locale paths and collections', () => {
+	const cases = validationCases()
+
+	it(`matches the configuration oracle for ${cases.length} generated configs`, () => {
+		const seen = new Set<string>()
+		for (const { label, config, errors } of cases) {
+			const thrown = thrownBy(config)
+			if (errors.length === 0) {
+				expect(thrown, label).toBeUndefined()
+			} else {
+				expect(errors, label).toContain(thrown)
+			}
+			seen.add(thrown?.replace(/"[^"]*"/g, '""') ?? 'valid')
+		}
+		expect([...seen].sort()).toEqual([
+			'collection slug "" equals the locale prefix ""',
+			'route "" matches no collection',
+			'route "" must contain {collection}',
+			'route "" must contain {locale}',
+			'valid'
+		])
+	})
+})
+
 describe('servedPath', () => {
-	const urls = createUrls({ localePaths: PREFIXES })
+	const urls = createUrls({ localePaths: PREFIXES, routes: { [ROUTE_ANY]: PATTERNS[0] ?? '' } })
 
 	it('gives a fallback page the requested locale prefix and collection slug', () => {
 		expect(urls.servedPath(servedEntry(['pt_BR'], 'es'), 'es')).toBe('/es/articulos/ola-mundo')
@@ -296,8 +505,10 @@ describe('hasCollectionSegment', () => {
 		expect(urls.hasCollectionSegment(ref)).toBe(pattern.includes('{collection}'))
 	})
 
-	it('is true for a collection without a route and false for a route keyed by another locale slug', () => {
-		expect(createUrls({ localePaths: PREFIXES }).hasCollectionSegment(ref)).toBe(true)
+	it('throws for a collection without a route and is false for a route keyed by another locale slug', () => {
+		expect(() => createUrls({ localePaths: PREFIXES }).hasCollectionSegment(ref)).toThrow(
+			'collection "blog" has no route'
+		)
 		const keyed = createUrls({
 			localePaths: PREFIXES,
 			routes: { artigos: '/{locale}/posts/{slug}' },
@@ -319,18 +530,18 @@ describe('moved', () => {
 		expect(urls.moved(params)).toBe('/pt/posts/ola-mundo')
 	})
 
-	it('falls back to the collection slug and then to the default pattern', () => {
+	it('falls back to the collection slug and then to the * route', () => {
 		const bySlug = createUrls({
 			localePaths: PREFIXES,
 			routes: { artigos: '/{locale}/a/{slug}' }
 		})
 		expect(bySlug.moved(params)).toBe('/pt/a/ola-mundo')
-		expect(createUrls({ localePaths: PREFIXES }).moved(params)).toBe('/pt/artigos/ola-mundo')
+		const any = createUrls({ localePaths: PREFIXES, routes: { [ROUTE_ANY]: ANY_DECOY } })
+		expect(any.moved(params)).toBe('/pt/any/artigos/ola-mundo')
 	})
 
 	it('throws for a locale missing from localePaths', () => {
-		expect(() =>
-			createUrls({ localePaths: PREFIXES }).moved({ ...params, locale: 'fr' })
-		).toThrow(/"fr"/)
+		const any = createUrls({ localePaths: PREFIXES, routes: { [ROUTE_ANY]: ANY_DECOY } })
+		expect(() => any.moved({ ...params, locale: 'fr' })).toThrow(/"fr"/)
 	})
 })

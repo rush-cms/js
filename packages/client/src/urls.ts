@@ -9,7 +9,7 @@ import type {
 	RushRoutes
 } from './types'
 
-const DEFAULT_PATTERN = '/{locale}/{collection}/{slug}'
+const ROUTE_ANY = '*'
 
 export type RushCollections = Record<LocaleCode, CollectionRef[]>
 
@@ -24,6 +24,7 @@ export type RushUrls = {
 	localeOf(param: string | undefined): LocaleCode | undefined
 	localeParam(locale: LocaleCode): string | undefined
 	collectionRef(key: string, locale: LocaleCode): CollectionRef | undefined
+	routed(collection: CollectionRef): boolean
 	hasCollectionSegment(collection: CollectionRef): boolean
 	collectionKeys(entry: Entry): string[]
 	collection(collection: CollectionRef, locale: LocaleCode): string
@@ -57,7 +58,11 @@ type CollectionIndex = {
 	idByKey: Map<string, string>
 }
 
+type RouteTable = Map<string, string[]>
+
 const SLUG_SEGMENT = '{slug}'
+const LOCALE_SEGMENT = '{locale}'
+const COLLECTION_SEGMENT = '{collection}'
 const PLACEHOLDER = /\{(locale|collection|slug)\}/g
 
 function segmentsOf(pattern: string): string[] {
@@ -90,14 +95,76 @@ function assertSingleEmptyPrefix(localePaths: RushLocalePaths): void {
 	}
 }
 
-function parseRoutes(routes: RushRoutes): Map<string, string[]> {
-	const parsed = new Map<string, string[]>()
+function placeholdersOf(segments: string[]): string[] {
+	const names = segments
+		.flatMap((segment) => [...segment.matchAll(PLACEHOLDER)])
+		.map((match) => match[1] ?? '')
+	return [...new Set(names)]
+}
+
+function assertPlaceholders(key: string, segments: string[]): void {
+	const names = placeholdersOf(segments)
+	if (!names.includes('locale')) {
+		throw new Error(`route "${key}" must contain {locale}`)
+	}
+	if (key === ROUTE_ANY && !names.includes('collection')) {
+		throw new Error(`route "${ROUTE_ANY}" must contain {collection}`)
+	}
+}
+
+function parseRoutes(routes: RushRoutes): RouteTable {
+	const parsed: RouteTable = new Map()
 	for (const [key, pattern] of Object.entries(routes)) {
 		const segments = segmentsOf(pattern)
 		assertSlugLast(key, segments)
+		assertPlaceholders(key, segments)
 		parsed.set(key, segments)
 	}
 	return parsed
+}
+
+function routeOf(routes: RouteTable, keys: string[]): string[] | undefined {
+	return routes.get(keys.find((candidate) => routes.has(candidate)) ?? ROUTE_ANY)
+}
+
+function keysOf(index: CollectionIndex, id: string, slugs: string[]): string[] {
+	return [...new Set([id, ...slugs, ...(index.slugsById.get(id)?.values() ?? [])])]
+}
+
+function assertKnownKeys(routes: RouteTable, index: CollectionIndex): void {
+	for (const key of routes.keys()) {
+		if (key !== ROUTE_ANY && !index.idByKey.has(key)) {
+			throw new Error(`route "${key}" matches no collection`)
+		}
+	}
+}
+
+function collectionFollowsLocale(segments: string[]): boolean {
+	return segments.some(
+		(segment, position) =>
+			segment === COLLECTION_SEGMENT && segments[position - 1] === LOCALE_SEGMENT
+	)
+}
+
+function assertSlugsAreNotPrefixes(
+	localePaths: RushLocalePaths,
+	routes: RouteTable,
+	index: CollectionIndex
+): void {
+	const bare = Object.keys(localePaths).find((locale) => localePaths[locale] === '')
+	const prefixes = new Set(Object.values(localePaths).filter((prefix) => prefix !== ''))
+	for (const [id, slugs] of index.slugsById) {
+		const slug = bare === undefined ? undefined : slugs.get(bare)
+		const segments = routeOf(routes, keysOf(index, id, []))
+		if (
+			slug !== undefined &&
+			prefixes.has(slug) &&
+			segments !== undefined &&
+			collectionFollowsLocale(segments)
+		) {
+			throw new Error(`collection slug "${slug}" equals the locale prefix "${slug}"`)
+		}
+	}
 }
 
 function indexCollections(collections: RushCollections): CollectionIndex {
@@ -118,20 +185,17 @@ function indexCollections(collections: RushCollections): CollectionIndex {
 	return { slugsById, idByKey }
 }
 
-function placeholdersOf(segments: string[]): string[] {
-	const names = segments
-		.flatMap((segment) => [...segment.matchAll(PLACEHOLDER)])
-		.map((match) => match[1] ?? '')
-	return [...new Set(names)]
-}
-
 export function createUrls(config: UrlConfig): RushUrls {
 	assertPlainPrefixes(config.localePaths)
 	assertSingleEmptyPrefix(config.localePaths)
 	const routeSegments = parseRoutes(config.routes ?? {})
-	const { slugsById, idByKey } = indexCollections(config.collections ?? {})
+	const index = indexCollections(config.collections ?? {})
+	if (config.collections !== undefined) {
+		assertKnownKeys(routeSegments, index)
+		assertSlugsAreNotPrefixes(config.localePaths, routeSegments, index)
+	}
+	const { slugsById, idByKey } = index
 	const localeOrder = Object.keys(config.localePaths)
-	const defaultSegments = segmentsOf(DEFAULT_PATTERN)
 
 	function prefixOf(locale: LocaleCode): string {
 		if (!Object.hasOwn(config.localePaths, locale)) {
@@ -140,13 +204,20 @@ export function createUrls(config: UrlConfig): RushUrls {
 		return config.localePaths[locale] ?? ''
 	}
 
-	function keysOf(id: string, slugs: string[]): string[] {
-		return [...new Set([id, ...slugs, ...(slugsById.get(id)?.values() ?? [])])]
+	function segmentsFor(ref: CollectionRef, keys: string[]): string[] {
+		const segments = routeOf(routeSegments, keys)
+		if (segments === undefined) {
+			throw new Error(`collection "${ref.slug}" has no route`)
+		}
+		return segments
 	}
 
-	function segmentsFor(keys: string[]): string[] {
-		const key = keys.find((candidate) => routeSegments.has(candidate))
-		return (key === undefined ? undefined : routeSegments.get(key)) ?? defaultSegments
+	function refKeys(ref: CollectionRef): string[] {
+		return keysOf(index, ref.id, [ref.slug])
+	}
+
+	function routed(ref: CollectionRef): boolean {
+		return routeOf(routeSegments, refKeys(ref)) !== undefined
 	}
 
 	function localeParam(locale: LocaleCode): string | undefined {
@@ -166,14 +237,14 @@ export function createUrls(config: UrlConfig): RushUrls {
 	}
 
 	function collectionKeys(entry: Entry): string[] {
-		return keysOf(entry.collection.id, [
+		return keysOf(index, entry.collection.id, [
 			entry.collection.slug,
 			...Object.values(entry.translations).map((item) => item.collection_slug)
 		])
 	}
 
 	function entryPath(entry: Entry, parts: UrlParts): string {
-		return build(segmentsFor(collectionKeys(entry)), parts)
+		return build(segmentsFor(entry.collection, collectionKeys(entry)), parts)
 	}
 
 	function translation(entry: Entry, locale: LocaleCode): string {
@@ -199,7 +270,11 @@ export function createUrls(config: UrlConfig): RushUrls {
 	}
 
 	function refSegments(ref: CollectionRef): string[] {
-		return segmentsFor(keysOf(ref.id, [ref.slug]))
+		return segmentsFor(ref, refKeys(ref))
+	}
+
+	function routedPath(ref: CollectionRef, path: () => string): string | undefined {
+		return routed(ref) ? path() : undefined
 	}
 
 	function pathIn(ref: CollectionRef, locale: LocaleCode, slug: string): string {
@@ -230,6 +305,7 @@ export function createUrls(config: UrlConfig): RushUrls {
 		collectionKeys,
 		collectionRef,
 		entryParams,
+		routed,
 		hasCollectionSegment: (ref) => placeholdersOf(refSegments(ref)).includes('collection'),
 		locales: localeOrder,
 		localeOf: (param) =>
@@ -244,15 +320,17 @@ export function createUrls(config: UrlConfig): RushUrls {
 				params.locale,
 				params.slug
 			),
-		homepage: (locale) => build(['{locale}'], { locale, collection: '', slug: '' }),
+		homepage: (locale) => build([LOCALE_SEGMENT], { locale, collection: '', slug: '' }),
 		navigationItem: (item, locale) => {
 			const summary = item.target?.entry
 			if (summary !== undefined) {
-				return pathIn(summary.collection, summary.locale, summary.slug)
+				return routedPath(summary.collection, () =>
+					pathIn(summary.collection, summary.locale, summary.slug)
+				)
 			}
 			const ref = item.target?.collection
 			if (ref !== undefined) {
-				return collection(ref, locale)
+				return routedPath(ref, () => collection(ref, locale))
 			}
 			return item.target?.url
 		}
