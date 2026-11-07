@@ -1,5 +1,7 @@
 import type { MovedParams } from './errors'
 import { toBcp47 } from './locales'
+import { createMatcher, segmentsOf } from './url-match'
+import type { UrlMatch, UrlMatcher } from './url-match'
 import type {
 	Entry,
 	Homepage,
@@ -13,10 +15,13 @@ const ROUTE_ANY = '*'
 
 export type RushCollections = Record<LocaleCode, CollectionRef[]>
 
+export type RushPageSegments = Record<LocaleCode, string>
+
 export type UrlConfig = {
 	routes?: RushRoutes
 	localePaths: RushLocalePaths
 	collections?: RushCollections
+	pageSegments?: RushPageSegments
 }
 
 export type RushUrls = {
@@ -27,7 +32,7 @@ export type RushUrls = {
 	routed(collection: CollectionRef): boolean
 	hasCollectionSegment(collection: CollectionRef): boolean
 	collectionKeys(entry: Entry): string[]
-	collection(collection: CollectionRef, locale: LocaleCode): string
+	collection(collection: CollectionRef, locale: LocaleCode, page?: number): string
 	entry(entry: Entry): string
 	servedPath(entry: Entry, requestedLocale: LocaleCode): string
 	translation(entry: Entry, locale: LocaleCode): string
@@ -35,6 +40,7 @@ export type RushUrls = {
 	entryParams(collection: CollectionRef, locale: LocaleCode, slug: string): RouteParams
 	homepage(locale: LocaleCode): string
 	navigationItem(item: NavigationItem, locale: LocaleCode): string | undefined
+	match(pathname: string): UrlMatch | undefined
 }
 
 export type Alternate = {
@@ -64,10 +70,7 @@ const SLUG_SEGMENT = '{slug}'
 const LOCALE_SEGMENT = '{locale}'
 const COLLECTION_SEGMENT = '{collection}'
 const PLACEHOLDER = /\{(locale|collection|slug)\}/g
-
-function segmentsOf(pattern: string): string[] {
-	return pattern.split('/').filter((segment) => segment !== '')
-}
+const DEFAULT_PAGE_SEGMENT = 'page'
 
 function assertSlugLast(key: string, segments: string[]): void {
 	const index = segments.findIndex((segment) => segment.includes(SLUG_SEGMENT))
@@ -78,11 +81,25 @@ function assertSlugLast(key: string, segments: string[]): void {
 	}
 }
 
-function assertPlainPrefixes(localePaths: RushLocalePaths): void {
-	for (const [locale, prefix] of Object.entries(localePaths)) {
-		if (prefix.includes('/')) {
-			throw new Error(`localePaths prefix for "${locale}" must not contain "/"`)
+function assertPlainSegments(values: Record<LocaleCode, string>, label: string): void {
+	for (const [locale, value] of Object.entries(values)) {
+		if (value.includes('/')) {
+			throw new Error(`${label} for "${locale}" must not contain "/"`)
 		}
+	}
+}
+
+function assertPageSegments(pageSegments: RushPageSegments): void {
+	assertPlainSegments(pageSegments, 'pageSegments segment')
+	const empty = Object.keys(pageSegments).find((locale) => pageSegments[locale] === '')
+	if (empty !== undefined) {
+		throw new Error(`pageSegments segment for "${empty}" must not be empty`)
+	}
+}
+
+function assertPage(page: number): void {
+	if (!Number.isSafeInteger(page) || page < 1) {
+		throw new Error(`page must be a positive integer, got ${page}`)
 	}
 }
 
@@ -123,8 +140,14 @@ function parseRoutes(routes: RushRoutes): RouteTable {
 	return parsed
 }
 
+function routeKeyOf(routes: RouteTable, keys: string[]): string | undefined {
+	const key = keys.find((candidate) => routes.has(candidate)) ?? ROUTE_ANY
+	return routes.has(key) ? key : undefined
+}
+
 function routeOf(routes: RouteTable, keys: string[]): string[] | undefined {
-	return routes.get(keys.find((candidate) => routes.has(candidate)) ?? ROUTE_ANY)
+	const key = routeKeyOf(routes, keys)
+	return key === undefined ? undefined : routes.get(key)
 }
 
 function keysOf(index: CollectionIndex, id: string, slugs: string[]): string[] {
@@ -186,8 +209,10 @@ function indexCollections(collections: RushCollections): CollectionIndex {
 }
 
 export function createUrls(config: UrlConfig): RushUrls {
-	assertPlainPrefixes(config.localePaths)
+	assertPlainSegments(config.localePaths, 'localePaths prefix')
 	assertSingleEmptyPrefix(config.localePaths)
+	const pageSegments = config.pageSegments ?? {}
+	assertPageSegments(pageSegments)
 	const routeSegments = parseRoutes(config.routes ?? {})
 	const index = indexCollections(config.collections ?? {})
 	if (config.collections !== undefined) {
@@ -281,10 +306,21 @@ export function createUrls(config: UrlConfig): RushUrls {
 		return build(refSegments(ref), { locale, collection: ref.slug, slug })
 	}
 
-	function collection(ref: CollectionRef, locale: LocaleCode): string {
+	function hasEntries(ref: CollectionRef): boolean {
+		return refSegments(ref).at(-1) === SLUG_SEGMENT
+	}
+
+	function pageSegmentOf(locale: LocaleCode): string {
+		const segment = Object.hasOwn(pageSegments, locale) ? pageSegments[locale] : undefined
+		return segment ?? DEFAULT_PAGE_SEGMENT
+	}
+
+	function collection(ref: CollectionRef, locale: LocaleCode, page = 1): string {
+		assertPage(page)
 		const segments = refSegments(ref)
-		const index = segments.at(-1) === SLUG_SEGMENT ? segments.slice(0, -1) : segments
-		return build(index, { locale, collection: ref.slug, slug: '' })
+		const index = hasEntries(ref) ? segments.slice(0, -1) : segments
+		const paged = page === 1 ? index : [...index, pageSegmentOf(locale), String(page)]
+		return build(paged, { locale, collection: ref.slug, slug: '' })
 	}
 
 	function collectionRef(key: string, locale: LocaleCode): CollectionRef | undefined {
@@ -299,6 +335,22 @@ export function createUrls(config: UrlConfig): RushUrls {
 			placeholdersOf(refSegments(ref)).map((name) => [name, values[name]])
 		)
 	}
+
+	function homepage(locale: LocaleCode): string {
+		return build([LOCALE_SEGMENT], { locale, collection: '', slug: '' })
+	}
+
+	const matcher: UrlMatcher | undefined =
+		config.collections === undefined
+			? undefined
+			: createMatcher({
+					locales: localeOrder,
+					collections: config.collections,
+					homepage,
+					collection,
+					hasEntries,
+					routeKey: (ref) => routeKeyOf(routeSegments, refKeys(ref))
+				})
 
 	return {
 		collection,
@@ -320,7 +372,13 @@ export function createUrls(config: UrlConfig): RushUrls {
 				params.locale,
 				params.slug
 			),
-		homepage: (locale) => build([LOCALE_SEGMENT], { locale, collection: '', slug: '' }),
+		homepage,
+		match: (pathname) => {
+			if (matcher === undefined) {
+				throw new Error('match needs collections')
+			}
+			return matcher(pathname)
+		},
 		navigationItem: (item, locale) => {
 			const summary = item.target?.entry
 			if (summary !== undefined) {

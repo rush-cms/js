@@ -9,9 +9,11 @@ export type {
 	CollectionRef,
 	RouteParams,
 	RushCollections,
+	RushPageSegments,
 	RushUrls,
 	UrlConfig
 } from './urls'
+export type { CollectionMatch, EntryMatch, HomepageMatch, UrlMatch } from './url-match'
 export { RushError, isRushError } from './errors'
 export { navigationLinks } from './navigation-links'
 export type { NavigationLink, NavigationLinkAttributes } from './navigation-links'

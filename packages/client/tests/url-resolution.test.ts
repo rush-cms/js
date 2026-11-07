@@ -14,6 +14,18 @@ import { navigationItem } from './fixtures/navigation'
 import { COLLECTION_SLUGS, ENTRY_SLUGS } from './fixtures/slugs'
 import { nonEmptySubsets } from './fixtures/subsets'
 import type { EntrySummary } from './fixtures/navigation'
+import {
+	LOCALES,
+	PREFIXES,
+	ROUTE_ANY,
+	collectionSlugs,
+	collisions,
+	nonEmptySubsets,
+	routeKeyFor,
+	substitute,
+	templatesOf,
+	thrownBy
+} from './fixtures/url-oracle'
 
 type RouteKeying = {
 	label: string
@@ -53,18 +65,6 @@ type ValidationCase = {
 	config: UrlConfig
 	errors: string[]
 }
-
-type Placeholders = {
-	locale: string
-	collection: string
-	slug: string
-}
-
-const LOCALES: LocaleCode[] = ['pt_BR', 'en', 'es']
-
-const PREFIXES: Record<LocaleCode, string> = { pt_BR: 'pt', en: 'en', es: 'es' }
-
-const ROUTE_ANY = '*'
 
 const PATTERNS = [
 	'/{locale}/{collection}/{slug}',
@@ -207,17 +207,6 @@ function movedTo(entry: Entry, requested: LocaleCode): MovedParams {
 	}
 }
 
-function substitute(pattern: string, values: Placeholders): string {
-	const path = pattern
-		.replaceAll('{locale}', values.locale)
-		.replaceAll('{collection}', values.collection)
-		.replaceAll('{slug}', values.slug)
-	return `/${path
-		.split('/')
-		.filter((segment) => segment !== '')
-		.join('/')}`
-}
-
 function expectedIn({ config, pattern }: RoutedCase, locale: LocaleCode, slug: string): string {
 	return substitute(pattern, {
 		locale: config.localePaths[locale] ?? '',
@@ -302,16 +291,6 @@ function assertResolution(resolution: ResolutionCase): void {
 	}
 }
 
-function collectionSlugs(collections: RushCollections): Map<string, Map<LocaleCode, string>> {
-	const slugs = new Map<string, Map<LocaleCode, string>>()
-	for (const [locale, list] of Object.entries(collections)) {
-		for (const { id, slug } of list) {
-			slugs.set(id, new Map([...(slugs.get(id) ?? []), [locale, slug]]))
-		}
-	}
-	return slugs
-}
-
 function patternErrors(key: string, pattern: string): string[] {
 	const locale = pattern.includes('{locale}') ? [] : [`route "${key}" must contain {locale}`]
 	const collection =
@@ -336,8 +315,8 @@ function clashErrors(config: UrlConfig, collections: RushCollections): string[] 
 	const bare = Object.keys(config.localePaths).find((locale) => config.localePaths[locale] === '')
 	return [...collectionSlugs(collections)].flatMap(([id, slugs]) => {
 		const slug = bare === undefined ? undefined : slugs.get(bare)
-		const key = [id, ...slugs.values()].find((candidate) => Object.hasOwn(routes, candidate))
-		const pattern = routes[key ?? ROUTE_ANY] ?? ''
+		const key = routeKeyFor(routes, id, [...slugs.values()])
+		const pattern = routes[key ?? ''] ?? ''
 		const ambiguous =
 			slug !== undefined &&
 			slug !== '' &&
@@ -354,7 +333,11 @@ function configErrors(config: UrlConfig): string[] {
 		...Object.entries(routes).flatMap(([key, pattern]) => patternErrors(key, pattern)),
 		...(collections === undefined
 			? []
-			: [...keyErrors(routes, collections), ...clashErrors(config, collections)])
+			: [
+					...keyErrors(routes, collections),
+					...clashErrors(config, collections),
+					...collisions(templatesOf(config))
+				])
 	]
 }
 
@@ -378,15 +361,6 @@ function validationCases(): ValidationCase[] {
 			)
 		)
 	)
-}
-
-function thrownBy(config: UrlConfig): string | undefined {
-	try {
-		createUrls(config)
-		return undefined
-	} catch (err) {
-		return err instanceof Error ? err.message : String(err)
-	}
 }
 
 describe('locale params', () => {
@@ -443,6 +417,7 @@ describe('route configuration over every key, pattern, locale paths and collecti
 			'route "" matches no collection',
 			'route "" must contain {collection}',
 			'route "" must contain {locale}',
+			'routes "" and "" produce the same URLs',
 			'valid'
 		])
 	})
