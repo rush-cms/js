@@ -22,10 +22,19 @@
   reached through a route key (`/en/servicos/web-development`) redirects to `urls.servedPath(entry, locale)`, and
   answers `404` only when that is the requested path. Locale segments map back through `localeOf`; the integration
   middleware answers `404` for a `locale` param that is no prefix, so pages read their locale with `pageLocale`.
-- The services collection has a fixed route, `routes: { servicos: '/{locale}/solutions/{slug}' }`, keyed by its
-  `pt_BR` slug: `src/pages/[locale]/solutions/` serves it in every locale (`resolveEntry(Astro, { collection:
+- `routes` is explicit: `'*': '/{locale}/{collection}/{slug}'` serves every collection without its own route, and the
+  services collection has a fixed route, `servicos: '/{locale}/solutions/{slug}'`, keyed by its `pt_BR` slug: `src/pages/[locale]/solutions/` serves it in every locale (`resolveEntry(Astro, { collection:
 'servicos' })` maps the key to `services`/`servicios`), the catch-all maps the `solutions` segment to the key, and
   the `[collection]` pages skip collections whose pattern has no `{collection}`.
+- A route key that matches no collection fails the build, so the captcha site (which has no services collection)
+  builds with `RUSH_CAPTCHA_SITE=true` (set by `build:captcha`), which drops the fixed route in `src/site-config.ts`.
+- The pages are file-per-shape (`[locale]/index`, `[locale]/[collection]/…`, `[locale]/solutions/…`) because every
+  locale has a prefix, the setup `@rushcms/astro` supports besides the dispatcher route. Its preview build still
+  prints `getStaticPaths() ignored in dynamic page` for those files: expected here, the dispatcher route of the
+  template site is what builds without it.
+- Content that may not exist (navigation, homepage, collections) is read through `optional` from `@rushcms/client`;
+  the main navigation comes from `getNavigation(Astro, 'main')` and renders each `NavigationLink` with its `href`,
+  `target`, `rel`, `className` and `attributes`. Type guards come from `@rushcms/client/internal`.
 - `trustedProxies` is required, so `astro.config.ts` sets it per build: `1` for the site and captcha builds, because
   the walker reaches the forms route of the site through its proxy, and `0` for the preview build, which is only
   reached directly. `src/site-config.ts` holds only the URL options (`UrlConfig`) shared with the pages.
@@ -49,6 +58,9 @@ In a `rush-cms` checkout (a worktree keeps its own `backend/.env`):
    that file (`API_LOG`) to count entry requests.
 4. Admin, for the preview check: `cd frontend && bun install && VITE_API_URL=http://localhost:8091 bun run dev`
    (`:5174`).
+
+The admin API requires the `rush_refresh` and `rush_csrf` cookies (and the `X-CSRF-Token` header) on
+`/auth/switch-site`, so the walker keeps the cookies of its login and sends them on every admin call.
 
 The seeded preview URL templates point at `http://localhost:4322/_rush/preview`.
 

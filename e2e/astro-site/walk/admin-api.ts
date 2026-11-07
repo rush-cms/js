@@ -1,4 +1,4 @@
-import { isRecord } from '@rushcms/client'
+import { isRecord } from '@rushcms/client/internal'
 
 export type Submission = {
 	id: string
@@ -36,10 +36,17 @@ type Envelope = {
 	data: unknown
 }
 
+type CookieJar = Map<string, string>
+
 type Session = {
 	token: string
 	siteId: string | undefined
+	cookies: CookieJar
 }
+
+const CSRF_COOKIE = 'rush_csrf'
+
+const CSRF_HEADER = 'X-CSRF-Token'
 
 function isEnvelope(value: unknown): value is Envelope {
 	return isRecord(value) && 'data' in value
@@ -58,6 +65,20 @@ async function bodyOf(response: Response): Promise<unknown> {
 	}
 }
 
+function rememberCookies(jar: CookieJar, response: Response): void {
+	for (const line of response.headers.getSetCookie()) {
+		const [pair = '', ...attributes] = line.split(';').map((part) => part.trim())
+		const separator = pair.indexOf('=')
+		if (separator > 0 && !attributes.includes('Max-Age=0')) {
+			jar.set(pair.slice(0, separator), pair.slice(separator + 1))
+		}
+	}
+}
+
+function cookieHeader(jar: CookieJar): string {
+	return [...jar].map(([name, value]) => `${name}=${value}`).join('; ')
+}
+
 async function call(
 	apiUrl: string,
 	session: Session,
@@ -68,9 +89,12 @@ async function call(
 		...init,
 		headers: {
 			'Content-Type': 'application/json',
-			Authorization: `Bearer ${session.token}`
+			Authorization: `Bearer ${session.token}`,
+			Cookie: cookieHeader(session.cookies),
+			[CSRF_HEADER]: session.cookies.get(CSRF_COOKIE) ?? ''
 		}
 	})
+	rememberCookies(session.cookies, response)
 	const body = await bodyOf(response)
 	if (!response.ok) {
 		throw new Error(
@@ -112,7 +136,8 @@ export async function adminLogin(
 	if (!response.ok) {
 		throw new Error(`POST /auth/login: ${response.status} ${JSON.stringify(body)}`)
 	}
-	const session: Session = { token: tokenOf(body), siteId: undefined }
+	const session: Session = { token: tokenOf(body), siteId: undefined, cookies: new Map() }
+	rememberCookies(session.cookies, response)
 
 	async function useSite(siteId: string): Promise<void> {
 		if (session.siteId === siteId) {

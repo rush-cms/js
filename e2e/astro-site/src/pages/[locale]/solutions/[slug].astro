@@ -1,14 +1,14 @@
 ---
 import { entryPaths, resolveEntry } from '@rushcms/astro'
 import type { EntryRouteProps } from '@rushcms/astro'
+import { optional } from '@rushcms/client'
 import EntryPage from '../../../components/entry-page.astro'
 import { redirectOrNotFound } from '../../../entry-response'
-import { unlessNotFound } from '../../../optional'
 import { SOLUTIONS_KEY } from '../../../site-config'
 
 type Props = EntryRouteProps
 
-export const getStaticPaths = async () => (await unlessNotFound(entryPaths(SOLUTIONS_KEY))) ?? []
+export const getStaticPaths = async () => (await optional(entryPaths(SOLUTIONS_KEY))) ?? []
 
 const resolved = await resolveEntry(Astro, { collection: SOLUTIONS_KEY })
 if (resolved.kind !== 'found') {

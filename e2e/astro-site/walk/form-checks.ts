@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { randomInt } from 'node:crypto'
-import { isRecord } from '@rushcms/client'
+import { isRecord } from '@rushcms/client/internal'
 import type { AdminApi, Submission } from './admin-api.ts'
 import type { Walker } from './browser.ts'
 import { hopsOf } from './browser.ts'

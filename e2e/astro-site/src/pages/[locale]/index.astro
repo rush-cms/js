@@ -1,15 +1,15 @@
 ---
 import { getRush, getUrls } from '@rushcms/astro'
 import Seo from '@rushcms/astro/components/seo.astro'
+import { optional } from '@rushcms/client'
 import Base from '../../layouts/base.astro'
-import { unlessNotFound } from '../../optional'
 import { contactPath, localeParams, pageLocale, switcherFor, tagPath } from '../../urls'
 
 export const getStaticPaths = localeParams
 
 const locale = pageLocale(Astro.params)
 const rush = getRush(Astro)
-const homepage = await unlessNotFound(rush.homepage.get())
+const homepage = await optional(rush.homepage.get())
 const collections = await rush.collections.list()
 const tags = await rush.tags.list()
 ---

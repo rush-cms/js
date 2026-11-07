@@ -1,11 +1,10 @@
 ---
-import { getRush } from '@rushcms/astro'
+import { getNavigation } from '@rushcms/astro'
 import PreviewBanner from '@rushcms/astro/components/preview-banner.astro'
-import { toBcp47 } from '@rushcms/client'
+import { optional, toBcp47 } from '@rushcms/client'
 import type { LocaleCode } from '@rushcms/client'
 import LanguageSwitcher from '../components/language-switcher.astro'
 import NavItems from '../components/nav-items.astro'
-import { unlessNotFound } from '../optional'
 import type { SwitcherLink } from '../urls'
 
 type Props = {
@@ -14,7 +13,8 @@ type Props = {
 }
 
 const { locale, switcher } = Astro.props
-const navigation = await unlessNotFound(getRush(Astro).navigations.get('main'))
+const navigationKey = 'main'
+const navigation = await optional(getNavigation(Astro, navigationKey))
 ---
 
 <html lang={toBcp47(locale)}>
@@ -28,8 +28,8 @@ const navigation = await unlessNotFound(getRush(Astro).navigations.get('main'))
 		<header>
 			{
 				navigation && (
-					<nav aria-label="main" data-nav={navigation.key}>
-						<NavItems items={navigation.items} locale={locale} />
+					<nav aria-label="main" data-nav={navigationKey}>
+						<NavItems links={navigation} />
 					</nav>
 				)
 			}

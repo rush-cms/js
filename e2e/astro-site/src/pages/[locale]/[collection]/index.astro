@@ -1,9 +1,9 @@
 ---
 import { getRush } from '@rushcms/astro'
+import { optional } from '@rushcms/client'
 import type { Collection } from '@rushcms/client'
 import { buildClient } from '../../../build-client'
 import CollectionPage from '../../../components/collection-page.astro'
-import { unlessNotFound } from '../../../optional'
 import { buildUrls, localizedPaths } from '../../../static-paths'
 import { pageLocale } from '../../../urls'
 
@@ -25,7 +25,7 @@ export async function getStaticPaths() {
 const locale = pageLocale(Astro.params)
 const collection =
 	Astro.props.collection ??
-	(await unlessNotFound(getRush(Astro).collections.get(Astro.params.collection ?? '')))
+	(await optional(getRush(Astro).collections.get(Astro.params.collection ?? '')))
 if (collection === undefined) {
 	return new Response(null, { status: 404 })
 }

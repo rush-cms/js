@@ -1,20 +1,20 @@
 ---
 import { getRush, getUrls } from '@rushcms/astro'
+import { optional } from '@rushcms/client'
 import { buildClient } from '../../../build-client'
 import CollectionPage from '../../../components/collection-page.astro'
-import { unlessNotFound } from '../../../optional'
 import { SOLUTIONS_KEY } from '../../../site-config'
 import { localeParams, pageLocale } from '../../../urls'
 
 export const getStaticPaths = async () =>
-	(await unlessNotFound(buildClient.collections.get(SOLUTIONS_KEY))) === undefined
+	(await optional(buildClient.collections.get(SOLUTIONS_KEY))) === undefined
 		? []
 		: localeParams()
 
 const locale = pageLocale(Astro.params)
 const slug = getUrls(Astro).collectionRef(SOLUTIONS_KEY, locale)?.slug
 const collection =
-	slug === undefined ? undefined : await unlessNotFound(getRush(Astro).collections.get(slug))
+	slug === undefined ? undefined : await optional(getRush(Astro).collections.get(slug))
 if (collection === undefined) {
 	return new Response(null, { status: 404 })
 }

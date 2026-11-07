@@ -7,7 +7,7 @@
 		"check": "node --env-file=.env.site node_modules/astro/bin/astro.mjs check && node node_modules/typescript7/bin/tsc -p tsconfig.json && ../../node_modules/.bin/oxlint --type-aware && node scripts/check-dts.ts",
 		"build": "node --env-file=.env.site node_modules/astro/bin/astro.mjs build",
 		"build:preview": "RUSH_PREVIEW=true node --env-file=.env.site node_modules/astro/bin/astro.mjs build --outDir dist-preview",
-		"build:captcha": "node --env-file=.env.captcha node_modules/astro/bin/astro.mjs build --outDir dist-captcha",
+		"build:captcha": "RUSH_CAPTCHA_SITE=true node --env-file=.env.captcha node_modules/astro/bin/astro.mjs build --outDir dist-captcha",
 		"start": "node --env-file=.env.site scripts/serve.ts site",
 		"start:preview": "node --env-file=.env.site scripts/serve.ts preview",
 		"start:captcha": "node --env-file=.env.captcha scripts/serve.ts captcha",
