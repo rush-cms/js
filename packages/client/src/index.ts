@@ -13,7 +13,9 @@ export type {
 	UrlConfig
 } from './urls'
 export { RushError, isRushError } from './errors'
-export { isRecord } from './json'
+export { navigationLinks } from './navigation-links'
+export type { NavigationLink, NavigationLinkAttributes } from './navigation-links'
+export { optional } from './optional'
 export type {
 	ClientErrorCode,
 	ContractErrorCode,

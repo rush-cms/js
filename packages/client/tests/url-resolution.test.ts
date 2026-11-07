@@ -12,6 +12,7 @@ import type {
 import { entryExample } from './fixtures/contract'
 import { navigationItem } from './fixtures/navigation'
 import { COLLECTION_SLUGS, ENTRY_SLUGS } from './fixtures/slugs'
+import { nonEmptySubsets } from './fixtures/subsets'
 import type { EntrySummary } from './fixtures/navigation'
 
 type RouteKeying = {
@@ -121,12 +122,6 @@ function localePathsVariants(): RushLocalePaths[] {
 				order.map((locale) => [locale, locale === empty ? '' : (PREFIXES[locale] ?? '')])
 			)
 		)
-	)
-}
-
-function nonEmptySubsets(items: LocaleCode[]): LocaleCode[][] {
-	return Array.from({ length: 2 ** items.length - 1 }, (_, mask) =>
-		items.filter((_, index) => ((mask + 1) >> index) & 1)
 	)
 }
 
