@@ -14,10 +14,10 @@
 		"walk": "node --env-file=.env.walk walk/run.ts"
 	},
 	"dependencies": {
-		"@astrojs/node": "11.1.10",
+		"@astrojs/node": "11.1.11",
 		"@rushcms/astro": "file:.packs/rushcms-astro.tgz",
 		"@rushcms/client": "file:.packs/rushcms-client.tgz",
-		"astro": "7.4.6"
+		"astro": "7.4.7"
 	},
 	"overrides": {
 		"@rushcms/client": "file:.packs/rushcms-client.tgz"
