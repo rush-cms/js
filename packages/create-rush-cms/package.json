@@ -4,11 +4,15 @@
 	"description": "Create a website powered by Rush CMS. Not released yet.",
 	"type": "module",
 	"bin": {
-		"create-rush-cms": "index.js"
+		"create-rush-cms": "dist/cli.js"
 	},
 	"files": [
-		"index.js"
+		"dist",
+		"template"
 	],
+	"engines": {
+		"node": ">=24"
+	},
 	"repository": {
 		"type": "git",
 		"url": "git+https://github.com/rush-cms/js.git",
@@ -22,5 +26,10 @@
 		"starter"
 	],
 	"author": "Rafhael Marsigli <oi@rafhael.com.br>",
-	"license": "MIT"
+	"license": "MIT",
+	"scripts": {
+		"build": "tsdown",
+		"typecheck": "tsc -p tsconfig.json",
+		"test": "vitest run"
+	}
 }

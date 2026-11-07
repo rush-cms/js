@@ -43,7 +43,7 @@
       "name": "create-rush-cms",
       "version": "0.0.2",
       "bin": {
-        "create-rush-cms": "index.js",
+        "create-rush-cms": "dist/cli.js",
       },
     },
     "scripts": {
