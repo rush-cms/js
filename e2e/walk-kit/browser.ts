@@ -6,6 +6,8 @@ import puppeteer from 'puppeteer-core'
 import type { Browser, HTTPResponse, Page } from 'puppeteer-core'
 import { PROXY_HOST } from './env.ts'
 
+export type { Browser, Cookie, HTTPResponse, Page } from 'puppeteer-core'
+
 export type Walker = {
 	browser: Browser
 	visitorIp: string | undefined
@@ -93,4 +95,21 @@ export async function openOk(page: Page, url: string): Promise<HTTPResponse> {
 	assert.ok(response, `no response for ${url}`)
 	assert.equal(response.status(), 200, `GET ${url}`)
 	return response
+}
+
+export function redirectsOnce(
+	walker: Walker,
+	base: string,
+	redirects: Redirect[],
+	status: number,
+	shot: string
+): Promise<string> {
+	return walker.withPage(async (page) => {
+		const seen: string[] = []
+		for (const redirect of redirects) {
+			seen.push(await redirectedOnce(page, base, redirect, status))
+		}
+		const file = await walker.shot(page, shot)
+		return `${seen.join('; ')} [${file}]`
+	})
 }

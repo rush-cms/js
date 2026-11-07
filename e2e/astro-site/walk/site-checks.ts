@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
-import type { Page } from 'puppeteer-core'
-import type { Redirect, Walker } from './browser.ts'
-import { openOk, redirectedOnce } from './browser.ts'
+import type { Page, Redirect, Walker } from '../../walk-kit/browser.ts'
+import { openOk, redirectsOnce } from '../../walk-kit/browser.ts'
+import { alternateLinks, attribute } from '../../walk-kit/dom.ts'
 import { SITE_URL } from './env.ts'
 
 const REDIRECTS: Redirect[] = [
@@ -11,16 +11,6 @@ const REDIRECTS: Redirect[] = [
 	{ from: '/pt/blog/ola-mundo', to: '/pt/artigos/ola-mundo' },
 	{ from: '/es/blog/hello-world', to: '/es/articulos/hola-mundo' }
 ]
-
-async function alternateLinks(page: Page): Promise<string[]> {
-	return page.$$eval('link[rel="alternate"][hreflang]', (links) =>
-		links.map((link) => `${link.getAttribute('hreflang')} ${link.getAttribute('href')}`)
-	)
-}
-
-async function attribute(page: Page, selector: string, name: string): Promise<string | null> {
-	return page.$eval(selector, (element, key) => element.getAttribute(key), name)
-}
 
 async function entrySlugs(page: Page): Promise<(string | null)[]> {
 	return page.$$eval('[data-entries] li', (items) =>
@@ -72,14 +62,7 @@ export function fallbackCanonical(walker: Walker): Promise<string> {
 }
 
 export function movedRedirects(walker: Walker): Promise<string> {
-	return walker.withPage(async (page) => {
-		const seen: string[] = []
-		for (const redirect of REDIRECTS) {
-			seen.push(await redirectedOnce(page, SITE_URL, redirect, 301))
-		}
-		const shot = await walker.shot(page, '04-moved-landing')
-		return `${seen.join('; ')} [${shot}]`
-	})
+	return redirectsOnce(walker, SITE_URL, REDIRECTS, 301, '04-moved-landing')
 }
 
 async function entryLinks(page: Page): Promise<(string | null)[]> {

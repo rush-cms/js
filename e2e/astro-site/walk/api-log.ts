@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { readFileSync, watch } from 'node:fs'
 import type { WalkEnv } from './env.ts'
-import { Blocked } from './results.ts'
+import { Blocked } from '../../walk-kit/results.ts'
 
 export type LoggedRequest = {
 	path: string

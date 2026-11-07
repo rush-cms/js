@@ -1,0 +1,16 @@
+{
+	"name": "rush-cms-e2e-walk-kit",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"check": "node node_modules/typescript7/bin/tsc -p tsconfig.json && ../../node_modules/.bin/oxlint --type-aware"
+	},
+	"dependencies": {
+		"@rushcms/client": "file:../../packages/client",
+		"puppeteer-core": "25.16.0"
+	},
+	"devDependencies": {
+		"@types/node": "26.6.6",
+		"typescript7": "npm:typescript@7.0.2"
+	}
+}

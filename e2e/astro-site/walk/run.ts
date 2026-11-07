@@ -1,9 +1,8 @@
-import { writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import type { AdminApi } from './admin-api.ts'
-import { adminLogin } from './admin-api.ts'
-import type { Walker } from './browser.ts'
-import { launchWalker } from './browser.ts'
+import type { AdminApi } from '../../walk-kit/admin-api.ts'
+import { adminLogin } from '../../walk-kit/admin-api.ts'
+import type { Walker } from '../../walk-kit/browser.ts'
+import { launchWalker } from '../../walk-kit/browser.ts'
 import { turnstileFails, turnstilePasses, useAlwaysPassSecret } from './captcha-checks.ts'
 import {
 	featuredImage,
@@ -22,8 +21,8 @@ import {
 	visitorRateLimit
 } from './form-checks.ts'
 import { previewFromAdmin, unknownLocaleOnPreview } from './preview-checks.ts'
-import type { CheckResult } from './results.ts'
-import { runCheck } from './results.ts'
+import type { CheckLog } from '../../walk-kit/results.ts'
+import { allPassed, recordCheck } from '../../walk-kit/results.ts'
 import {
 	fallbackCanonical,
 	languageSwitcher,
@@ -125,18 +124,17 @@ function isGroup(value: string): value is Group {
 }
 
 async function walk(context: WalkContext, groups: Group[]): Promise<boolean> {
-	const resultsPath = join(context.env.shotsDir, `results-${groups.join('-')}.json`)
-	const results: CheckResult[] = []
+	const log: CheckLog = {
+		path: join(context.env.shotsDir, `results-${groups.join('-')}.json`),
+		results: []
+	}
 	for (const group of groups) {
 		await GROUPS[group].prepare?.(context)
 		for (const check of GROUPS[group].checks) {
-			const result = await runCheck(check.name, () => check.run(context))
-			console.log(`${result.status} ${result.name}: ${result.evidence}`)
-			results.push(result)
-			writeFileSync(resultsPath, JSON.stringify(results, null, '\t'))
+			await recordCheck(log, check.name, () => check.run(context))
 		}
 	}
-	return results.every((result) => result.status === 'PASS')
+	return allPassed(log)
 }
 
 const groups = process.argv.slice(2)

@@ -1,55 +1,40 @@
 import assert from 'node:assert/strict'
 import { randomInt } from 'node:crypto'
 import { isRecord } from '@rushcms/client/internal'
-import type { AdminApi, Submission } from './admin-api.ts'
-import type { Walker } from './browser.ts'
-import { hopsOf } from './browser.ts'
-import { VISITOR, fillContact, markerFor, statusOf, submitWithScript } from './contact-form.ts'
-import { PORTS, PREVIEW_URL, PROXY_HOST, PROXY_PORT, SITE_URL } from './env.ts'
+import type { AdminApi } from '../../walk-kit/admin-api.ts'
+import type { Walker } from '../../walk-kit/browser.ts'
+import { VISITOR, markerFor, submitWithScript } from '../../walk-kit/contact-form.ts'
+import { PROXY_PORT } from '../../walk-kit/env.ts'
+import {
+	LOOPBACK,
+	behindProxy,
+	directOrigin,
+	sentWithScript,
+	sentWithoutScript
+} from '../../walk-kit/form-checks.ts'
+import type { ContactForm } from '../../walk-kit/form-checks.ts'
+import { localTarget, startProxy } from '../../walk-kit/proxy.ts'
+import { withRestore } from '../../walk-kit/restore.ts'
+import { PORTS, PREVIEW_URL, SITE_URL } from './env.ts'
 import type { WalkEnv } from './env.ts'
-import { startProxy } from './proxy.ts'
-import type { ProxyTarget } from './proxy.ts'
 import { submitContactDirect } from './public-api.ts'
-import { withRestore } from './restore.ts'
-import { Blocked } from './results.ts'
 
 const VISITOR_LIMIT = 5
 const WINDOW_SECONDS = 60
 
-const CONTACT_PAGE = `${SITE_URL}/pt/contact`
 const PROXIED_CONTACT_PAGE = `http://localhost:${PROXY_PORT}/pt/contact`
-const SITE_TARGET: ProxyTarget = { host: 'localhost', port: PORTS.site }
 
-const LOOPBACK = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1'])
-
-const FORGED_BY_BROWSER = '198.51.100.66'
-
-async function submissionWith(
-	admin: AdminApi,
-	siteId: string,
-	marker: string
-): Promise<Submission> {
-	const found = (await admin.submissions(siteId, 'contact')).find(
-		(submission) => submission.data['message'] === marker
-	)
-	assert.ok(found, `no stored submission with message ${marker}`)
-	return found
+function contactForm(admin: AdminApi, siteId: string): ContactForm {
+	return { admin, siteId, path: '/pt/contact', sentText: 'Mensagem enviada' }
 }
 
 export function formWithScript(walker: Walker, admin: AdminApi, siteId: string): Promise<string> {
-	return walker.withPage(async (page) => {
-		await page.goto(CONTACT_PAGE)
-		const marker = markerFor('js')
-		const outcome = await submitWithScript(page, marker)
-		assert.equal(outcome.status, 201)
-		assert.equal(outcome.state, 'sent')
-		assert.equal(outcome.text, 'Mensagem enviada')
-		assert.equal(new URL(page.url()).pathname, '/pt/contact')
-		const stored = await submissionWith(admin, siteId, marker)
-		assert.ok(LOOPBACK.has(stored.ip_address ?? ''), `ip ${stored.ip_address}`)
-		const shot = await walker.shot(page, '06-form-js-sent')
-		return `fetch POST ${outcome.status}, in-place status "${outcome.text}", stored with ip ${stored.ip_address} [${shot}]`
-	})
+	return sentWithScript(
+		walker,
+		contactForm(admin, siteId),
+		directOrigin(SITE_URL),
+		'06-form-js-sent'
+	)
 }
 
 export function formWithoutScript(
@@ -57,52 +42,22 @@ export function formWithoutScript(
 	admin: AdminApi,
 	siteId: string
 ): Promise<string> {
-	return walker.withPage(async (page) => {
-		await page.setJavaScriptEnabled(false)
-		await page.goto(CONTACT_PAGE)
-		const marker = markerFor('nojs')
-		await fillContact(page, marker)
-		const [response] = await Promise.all([
-			page.waitForNavigation(),
-			page.click('form[data-rush-form] button[type="submit"]')
-		])
-		assert.ok(response, 'no navigation after the plain form post')
-		assert.deepEqual(hopsOf(response), [
-			{ status: 303, path: '/_rush/forms/contact' },
-			{ status: 200, path: '/pt/contact?rush_form=contact&status=sent' }
-		])
-		const status = await statusOf(page)
-		assert.deepEqual(status, { state: 'sent', text: 'Mensagem enviada' })
-		await submissionWith(admin, siteId, marker)
-		const shot = await walker.shot(page, '07-form-nojs-sent')
-		return `plain POST -303-> /pt/contact?rush_form=contact&status=sent, server-rendered "${status.text}", stored [${shot}]`
-	})
+	return sentWithoutScript(
+		walker,
+		contactForm(admin, siteId),
+		directOrigin(SITE_URL),
+		'07-form-nojs-sent'
+	)
 }
 
-export async function visitorIpBehindProxy(
+export function visitorIpBehindProxy(
 	walker: Walker,
 	admin: AdminApi,
 	siteId: string
 ): Promise<string> {
-	if (walker.visitorIp === undefined) {
-		throw new Blocked('no non-loopback IPv4 interface to reach the proxy from')
-	}
-	const proxy = await startProxy(PROXY_PORT, SITE_TARGET)
-	try {
-		return await walker.withPage(async (page) => {
-			await page.setExtraHTTPHeaders({ 'X-Forwarded-For': FORGED_BY_BROWSER })
-			await page.goto(`http://${PROXY_HOST}:${PROXY_PORT}/pt/contact`)
-			const marker = markerFor('proxy')
-			const outcome = await submitWithScript(page, marker)
-			assert.equal(outcome.status, 201)
-			const stored = await submissionWith(admin, siteId, marker)
-			assert.equal(stored.ip_address, walker.visitorIp)
-			const shot = await walker.shot(page, '08-form-behind-proxy')
-			return `via proxy ${PROXY_HOST}:${PROXY_PORT} (browser sends X-Forwarded-For ${FORGED_BY_BROWSER}, the proxy appends the socket address ${walker.visitorIp}, trustedProxies 1, Node sees the proxy on loopback): stored ip_address ${stored.ip_address} [${shot}]`
-		})
-	} finally {
-		await proxy.close()
-	}
+	return behindProxy(walker, PORTS.site, (origin) =>
+		sentWithScript(walker, contactForm(admin, siteId), origin, '08-form-behind-proxy')
+	)
 }
 
 function freshVisitorIp(): string {
@@ -125,7 +80,7 @@ function assertWithinWindow(seconds: number, label: string): void {
 
 export async function visitorRateLimit(walker: Walker, env: WalkEnv): Promise<string> {
 	const ip = freshVisitorIp()
-	const proxy = await startProxy(PROXY_PORT, SITE_TARGET, ip)
+	const proxy = await startProxy(PROXY_PORT, localTarget(PORTS.site), ip)
 	try {
 		return await walker.withPage(async (page) => {
 			const accepted: number[] = []

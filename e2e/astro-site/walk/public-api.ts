@@ -1,6 +1,6 @@
 import { createClient } from '@rushcms/client'
 import type { RushClient } from '@rushcms/client'
-import type { ContactData } from './contact-form.ts'
+import type { ContactData } from '../../walk-kit/contact-form.ts'
 import type { WalkEnv } from './env.ts'
 
 export type DirectOutcome = {

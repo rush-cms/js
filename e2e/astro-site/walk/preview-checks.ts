@@ -1,20 +1,14 @@
 import assert from 'node:assert/strict'
-import type { Cookie, HTTPResponse, Page } from 'puppeteer-core'
-import type { Walker } from './browser.ts'
+import type { HTTPResponse, Page, Walker } from '../../walk-kit/browser.ts'
 import type { WalkEnv } from './env.ts'
 import { ADMIN_URL, PREVIEW_URL, SITE_URL } from './env.ts'
-import { withRestore } from './restore.ts'
+import { PREVIEW_BANNER, assertPreviewLanding, exitPreview } from '../../walk-kit/preview.ts'
+import { withRestore } from '../../walk-kit/restore.ts'
 
 const ENTRY_PATH = '/pt/artigos/ola-mundo'
 const ENTRY_TITLE = 'Olá, mundo'
 const PUBLISHED_EXCERPT = 'Olá, mundo (pt_BR)'
-const PREVIEW_COOKIE = 'rush_preview'
 const EXCERPT_FIELD = '#entry-excerpt'
-
-function redirectCount(): number {
-	const [navigation] = performance.getEntriesByType('navigation')
-	return navigation instanceof PerformanceNavigationTiming ? navigation.redirectCount : -1
-}
 
 async function excerpt(page: Page): Promise<string | null> {
 	return page.$eval('[data-excerpt]', (element) => element.textContent)
@@ -56,12 +50,8 @@ async function openPreviewTab(walker: Walker, admin: Page): Promise<Page> {
 	])
 	const preview = await target.page()
 	assert.ok(preview, 'the preview tab has no page')
-	await preview.waitForSelector('[data-rush-preview]')
+	await preview.waitForSelector(PREVIEW_BANNER)
 	return preview
-}
-
-async function previewCookie(walker: Walker): Promise<Cookie | undefined> {
-	return (await walker.browser.cookies()).find((cookie) => cookie.name === PREVIEW_COOKIE)
 }
 
 const NON_PREFIX_LOCALES = ['pt_BR', 'PT']
@@ -98,12 +88,8 @@ async function previewDraft(walker: Walker, admin: Page, draft: string): Promise
 
 	const preview = await openPreviewTab(walker, admin)
 	try {
-		assert.equal(new URL(preview.url()).pathname, ENTRY_PATH)
-		assert.equal(await preview.evaluate(redirectCount), 1)
-		const reloaded = await preview.reload()
-		assert.equal(reloaded?.headers()['x-robots-tag'], 'noindex')
+		await assertPreviewLanding(walker, preview, ENTRY_PATH)
 		assert.equal(await excerpt(preview), draft)
-		assert.ok((await previewCookie(walker))?.httpOnly, 'rush_preview cookie is HttpOnly')
 		const previewShot = await walker.shot(preview, '13-preview-draft')
 
 		await walker.withPage(async (published) => {
@@ -111,11 +97,8 @@ async function previewDraft(walker: Walker, admin: Page, draft: string): Promise
 			assert.equal(await excerpt(published), PUBLISHED_EXCERPT)
 		})
 
-		await Promise.all([preview.waitForNavigation(), preview.click('[data-rush-preview] a')])
-		assert.equal(new URL(preview.url()).pathname, ENTRY_PATH)
-		assert.equal(await preview.$('[data-rush-preview]'), null)
+		await exitPreview(walker, preview, ENTRY_PATH)
 		assert.equal(await excerpt(preview), PUBLISHED_EXCERPT)
-		assert.equal(await previewCookie(walker), undefined)
 		const exitShot = await walker.shot(preview, '14-preview-exited')
 		return `admin Save (draft excerpt "${draft}") -> Publishing options > Preview opened ${PREVIEW_URL}/_rush/preview?token=… redirected once to ${ENTRY_PATH} with banner, draft excerpt, X-Robots-Tag noindex, HttpOnly rush_preview; ${SITE_URL} still shows "${PUBLISHED_EXCERPT}"; Exit -> published page, no banner, cookie cleared [${editorShot}, ${previewShot}, ${exitShot}]`
 	} finally {

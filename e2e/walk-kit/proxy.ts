@@ -10,6 +10,10 @@ export type ProxyTarget = {
 	port: number
 }
 
+export function localTarget(port: number): ProxyTarget {
+	return { host: 'localhost', port }
+}
+
 function appendedFor(incoming: IncomingMessage): string {
 	return [incoming.headers['x-forwarded-for'], incoming.socket.remoteAddress]
 		.filter((value) => value !== undefined && value !== '')

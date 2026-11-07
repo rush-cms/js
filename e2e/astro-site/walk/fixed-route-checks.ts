@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict'
-import type { Page } from 'puppeteer-core'
-import type { Redirect, Walker } from './browser.ts'
-import { openOk, redirectedOnce } from './browser.ts'
+import type { Page, Redirect, Walker } from '../../walk-kit/browser.ts'
+import { openOk, redirectedOnce } from '../../walk-kit/browser.ts'
 import { PREVIEW_URL, SITE_URL } from './env.ts'
 
 type FixedEntry = {

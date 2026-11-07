@@ -12,11 +12,85 @@ export type CaptchaSettings = {
 	secret_key: string
 }
 
+export type Translated = Record<string, string>
+
+export type SiteSettingsWrite = {
+	default_locale: string
+	locales: string[]
+	homepage_preview_url_template: string
+}
+
+export type SiteWrite = {
+	name: string
+	slug: string
+	settings: SiteSettingsWrite
+}
+
+export type CollectionWrite = {
+	name: Translated
+	slug: Translated
+	preview_url_template: string
+	site_locales: string[]
+}
+
+export type CollectionPatch = {
+	items_per_page: number
+	site_locales: string[]
+}
+
+export type NavigationAttributeWrite = {
+	name: string
+	value: string
+}
+
+export type NavigationItemWrite = {
+	label: Translated
+	type: 'url' | 'entry' | 'collection'
+	url?: string
+	collection_id?: string
+	target?: string
+	nofollow?: boolean
+	noreferrer?: boolean
+	class?: string
+	attributes?: NavigationAttributeWrite[]
+	children: NavigationItemWrite[]
+}
+
+export type NavigationWrite = {
+	name: Translated
+	key: string
+	items: NavigationItemWrite[]
+	is_active: boolean
+}
+
+export type EntryTranslationWrite = {
+	title: string
+	slug: string
+	excerpt: string
+	data: Record<string, unknown>
+}
+
+export type EntryWrite = {
+	site_locales: string[]
+	translations: Record<string, EntryTranslationWrite>
+}
+
 export type AdminApi = {
 	submissions(siteId: string, formKey: string): Promise<Submission[]>
 	setCaptchaSecret(siteId: string, secret: string): Promise<void>
 	createMessageForm(siteId: string, key: string): Promise<string>
 	deleteForm(siteId: string, formId: string): Promise<void>
+	createSite(site: SiteWrite): Promise<string>
+	deleteSite(siteId: string): Promise<void>
+	createDeliveryToken(siteId: string, name: string): Promise<string>
+	collectionId(siteId: string, locale: string, slug: string): Promise<string>
+	createCollection(siteId: string, collection: CollectionWrite): Promise<string>
+	updateCollection(siteId: string, collectionId: string, patch: CollectionPatch): Promise<void>
+	createNavigation(siteId: string, navigation: NavigationWrite): Promise<string>
+	deleteNavigation(siteId: string, navigationId: string): Promise<void>
+	createEntry(siteId: string, collectionId: string, entry: EntryWrite): Promise<string>
+	deleteEntry(siteId: string, collectionId: string, entryId: string): Promise<void>
+	previewLink(siteId: string, document: string, locale: string): Promise<string>
 }
 
 type FormFieldWrite = {
@@ -158,6 +232,20 @@ export async function adminLogin(
 		return value['id']
 	}
 
+	function post(path: string, body: unknown): Promise<unknown> {
+		return call(apiUrl, session, path, { method: 'POST', body: JSON.stringify(body) })
+	}
+
+	async function create(siteId: string, path: string, body: unknown): Promise<string> {
+		await useSite(siteId)
+		return idOf(dataOf(await post(path, body)))
+	}
+
+	async function remove(siteId: string, path: string): Promise<void> {
+		await useSite(siteId)
+		await call(apiUrl, session, path, { method: 'DELETE' })
+	}
+
 	async function formId(key: string): Promise<string> {
 		const forms = listOf(dataOf(await call(apiUrl, session, '/admin/forms')))
 		const form = forms.find((item) => isRecord(item) && item['key'] === key)
@@ -194,8 +282,7 @@ export async function adminLogin(
 				body: JSON.stringify({ settings: { ...settings, captcha: next } })
 			})
 		},
-		createMessageForm: async (siteId, key) => {
-			await useSite(siteId)
+		createMessageForm: (siteId, key) => {
 			const form: FormWrite = {
 				name: { en: key },
 				key,
@@ -208,15 +295,54 @@ export async function adminLogin(
 					}
 				]
 			}
-			const created = await call(apiUrl, session, '/admin/forms', {
-				method: 'POST',
-				body: JSON.stringify(form)
-			})
-			return idOf(dataOf(created))
+			return create(siteId, '/admin/forms', form)
 		},
-		deleteForm: async (siteId, id) => {
+		deleteForm: (siteId, id) => remove(siteId, `/admin/forms/${id}`),
+		createSite: async (site) => idOf(dataOf(await post('/admin/sites', site))),
+		deleteSite: async (siteId) => {
+			await remove(siteId, `/admin/sites/${siteId}`)
+			session.siteId = undefined
+		},
+		createDeliveryToken: async (siteId, name) => {
 			await useSite(siteId)
-			await call(apiUrl, session, `/admin/forms/${id}`, { method: 'DELETE' })
+			const created = await post('/admin/tokens', { name, scope: 'delivery' })
+			if (!isRecord(created) || typeof created['token'] !== 'string') {
+				throw new Error('no token in the created token response')
+			}
+			return created['token']
+		},
+		collectionId: async (siteId, locale, slug) => {
+			await useSite(siteId)
+			const collections = listOf(dataOf(await call(apiUrl, session, '/admin/collections')))
+			const found = collections.find(
+				(item) => isRecord(item) && isRecord(item['slug']) && item['slug'][locale] === slug
+			)
+			if (found === undefined) {
+				throw new Error(`collection ${locale}:${slug} not found in the admin`)
+			}
+			return idOf(found)
+		},
+		createCollection: (siteId, collection) => create(siteId, '/admin/collections', collection),
+		updateCollection: async (siteId, id, patch) => {
+			await useSite(siteId)
+			await call(apiUrl, session, `/admin/collections/${id}`, {
+				method: 'PUT',
+				body: JSON.stringify(patch)
+			})
+		},
+		createNavigation: (siteId, navigation) => create(siteId, '/admin/navigations', navigation),
+		deleteNavigation: (siteId, id) => remove(siteId, `/admin/navigations/${id}`),
+		createEntry: (siteId, collectionId, entry) =>
+			create(siteId, `/admin/collections/${collectionId}/entries`, entry),
+		deleteEntry: (siteId, collectionId, id) =>
+			remove(siteId, `/admin/collections/${collectionId}/entries/${id}`),
+		previewLink: async (siteId, document, locale) => {
+			await useSite(siteId)
+			const link = dataOf(await post(`/admin${document}/preview-link`, { locale }))
+			if (!isRecord(link) || typeof link['url'] !== 'string') {
+				throw new Error(`no url in the preview link of ${document}`)
+			}
+			return link['url']
 		}
 	}
 }

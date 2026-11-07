@@ -1,0 +1,14 @@
+{
+	"name": "rush-cms-e2e-template",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"check": "node node_modules/typescript7/bin/tsc -p tsconfig.json && ../../node_modules/.bin/oxlint --type-aware && bun run --cwd ../walk-kit check",
+		"generate": "node --env-file=.env.walk scripts/generate.ts",
+		"walk": "node --env-file=.env.walk walk/run.ts"
+	},
+	"devDependencies": {
+		"@types/node": "26.6.6",
+		"typescript7": "npm:typescript@7.0.2"
+	}
+}

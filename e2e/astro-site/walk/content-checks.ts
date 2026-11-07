@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict'
-import type { Page } from 'puppeteer-core'
+import type { Page, Walker } from '../../walk-kit/browser.ts'
 import { entryRequestsDuring } from './api-log.ts'
 import type { LoggedRequest } from './api-log.ts'
-import type { Walker } from './browser.ts'
-import { openOk, redirectedOnce } from './browser.ts'
+import { openOk, redirectedOnce } from '../../walk-kit/browser.ts'
+import { PREVIEW_BANNER } from '../../walk-kit/preview.ts'
+import { loadedImages, richText } from '../../walk-kit/rich-text.ts'
+import type { RenderedRichText } from '../../walk-kit/rich-text.ts'
 import { PREVIEW_URL, SITE_URL } from './env.ts'
 import type { WalkEnv } from './env.ts'
 import { publicClient } from './public-api.ts'
@@ -14,14 +16,6 @@ type LocalizedEntry = {
 	collection: string
 	slug: string
 	heading: string
-}
-
-type RenderedRichText = {
-	heading: string | null
-	links: (string | null)[]
-	items: number
-	images: number
-	callout: string | null
 }
 
 type RenderedImage = {
@@ -63,33 +57,7 @@ function entryPathOf(env: WalkEnv, collection: string, slug: string): string {
 	return `/api/v1/${env.siteId}/collections/${collection}/entries/${slug}`
 }
 
-async function loadedImages(page: Page, selector: string): Promise<boolean[]> {
-	return page.$$eval(selector, (images) =>
-		Promise.all(
-			images.map((image) => {
-				if (!(image instanceof HTMLImageElement)) {
-					return Promise.resolve(false)
-				}
-				image.loading = 'eager'
-				return image.decode().then(
-					() => image.naturalWidth > 0,
-					() => false
-				)
-			})
-		)
-	)
-}
-
-async function richText(page: Page): Promise<RenderedRichText> {
-	const loaded = await loadedImages(page, '[data-field="body"] img')
-	const rendered = await page.$eval('[data-field="body"]', (body) => ({
-		heading: body.querySelector('h2')?.textContent ?? null,
-		links: [...body.querySelectorAll('a')].map((link) => link.getAttribute('href')),
-		items: body.querySelectorAll('ul > li').length,
-		callout: body.querySelector('[data-callout]')?.textContent ?? null
-	}))
-	return { ...rendered, images: loaded.filter(Boolean).length }
-}
+const BODY = '[data-field="body"]'
 
 async function featured(page: Page): Promise<RenderedImage> {
 	const [loaded = false] = await loadedImages(page, '[data-featured] img')
@@ -117,7 +85,7 @@ export function richTextInEachLocale(walker: Walker): Promise<string> {
 		const shots: string[] = []
 		for (const entry of HELLO) {
 			await openOk(page, `${SITE_URL}${entry.path}`)
-			assertRichText(await richText(page), entry)
+			assertRichText(await richText(page, BODY), entry)
 			shots.push(await walker.shot(page, `15-rich-text-${entry.locale}`))
 		}
 		return `${HELLO.map((entry) => entry.path).join(', ')}: h2, link https://example.com/<locale>, 2 list items, loaded image, callout block "Callout (<locale>)" [${shots.join(', ')}]`
@@ -163,8 +131,8 @@ export function previewOnDemand(walker: Walker): Promise<string> {
 		assert.ok(entry)
 		const response = await openOk(page, `${PREVIEW_URL}${entry.path}`)
 		assert.equal(response.headers()['x-robots-tag'], 'noindex')
-		assert.equal(await page.$('[data-rush-preview]'), null)
-		assertRichText(await richText(page), entry)
+		assert.equal(await page.$(PREVIEW_BANNER), null)
+		assertRichText(await richText(page, BODY), entry)
 		const rendered = await featured(page)
 		assert.ok(rendered.loaded, `featured image ${rendered.src} loaded`)
 		const shot = await walker.shot(page, '17-preview-on-demand')
