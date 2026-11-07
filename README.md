@@ -52,6 +52,10 @@ each published package (`@rushcms/client`, `@rushcms/astro` and `create-rush-cms
 workflow of this repository. `create-rush-cms` needs its trusted publisher before its first real publish (0.1.0).
 Until then, the workflow only opens or updates the version pull request.
 
+The workflow acts as the `rush-cms-release` GitHub App (contents and pull requests write, installed on this repository
+only), so the version pull request and its commits trigger CI. It reads the app's client id and private key from the
+repository secrets `RELEASE_APP_CLIENT_ID` and `RELEASE_APP_PRIVATE_KEY`.
+
 No push publishes anything without a changeset. `templates/astro` is private and never versioned or published. A
 changeset that releases `@rushcms/client` or `@rushcms/astro` must also release `create-rush-cms`
 (`bun run changesets:check` enforces it in CI), because the starter bundles the template with both packages pinned to the exact
