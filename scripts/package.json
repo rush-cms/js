@@ -2,6 +2,9 @@
 	"name": "rush-cms-js-scripts",
 	"private": true,
 	"type": "module",
+	"scripts": {
+		"test": "vitest run"
+	},
 	"devDependencies": {
 		"openapi-typescript": "7.13.0",
 		"typescript": "npm:@typescript/typescript6@6.0.2"

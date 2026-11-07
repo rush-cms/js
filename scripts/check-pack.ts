@@ -1,15 +1,25 @@
 import { execFileSync } from 'node:child_process'
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
-import { join, posix } from 'node:path'
+import { join, posix, resolve } from 'node:path'
+import { DEPENDENCY_FIELDS, WORKSPACE_PREFIX, isExcludedFromBundle } from './bundle-template'
 import { literalTargets, targetsOf } from './export-targets'
 import type { PackageManifest } from './export-targets'
+import { BUNDLING_PACKAGE, workspaceVersions } from './workspace-versions'
 
 type PackReport = {
 	files: { path: string }[]
 }
 
-const PACKAGES_DIR = join(import.meta.dirname, '../packages')
-const ROOT_LICENSE = join(import.meta.dirname, '../LICENSE')
+type DependencyMap = Record<string, string>
+
+type TemplateManifest = Partial<Record<string, DependencyMap>>
+
+const ROOT = resolve(import.meta.dirname, '..')
+const PACKAGES_DIR = join(ROOT, 'packages')
+const ROOT_LICENSE = join(ROOT, 'LICENSE')
+const VERSIONS = workspaceVersions(ROOT)
+const TEMPLATE_DIR = 'template/'
+const TEMPLATE_MANIFEST = `${TEMPLATE_DIR}package.json`
 const RELEASE_FILES = ['README.md', 'LICENSE']
 const CHECKED = /\.(js|mjs|ts|astro)$/
 const SPECIFIER = /(?:\bfrom\s*|\bimport\s*\(?\s*)['"]([^'"]+)['"]/g
@@ -99,6 +109,42 @@ function releaseFileProblems(manifest: PackageManifest, dir: string, files: Set<
 		: missing
 }
 
+function pinProblems(dir: string): string[] {
+	const template = JSON.parse(
+		readFileSync(join(dir, TEMPLATE_MANIFEST), 'utf8')
+	) as TemplateManifest
+	return DEPENDENCY_FIELDS.flatMap((field) =>
+		Object.entries(template[field] ?? {}).flatMap(([name, range]) => {
+			const expected = VERSIONS.get(name)
+			if (range.startsWith(WORKSPACE_PREFIX)) {
+				return [`${TEMPLATE_MANIFEST}: ${name} is ${range}`]
+			}
+			return expected !== undefined && range !== expected
+				? [`${TEMPLATE_MANIFEST}: ${name} is ${range}, expected ${expected}`]
+				: []
+		})
+	)
+}
+
+function bundledTemplateProblems(
+	manifest: PackageManifest,
+	dir: string,
+	files: Set<string>
+): string[] {
+	if (manifest.name !== BUNDLING_PACKAGE) {
+		return []
+	}
+	if (!files.has(TEMPLATE_MANIFEST)) {
+		return [`${manifest.name}: ${TEMPLATE_MANIFEST} is not in the tarball`]
+	}
+	const leaked = [...files]
+		.filter(
+			(file) => file.startsWith(TEMPLATE_DIR) && file.split('/').some(isExcludedFromBundle)
+		)
+		.map((file) => `${manifest.name}: ${file} must not be in the tarball`)
+	return [...pinProblems(dir).map((problem) => `${manifest.name}: ${problem}`), ...leaked]
+}
+
 function checkPackage(dir: string): string[] {
 	const manifest = manifestOf(dir)
 	if (manifest.private === true) {
@@ -115,6 +161,7 @@ function checkPackage(dir: string): string[] {
 	return [
 		...releaseFileProblems(manifest, dir, files),
 		...exportProblems(manifest, files),
+		...bundledTemplateProblems(manifest, dir, files),
 		...referenced
 	]
 }

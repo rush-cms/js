@@ -2,6 +2,7 @@ node_modules
 dist
 *.tsbuildinfo
 .astro
+packages/create-rush-cms/template
 e2e/astro-site/.packs
 e2e/astro-site/dist-*
 e2e/astro-site/bun.lock

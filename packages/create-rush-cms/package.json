@@ -28,7 +28,7 @@
 	"author": "Rafhael Marsigli <oi@rafhael.com.br>",
 	"license": "MIT",
 	"scripts": {
-		"build": "tsdown",
+		"build": "tsdown && bun ../../scripts/bundle-template.ts",
 		"typecheck": "tsc -p tsconfig.json",
 		"test": "vitest run"
 	}

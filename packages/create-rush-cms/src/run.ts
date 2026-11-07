@@ -1,23 +1,15 @@
-import {
-	copyFileSync,
-	existsSync,
-	readFileSync,
-	readdirSync,
-	statSync,
-	writeFileSync
-} from 'node:fs'
+import { copyFileSync, existsSync, readdirSync, statSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { parseArgs } from 'node:util'
 import { copyTemplate } from './copy'
 import { USAGE, installFailure, nextSteps } from './next-steps'
 import type { NextStepsInput } from './next-steps'
+import { updateManifest } from './manifest'
 import { packageNameOf } from './package-name'
 import { detectPackageManager } from './package-manager'
 import type { CliEnv, CliIo } from './types'
 
 export const DEFAULT_TEMPLATE_DIR = resolve(import.meta.dirname, '..', 'template')
-
-const DEFAULT_INDENT = '\t'
 
 type Options = {
 	dir: string
@@ -81,12 +73,9 @@ function isNonEmpty(target: string): boolean {
 }
 
 function setPackageName(target: string): void {
-	const file = join(target, 'package.json')
-	const text = readFileSync(file, 'utf8')
-	const indent = /\n([ \t]+)"/.exec(text)?.[1] ?? DEFAULT_INDENT
-	const manifest = JSON.parse(text) as Record<string, unknown>
-	manifest.name = packageNameOf(target)
-	writeFileSync(file, `${JSON.stringify(manifest, null, indent)}\n`)
+	updateManifest(join(target, 'package.json'), (manifest) => {
+		manifest.name = packageNameOf(target)
+	})
 }
 
 function scaffold(target: string, templateDir: string): void {

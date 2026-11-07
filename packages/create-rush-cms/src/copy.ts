@@ -4,15 +4,34 @@ import { join } from 'node:path'
 const GITIGNORE_SOURCE = '_gitignore'
 const GITIGNORE_TARGET = '.gitignore'
 
-export function copyTemplate(from: string, to: string): void {
+export type CopyRules = {
+	skip: (name: string) => boolean
+	rename: (name: string) => string
+}
+
+export const KEEP_NAMES: CopyRules['rename'] = (name) => name
+
+export const TEMPLATE_RULES: CopyRules = {
+	skip: () => false,
+	rename: (name) => (name === GITIGNORE_SOURCE ? GITIGNORE_TARGET : name)
+}
+
+export function copyTree(from: string, to: string, rules: CopyRules): void {
 	mkdirSync(to, { recursive: true })
 	for (const entry of readdirSync(from, { withFileTypes: true })) {
+		if (rules.skip(entry.name)) {
+			continue
+		}
 		const source = join(from, entry.name)
+		const target = join(to, rules.rename(entry.name))
 		if (entry.isDirectory()) {
-			copyTemplate(source, join(to, entry.name))
+			copyTree(source, target, rules)
 		} else {
-			const name = entry.name === GITIGNORE_SOURCE ? GITIGNORE_TARGET : entry.name
-			copyFileSync(source, join(to, name))
+			copyFileSync(source, target)
 		}
 	}
+}
+
+export function copyTemplate(from: string, to: string): void {
+	copyTree(from, to, TEMPLATE_RULES)
 }
