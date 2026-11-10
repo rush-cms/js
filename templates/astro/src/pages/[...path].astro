@@ -5,6 +5,7 @@ import { routePage } from '../lib/route-page'
 import Home from '../views/home.astro'
 import { viewsFor } from '../views/index'
 import NotFound from '../views/not-found.astro'
+import Taxonomy from '../views/taxonomy.astro'
 
 export * from '@rushcms/astro/site-paths'
 
@@ -28,5 +29,6 @@ const { list: List, entry: Entry } = viewsFor(collection, getUrls(Astro))
 
 {page.kind === 'homepage' && <Home page={page} />}
 {page.kind === 'collection' && <List page={page} />}
+{page.kind === 'taxonomy' && <Taxonomy page={page} />}
 {page.kind === 'found' && <Entry entry={page.entry} locale={page.locale} />}
 {page.kind === 'missing' && <NotFound />}

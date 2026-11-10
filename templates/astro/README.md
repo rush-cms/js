@@ -52,19 +52,20 @@ no navigation links. See [Routes](https://github.com/rush-cms/js/tree/main/packa
 
 No page file encodes a URL shape:
 
-| File                                  | Answers                                                                       |
-| ------------------------------------- | ----------------------------------------------------------------------------- |
-| `src/pages/[...path].astro`           | Every homepage, collection list page and entry, prerendered at build time     |
-| `src/pages/404.astro`                 | Every other path, on demand: redirects retired slugs, else the not-found page |
-| `src/pages/[...locale]/contact.astro` | The contact form of each locale, on demand                                    |
-| `src/pages/sitemap.xml.ts`            | The sitemap, from the same routes                                             |
-| `src/pages/robots.txt.ts`             | `robots.txt` (everything disallowed in a preview deployment)                  |
+| File                                  | Answers                                                                          |
+| ------------------------------------- | -------------------------------------------------------------------------------- |
+| `src/pages/[...path].astro`           | Every homepage, list page, taxonomy listing and entry, prerendered at build time |
+| `src/pages/404.astro`                 | Every other path, on demand: redirects retired slugs, else the not-found page    |
+| `src/pages/[...locale]/contact.astro` | The contact form of each locale, on demand                                       |
+| `src/pages/sitemap.xml.ts`            | The sitemap, from the same routes                                                |
+| `src/pages/robots.txt.ts`             | `robots.txt` (everything disallowed in a preview deployment)                     |
 
 The dispatcher hands each page to a view:
 
 - `src/views/home.astro`: the front page of every locale. It is a static welcome page; replace it with your design,
   or render the homepage built in Rush CMS from `page.homepage`.
 - `src/views/collection.astro`: a collection list page with pagination.
+- `src/views/taxonomy.astro`: the entries of a category or tag, with pagination (see [Taxonomies](#taxonomies)).
 - `src/views/entry.astro`: an entry with its title, featured image, excerpt and every rich-text field.
 - `src/views/not-found.astro`: the 404 page.
 
@@ -78,6 +79,23 @@ const views: ViewMap = { posts: { entry: PostEntry } }
 
 A view receives the same props as the generic one (`EntryViewProps` or `ListViewProps`), and `npm run check` fails
 when it does not. `src/astro-modules.d.ts` lets plain TypeScript read the `.astro` imports of that file.
+
+## Taxonomies
+
+Categories and tags have no pages until `taxonomies` in `astro.config.ts` gives their type a path segment in every
+locale of `localePaths`:
+
+```ts
+taxonomies: {
+	category: { en: 'category', pt_BR: 'categoria' },
+	tag: { en: 'tag', pt_BR: 'tag' }
+}
+```
+
+Each category or tag with entries then gets a listing page per locale (`/category/design`, `/pt/categoria/design`,
+`/category/design/page/2`), rendered by `src/views/taxonomy.astro` (`TaxonomyViewProps`) and listed in the sitemap.
+Link to one with `getUrls(Astro).taxonomy(tag, locale)`, for instance from an entry's `categories`. See
+[Taxonomies](https://github.com/rush-cms/js/tree/main/packages/astro#taxonomies) for the rules.
 
 ## Navigation and forms
 

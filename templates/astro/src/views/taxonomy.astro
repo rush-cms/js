@@ -1,0 +1,20 @@
+---
+import { getUrls } from '@rushcms/astro'
+import ListPage from '../components/list-page.astro'
+import type { TaxonomyViewProps } from './index'
+
+type Props = TaxonomyViewProps
+
+const { page } = Astro.props
+const { tag, locale } = page
+const urls = getUrls(Astro)
+---
+
+<ListPage
+	locale={locale}
+	title={tag.name}
+	page={page.page}
+	lastPage={page.lastPage}
+	entries={page.entries.items}
+	pageUrl={(number) => urls.taxonomy(tag, locale, number)}
+/>
