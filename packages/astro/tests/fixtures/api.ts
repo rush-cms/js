@@ -104,6 +104,25 @@ function slugTag(tags: Tag[], slug: string, type: string | null): Tag | undefine
 		.find((tag) => tag !== undefined)
 }
 
+function preferenceOrder(catalog: TagCatalog, locale: LocaleCode): Tag[][] {
+	const others = Object.entries(catalog.tags).filter(([code]) => code !== locale)
+	return [catalog.tags[locale] ?? [], ...others.map(([, tags]) => tags)]
+}
+
+function resolvedTag(
+	catalog: TagCatalog,
+	locale: LocaleCode,
+	slug: string,
+	type: string | null
+): Tag | undefined {
+	const found = preferenceOrder(catalog, locale)
+		.map((tags) => slugTag(tags, slug, type))
+		.find((tag) => tag !== undefined)
+	return found === undefined
+		? undefined
+		: ((catalog.tags[locale] ?? []).find((tag) => tag.id === found.id) ?? found)
+}
+
 export function tagResponse(
 	catalog: TagCatalog | undefined,
 	request: StubRequest
@@ -122,7 +141,7 @@ export function tagResponse(
 	if (slug === undefined) {
 		return undefined
 	}
-	const tag = slugTag(tags, slug, request.query.get('type'))
+	const tag = resolvedTag(catalog, locale, slug, request.query.get('type'))
 	return tag === undefined
 		? notFound('tag')
 		: pagedResponse(catalog.entries[tagEntriesKey(locale, tag)] ?? [], request, TAG_PAGE_SIZE)

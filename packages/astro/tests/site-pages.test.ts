@@ -669,11 +669,11 @@ describe('resolvePage', () => {
 			tag: { slug: 'design', type: 'category' }
 		})
 		expect(entrySlugs(resolved)).toEqual(['artigos-16', 'artigos-17'])
-		expect(tagRequests()).toEqual([
-			'/tags?locale=pt_BR&type=category',
+		expect(tagRequests().toSorted()).toEqual([
+			'/tags/design/entries?locale=pt_BR&page=2&type=category',
 			'/tags?locale=en&type=category',
 			'/tags?locale=es&type=category',
-			'/tags/design/entries?locale=pt_BR&page=2&type=category'
+			'/tags?locale=pt_BR&type=category'
 		])
 	})
 
@@ -692,12 +692,15 @@ describe('resolvePage', () => {
 		expect(alternatesOf(await taxonomyAt('/tag/astro'))).toEqual(only('en', '/tag/astro'))
 	})
 
-	it('answers missing past the last page, for an empty or unknown tag and for the other type', async () => {
+	it('answers missing past the last page, for an empty or unknown tag, for the other type and for the slug of another locale', async () => {
 		for (const path of [
 			'/category/design/page/3',
 			'/category/empty',
 			'/category/unknown',
-			'/tag/design'
+			'/tag/design',
+			'/category/diseno',
+			'/br/categoria/diseno',
+			'/es/categoria/design'
 		]) {
 			expect(await taxonomyAt(path), path).toEqual({ kind: 'missing' })
 		}

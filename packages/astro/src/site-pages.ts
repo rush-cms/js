@@ -90,6 +90,8 @@ type PagedPage = {
 
 type PageLoader<P> = (page: number) => Promise<P>
 
+type TagKey = Pick<Tag, 'type' | 'slug'>
+
 type ListedPage = {
 	url: string
 	page: SitePage
@@ -155,14 +157,22 @@ function collectionPages(
 	return everyPage((page) => collectionPage(client, collection, locale, page))
 }
 
-async function taxonomyPage(
+function taxonomyEntries(
 	client: RushClient,
+	tag: TagKey,
+	locale: LocaleCode,
+	page: number
+): Promise<TaxonomyEntryPage> {
+	return client.tags.entries(tag.slug, { type: tag.type, locale, page })
+}
+
+function taxonomyPageOf(
 	tag: Tag,
 	locale: LocaleCode,
 	page: number,
+	entries: TaxonomyEntryPage,
 	alternates: Alternate[]
-): Promise<TaxonomyPage> {
-	const entries = await client.tags.entries(tag.slug, { type: tag.type, locale, page })
+): TaxonomyPage {
 	return {
 		kind: 'taxonomy',
 		locale,
@@ -172,6 +182,17 @@ async function taxonomyPage(
 		entries,
 		alternates
 	}
+}
+
+async function taxonomyPage(
+	client: RushClient,
+	tag: Tag,
+	locale: LocaleCode,
+	page: number,
+	alternates: Alternate[]
+): Promise<TaxonomyPage> {
+	const entries = await taxonomyEntries(client, tag, locale, page)
+	return taxonomyPageOf(tag, locale, page, entries, alternates)
 }
 
 function typePages(
@@ -289,15 +310,18 @@ async function resolveTaxonomy(
 ): Promise<TaxonomyPage | EntryMissing> {
 	const { locale } = match
 	const client = runtime.clientIn(context, locale)
-	const lists = await tagsByLocale(client, runtime.urls, match.type)
+	const [lists, entries] = await Promise.all([
+		tagsByLocale(client, runtime.urls, match.type),
+		optional(taxonomyEntries(client, match, locale, match.page))
+	])
 	const tag = lists
 		.find((list) => list.locale === locale)
 		?.tags.find((candidate) => candidate.slug === match.slug)
-	if (tag === undefined) {
+	if (tag === undefined || entries === undefined) {
 		return MISSING
 	}
 	const alternates = tagAlternates(lists, tag.id, runtime.urls)
-	return withinLastPage(await taxonomyPage(client, tag, locale, match.page, alternates))
+	return withinLastPage(taxonomyPageOf(tag, locale, match.page, entries, alternates))
 }
 
 function resolveMatchedEntry(
