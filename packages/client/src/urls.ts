@@ -8,7 +8,10 @@ import type {
 	LocaleCode,
 	NavigationItem,
 	RushLocalePaths,
-	RushRoutes
+	RushRoutes,
+	Tag,
+	TagRef,
+	TagType
 } from './types'
 
 const ROUTE_ANY = '*'
@@ -17,15 +20,23 @@ export type RushCollections = Record<LocaleCode, CollectionRef[]>
 
 export type RushPageSegments = Record<LocaleCode, string>
 
+export type RushTaxonomySegments = Record<LocaleCode, string>
+
+export type RushTaxonomies = Partial<Record<TagType, RushTaxonomySegments>>
+
+export type TaxonomyKey = Pick<TagRef, 'type' | 'slug'>
+
 export type UrlConfig = {
 	routes?: RushRoutes
 	localePaths: RushLocalePaths
 	collections?: RushCollections
 	pageSegments?: RushPageSegments
+	taxonomies?: RushTaxonomies
 }
 
 export type RushUrls = {
 	readonly locales: readonly LocaleCode[]
+	readonly taxonomyTypes: readonly TagType[]
 	localeOf(param: string | undefined): LocaleCode | undefined
 	localeParam(locale: LocaleCode): string | undefined
 	collectionRef(key: string, locale: LocaleCode): CollectionRef | undefined
@@ -33,6 +44,7 @@ export type RushUrls = {
 	hasCollectionSegment(collection: CollectionRef): boolean
 	collectionKeys(source: Entry | CollectionRef): string[]
 	collection(collection: CollectionRef, locale: LocaleCode, page?: number): string
+	taxonomy(tag: TagRef | Tag, locale: LocaleCode, page?: number): string | undefined
 	entry(entry: Entry): string
 	servedPath(entry: Entry, requestedLocale: LocaleCode): string
 	translation(entry: Entry, locale: LocaleCode): string
@@ -66,11 +78,23 @@ type CollectionIndex = {
 
 type RouteTable = Map<string, string[]>
 
+type LocaleValue = (locale: LocaleCode) => string | undefined
+
+type LocalePrefixes = {
+	bare: LocaleCode | undefined
+	prefixes: ReadonlySet<string>
+}
+
 const SLUG_SEGMENT = '{slug}'
 const LOCALE_SEGMENT = '{locale}'
 const COLLECTION_SEGMENT = '{collection}'
 const PLACEHOLDER = /\{(locale|collection|slug)\}/g
 const DEFAULT_PAGE_SEGMENT = 'page'
+const TAXONOMY_TYPES: readonly TagType[] = ['category', 'tag']
+
+function ownValue<T>(record: Record<string, T>, key: string): T | undefined {
+	return Object.hasOwn(record, key) ? record[key] : undefined
+}
 
 function assertSlugLast(key: string, segments: string[]): void {
 	const index = segments.findIndex((segment) => segment.includes(SLUG_SEGMENT))
@@ -89,11 +113,11 @@ function assertPlainSegments(values: Record<LocaleCode, string>, label: string):
 	}
 }
 
-function assertPageSegments(pageSegments: RushPageSegments): void {
-	assertPlainSegments(pageSegments, 'pageSegments segment')
-	const empty = Object.keys(pageSegments).find((locale) => pageSegments[locale] === '')
+function assertSegments(values: Record<LocaleCode, string>, label: string): void {
+	assertPlainSegments(values, label)
+	const empty = Object.keys(values).find((locale) => values[locale] === '')
 	if (empty !== undefined) {
-		throw new Error(`pageSegments segment for "${empty}" must not be empty`)
+		throw new Error(`${label} for "${empty}" must not be empty`)
 	}
 }
 
@@ -110,6 +134,63 @@ function assertSingleEmptyPrefix(localePaths: RushLocalePaths): void {
 			`localePaths has more than one empty prefix: ${empty.map(([locale]) => locale).join(', ')}`
 		)
 	}
+}
+
+function localePrefixes(localePaths: RushLocalePaths): LocalePrefixes {
+	return {
+		bare: Object.keys(localePaths).find((locale) => localePaths[locale] === ''),
+		prefixes: new Set(Object.values(localePaths).filter((prefix) => prefix !== ''))
+	}
+}
+
+function prefixShadowedBy(
+	{ bare, prefixes }: LocalePrefixes,
+	valueIn: LocaleValue
+): string | undefined {
+	const value = bare === undefined ? undefined : valueIn(bare)
+	return value !== undefined && prefixes.has(value) ? value : undefined
+}
+
+function isTaxonomyType(key: string): key is TagType {
+	return TAXONOMY_TYPES.some((type) => type === key)
+}
+
+function assertTaxonomy(
+	type: string,
+	segments: RushTaxonomySegments,
+	localePaths: RushLocalePaths
+): void {
+	const label = `taxonomies.${type}`
+	if (!isTaxonomyType(type)) {
+		throw new Error(
+			`taxonomies key "${type}" must be ${TAXONOMY_TYPES.map((name) => `"${name}"`).join(' or ')}`
+		)
+	}
+	assertSegments(segments, `${label} segment`)
+	const missing = Object.keys(localePaths).find((locale) => !Object.hasOwn(segments, locale))
+	if (missing !== undefined) {
+		throw new Error(`${label} has no segment for locale "${missing}"`)
+	}
+	const unknown = Object.keys(segments).find((locale) => !Object.hasOwn(localePaths, locale))
+	if (unknown !== undefined) {
+		throw new Error(`${label} segment for "${unknown}" names no localePaths locale`)
+	}
+	const shadowed = prefixShadowedBy(localePrefixes(localePaths), (locale) =>
+		ownValue(segments, locale)
+	)
+	if (shadowed !== undefined) {
+		throw new Error(`${label} segment "${shadowed}" equals the locale prefix "${shadowed}"`)
+	}
+}
+
+function assertTaxonomies(taxonomies: RushTaxonomies, localePaths: RushLocalePaths): void {
+	for (const [type, segments] of Object.entries(taxonomies)) {
+		assertTaxonomy(type, segments ?? {}, localePaths)
+	}
+}
+
+function configuredTypes(taxonomies: RushTaxonomies): TagType[] {
+	return TAXONOMY_TYPES.filter((type) => ownValue(taxonomies, type) !== undefined)
 }
 
 function placeholdersOf(segments: string[]): string[] {
@@ -178,17 +259,11 @@ function assertSlugsAreNotPrefixes(
 	routes: RouteTable,
 	index: CollectionIndex
 ): void {
-	const bare = Object.keys(localePaths).find((locale) => localePaths[locale] === '')
-	const prefixes = new Set(Object.values(localePaths).filter((prefix) => prefix !== ''))
+	const prefixes = localePrefixes(localePaths)
 	for (const [id, slugs] of index.slugsById) {
-		const slug = bare === undefined ? undefined : slugs.get(bare)
+		const slug = prefixShadowedBy(prefixes, (locale) => slugs.get(locale))
 		const segments = routeOf(routes, keysOf(index, id, []))
-		if (
-			slug !== undefined &&
-			prefixes.has(slug) &&
-			segments !== undefined &&
-			collectionFollowsLocale(segments)
-		) {
+		if (slug !== undefined && segments !== undefined && collectionFollowsLocale(segments)) {
 			throw new Error(`collection slug "${slug}" equals the locale prefix "${slug}"`)
 		}
 	}
@@ -216,7 +291,9 @@ export function createUrls(config: UrlConfig): RushUrls {
 	assertPlainSegments(config.localePaths, 'localePaths prefix')
 	assertSingleEmptyPrefix(config.localePaths)
 	const pageSegments = config.pageSegments ?? {}
-	assertPageSegments(pageSegments)
+	assertSegments(pageSegments, 'pageSegments segment')
+	const taxonomies = config.taxonomies ?? {}
+	assertTaxonomies(taxonomies, config.localePaths)
 	const routeSegments = parseRoutes(config.routes ?? {})
 	const index = indexCollections(config.collections ?? {})
 	if (config.collections !== undefined) {
@@ -319,17 +396,31 @@ export function createUrls(config: UrlConfig): RushUrls {
 	}
 
 	function pageSegmentOf(locale: LocaleCode): string {
-		const segment = Object.hasOwn(pageSegments, locale) ? pageSegments[locale] : undefined
-		return segment ?? DEFAULT_PAGE_SEGMENT
+		return ownValue(pageSegments, locale) ?? DEFAULT_PAGE_SEGMENT
+	}
+
+	function paged(segments: string[], locale: LocaleCode, page: number): string[] {
+		assertPage(page)
+		return page === 1 ? segments : [...segments, pageSegmentOf(locale), String(page)]
 	}
 
 	function collection(ref: CollectionRef, locale: LocaleCode, page = 1): string {
-		assertPage(page)
 		const segments = refSegments(ref)
 		const index = hasEntries(ref) ? segments.slice(0, -1) : segments
-		const paged = page === 1 ? index : [...index, pageSegmentOf(locale), String(page)]
-		return build(paged, { locale, collection: ref.slug, slug: '' })
+		return build(paged(index, locale, page), { locale, collection: ref.slug, slug: '' })
 	}
+
+	function taxonomy(tag: TaxonomyKey, locale: LocaleCode, page = 1): string | undefined {
+		const segments = ownValue(taxonomies, tag.type)
+		if (segments === undefined) {
+			assertPage(page)
+			return undefined
+		}
+		const index = [LOCALE_SEGMENT, ownValue(segments, locale) ?? '', SLUG_SEGMENT]
+		return build(paged(index, locale, page), { locale, collection: '', slug: tag.slug })
+	}
+
+	const taxonomyTypes = configuredTypes(taxonomies)
 
 	function collectionRef(key: string, locale: LocaleCode): CollectionRef | undefined {
 		const id = idByKey.get(key)
@@ -357,11 +448,15 @@ export function createUrls(config: UrlConfig): RushUrls {
 					homepage,
 					collection,
 					hasEntries,
-					routeKey: (ref) => routeKeyOf(routeSegments, refKeys(ref))
+					routeKey: (ref) => routeKeyOf(routeSegments, refKeys(ref)),
+					taxonomyTypes,
+					taxonomy
 				})
 
 	return {
 		collection,
+		taxonomy,
+		taxonomyTypes,
 		collectionKeys,
 		collectionRef,
 		entryParams,

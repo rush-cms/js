@@ -8,6 +8,7 @@ import type {
 	RushLocalePaths,
 	RushPageSegments,
 	RushRoutes,
+	RushTaxonomies,
 	RushUrls,
 	UrlConfig,
 	UrlMatch
@@ -16,12 +17,16 @@ import {
 	LOCALES,
 	PREFIXES,
 	ROUTE_ANY,
+	TAXONOMY_TYPES,
 	VALUE,
 	collisions,
+	isTaxonomyTemplate,
+	prefixClashes,
 	templatesOf,
 	thrownBy
 } from './fixtures/url-oracle'
 import { nonEmptySubsets } from './fixtures/subsets'
+import { TAXONOMIES } from './fixtures/taxonomies'
 import type { Template } from './fixtures/url-oracle'
 
 type Instance = {
@@ -55,6 +60,8 @@ type Tally = {
 }
 
 const PAGES = [1, 2, 3, 4, 5]
+
+const TAXONOMY_PAGES = [2, 10]
 
 const SLUGS = [
 	'olá-mundo',
@@ -122,6 +129,16 @@ const PAGE_SEGMENTS: (RushPageSegments | undefined)[] = [
 	{ en: 'p', es: 'página' }
 ]
 
+const TAXONOMY_SETS: RushTaxonomies[] = [
+	{ category: TAXONOMIES.category ?? {} },
+	TAXONOMIES,
+	{ tag: { pt_BR: 'artigos', en: 'blog', es: 'page' } },
+	{ category: { pt_BR: 'en', en: 'pt', es: 'x' } },
+	{ category: { pt_BR: 'c', en: 'c', es: 'c' }, tag: { pt_BR: 'c', en: 't', es: 't' } }
+]
+
+const TAXONOMY_ROUTE_SETS = ROUTE_SETS.slice(0, 3)
+
 function localePathsVariants(): RushLocalePaths[] {
 	return nonEmptySubsets(LOCALES).flatMap((locales) =>
 		[undefined, ...locales].map((empty) =>
@@ -141,9 +158,17 @@ function pageNumber(value: string): number | undefined {
 	return /^[1-9][0-9]*$/.test(value) && Number.isSafeInteger(page) && page >= 2 ? page : undefined
 }
 
-function readTemplate(template: Template, value: string): UrlMatch | undefined {
+function readTemplate(template: Template, values: string[]): UrlMatch | undefined {
+	const [value = '', pageValue = ''] = values
 	if (template.kind === 'homepage') {
 		return { kind: 'homepage', locale: template.locale }
+	}
+	if (isTaxonomyTemplate(template)) {
+		const number = template.kind === 'taxonomy-index' ? 1 : pageNumber(pageValue)
+		const { locale, type } = template
+		return number === undefined
+			? undefined
+			: { kind: 'taxonomy', locale, type, slug: value, page: number }
 	}
 	const { locale, collection } = template
 	if (template.kind === 'entry') {
@@ -164,13 +189,12 @@ function decodedSegments(pathname: string): string[] | undefined {
 	}
 }
 
-function valueIn(template: Template, segments: string[]): string | undefined {
+function valuesIn(template: Template, segments: string[]): string[] | undefined {
 	if (template.segments.length !== segments.length) {
 		return undefined
 	}
 	const fits = template.segments.every((part, i) => part === VALUE || part === segments[i])
-	const at = template.segments.indexOf(VALUE)
-	return fits ? (at === -1 ? '' : segments[at]) : undefined
+	return fits ? segments.filter((_, i) => template.segments[i] === VALUE) : undefined
 }
 
 function oracleMatch(templates: Template[], pathname: string): UrlMatch | undefined {
@@ -179,8 +203,8 @@ function oracleMatch(templates: Template[], pathname: string): UrlMatch | undefi
 		return undefined
 	}
 	const candidates = templates.flatMap((template): Candidate[] => {
-		const value = valueIn(template, segments)
-		const match = value === undefined ? undefined : readTemplate(template, value)
+		const values = valuesIn(template, segments)
+		const match = values === undefined ? undefined : readTemplate(template, values)
 		return match === undefined ? [] : [{ template, match }]
 	})
 	const rank = (candidate: Candidate) =>
@@ -188,8 +212,9 @@ function oracleMatch(templates: Template[], pathname: string): UrlMatch | undefi
 	return candidates.sort((a, b) => rank(b) - rank(a))[0]?.match
 }
 
-function render(segments: string[], value: string): string {
-	return `/${segments.map((segment) => (segment === VALUE ? value : segment)).join('/')}`
+function render(segments: string[], ...values: string[]): string {
+	const queue = [...values]
+	return `/${segments.map((segment) => (segment === VALUE ? (queue.shift() ?? '') : segment)).join('/')}`
 }
 
 function instancesOf(template: Template): Instance[] {
@@ -200,6 +225,16 @@ function instancesOf(template: Template): Instance[] {
 				target: { kind: 'homepage', locale: template.locale }
 			}
 		]
+	}
+	if (isTaxonomyTemplate(template)) {
+		const { locale, type, segments } = template
+		const pages = template.kind === 'taxonomy-index' ? [1] : TAXONOMY_PAGES
+		return SLUGS.flatMap((slug) =>
+			pages.map((page) => ({
+				url: render(segments, slug, String(page)),
+				target: { kind: 'taxonomy', locale, type, slug, page }
+			}))
+		)
 	}
 	const { locale, collection, segments } = template
 	if (template.kind === 'entry') {
@@ -215,12 +250,19 @@ function instancesOf(template: Template): Instance[] {
 	}))
 }
 
-function builtBy(urls: RushUrls, target: UrlMatch): string {
+function builtBy(urls: RushUrls, target: UrlMatch): string | undefined {
 	if (target.kind === 'homepage') {
 		return urls.homepage(target.locale)
 	}
 	if (target.kind === 'collection') {
 		return urls.collection(target.collection, target.locale, target.page)
+	}
+	if (target.kind === 'taxonomy') {
+		return urls.taxonomy(
+			{ id: '', name: '', type: target.type, slug: target.slug },
+			target.locale,
+			target.page
+		)
 	}
 	return urls.moved({
 		locale: target.locale,
@@ -243,15 +285,45 @@ function variantsOf(url: string): string[] {
 	]
 }
 
-function matchCases(): MatchCase[] {
+function restricted(taxonomies: RushTaxonomies, localePaths: RushLocalePaths): RushTaxonomies {
+	return Object.fromEntries(
+		TAXONOMY_TYPES.flatMap((type) => {
+			const segments = taxonomies[type]
+			return segments === undefined
+				? []
+				: [
+						[
+							type,
+							Object.fromEntries(
+								Object.keys(localePaths).map((l) => [l, segments[l] ?? ''])
+							)
+						]
+					]
+		})
+	)
+}
+
+function matchCase(config: UrlConfig): MatchCase {
+	return { label: JSON.stringify(config), config, templates: templatesOf(config) }
+}
+
+function matchCases(
+	routeSets: RushRoutes[],
+	taxonomySets: (RushTaxonomies | undefined)[]
+): MatchCase[] {
 	return localePathsVariants().flatMap((localePaths) =>
-		ROUTE_SETS.flatMap((routes) =>
-			PAGE_SEGMENTS.map((pageSegments) => {
-				const base = { localePaths, routes, collections: COLLECTIONS }
-				const config: UrlConfig =
-					pageSegments === undefined ? base : { ...base, pageSegments }
-				return { label: JSON.stringify(config), config, templates: templatesOf(config) }
-			})
+		routeSets.flatMap((routes) =>
+			PAGE_SEGMENTS.flatMap((pageSegments) =>
+				taxonomySets.map((taxonomies) => {
+					const base: UrlConfig = { localePaths, routes, collections: COLLECTIONS }
+					const paged = pageSegments === undefined ? base : { ...base, pageSegments }
+					return matchCase(
+						taxonomies === undefined
+							? paged
+							: { ...paged, taxonomies: restricted(taxonomies, localePaths) }
+					)
+				})
+			)
 		)
 	)
 }
@@ -261,7 +333,7 @@ function checkCase(
 	tally: Tally,
 	mismatches: Mismatch[]
 ): void {
-	const messages = collisions(templates)
+	const messages = [...prefixClashes(config), ...collisions(templates)]
 	if (messages.length > 0) {
 		tally.collisions += 1
 		expect(messages, label).toContain(thrownBy(config))
@@ -290,7 +362,7 @@ function checkCase(
 }
 
 describe('match over generated configs', () => {
-	const cases = matchCases()
+	const cases = matchCases(ROUTE_SETS, [undefined])
 
 	it(`agrees with the independent oracle on ${cases.length} configs`, () => {
 		expect(cases.length).toBe(399)
@@ -301,6 +373,19 @@ describe('match over generated configs', () => {
 		}
 		expect(mismatches.slice(0, 5)).toEqual([])
 		expect(tally).toEqual({ exact: 26108, shadowed: 270, unmatched: 287016, collisions: 93 })
+	})
+
+	const taxonomyCases = matchCases(TAXONOMY_ROUTE_SETS, TAXONOMY_SETS)
+
+	it(`agrees with the oracle on ${taxonomyCases.length} configs with taxonomies`, () => {
+		const tally: Tally = { exact: 0, shadowed: 0, unmatched: 0, collisions: 0 }
+		const mismatches: Mismatch[] = []
+		for (const matchCase of taxonomyCases) {
+			checkCase(matchCase, tally, mismatches)
+		}
+		expect(taxonomyCases.length).toBe(855)
+		expect(mismatches.slice(0, 5)).toEqual([])
+		expect(tally).toEqual({ exact: 87492, shadowed: 754, unmatched: 962924, collisions: 360 })
 	})
 })
 

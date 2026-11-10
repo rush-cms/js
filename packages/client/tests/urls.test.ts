@@ -7,11 +7,13 @@ import type {
 	RushCollections,
 	RushLocalePaths,
 	RushRoutes,
+	RushTaxonomies,
 	UrlConfig
 } from '../src/index'
 import { entryExample, responseExample } from './fixtures/contract'
 import { navigationItem } from './fixtures/navigation'
 import { LOCALES } from './fixtures/url-oracle'
+import { TAXONOMIES, TAXONOMY_LOCALE_PATHS, tagOf } from './fixtures/taxonomies'
 import type { EntrySummary } from './fixtures/navigation'
 
 const LOCALE_PATHS: RushLocalePaths = { en: 'en', pt_BR: 'pt', es: 'es' }
@@ -438,5 +440,131 @@ describe('entryParams', () => {
 			routes: { blog: '/{locale}/blog/{slug}' }
 		})
 		expect(rooted.entryParams(ref, 'en', 'x')).toEqual({ locale: undefined, slug: 'x' })
+	})
+})
+
+describe('taxonomy urls', () => {
+	const category = tagOf({ type: 'category', slug: 'design' })
+	const tag = tagOf({ type: 'tag', slug: 'astro' })
+	const posts: CollectionRef = { id: 'posts', slug: 'blog' }
+	const collections: RushCollections = Object.fromEntries(
+		Object.keys(TAXONOMY_LOCALE_PATHS).map((locale) => [locale, [posts]])
+	)
+
+	function taxonomyUrls(config: Partial<UrlConfig> = {}) {
+		return createUrls({
+			localePaths: TAXONOMY_LOCALE_PATHS,
+			routes: { posts: '/{locale}/blog/{slug}' },
+			taxonomies: TAXONOMIES,
+			pageSegments: { pt_BR: 'pagina' },
+			collections,
+			...config
+		})
+	}
+
+	it('builds the segment of each locale under its prefix', () => {
+		const urls = taxonomyUrls()
+		expect(urls.taxonomy(category, 'pt_BR')).toBe('/br/categoria/design')
+		expect(urls.taxonomy(category, 'en')).toBe('/category/design')
+		expect(urls.taxonomy(category, 'es')).toBe('/es/categoria/design')
+		expect(urls.taxonomy(tag, 'es')).toBe('/es/etiqueta/astro')
+	})
+
+	it('appends the page segment of the locale after page 1', () => {
+		const urls = taxonomyUrls()
+		expect(urls.taxonomy(category, 'pt_BR', 1)).toBe('/br/categoria/design')
+		expect(urls.taxonomy(category, 'pt_BR', 2)).toBe('/br/categoria/design/pagina/2')
+		expect(urls.taxonomy(tag, 'en', 3)).toBe('/tag/astro/page/3')
+	})
+
+	it('accepts the tag refs an entry carries', () => {
+		const ref = { id: category.id, type: category.type, name: category.name, slug: 'design' }
+		expect(taxonomyUrls().taxonomy(ref, 'en')).toBe('/category/design')
+	})
+
+	it('gives an unconfigured taxonomy type no url', () => {
+		const urls = taxonomyUrls({ taxonomies: { category: TAXONOMIES.category ?? {} } })
+		expect(urls.taxonomy(tag, 'en')).toBeUndefined()
+		expect(urls.taxonomyTypes).toEqual(['category'])
+		expect(urlsFor().taxonomy(category, 'en')).toBeUndefined()
+		expect(urlsFor().taxonomyTypes).toEqual([])
+	})
+
+	it.each([0, -1, 1.5, Number.NaN])('throws for page %s', (page) => {
+		expect(() => taxonomyUrls().taxonomy(category, 'en', page)).toThrow(
+			'page must be a positive integer'
+		)
+	})
+
+	it('matches the taxonomy pages it builds', () => {
+		const urls = taxonomyUrls()
+		expect(urls.match('/category/design')).toStrictEqual({
+			kind: 'taxonomy',
+			locale: 'en',
+			type: 'category',
+			slug: 'design',
+			page: 1
+		})
+		expect(urls.match('/br/categoria/design/pagina/2')).toStrictEqual({
+			kind: 'taxonomy',
+			locale: 'pt_BR',
+			type: 'category',
+			slug: 'design',
+			page: 2
+		})
+		expect(urls.match('/es/etiqueta/astro')).toMatchObject({ type: 'tag', locale: 'es' })
+		expect(urls.match('/br/categoria/design/page/2')).toBeUndefined()
+		expect(urls.match('/category/design/page/1')).toBeUndefined()
+		expect(urls.match('/blog/design')).toMatchObject({ kind: 'entry', slug: 'design' })
+	})
+
+	it('rejects an empty segment or one with a slash', () => {
+		const empty = { category: { pt_BR: 'categoria', en: '', es: 'categoria' } }
+		expect(() => taxonomyUrls({ taxonomies: empty })).toThrow(
+			'taxonomies.category segment for "en" must not be empty'
+		)
+		const slashed = { tag: { pt_BR: 'a/b', en: 'tag', es: 'tag' } }
+		expect(() => taxonomyUrls({ taxonomies: slashed })).toThrow(
+			'taxonomies.tag segment for "pt_BR" must not contain "/"'
+		)
+	})
+
+	it('requires a segment for every locale and no other', () => {
+		const missing = { category: { pt_BR: 'categoria', en: 'category' } }
+		expect(() => taxonomyUrls({ taxonomies: missing })).toThrow(
+			'taxonomies.category has no segment for locale "es"'
+		)
+		const extra = { category: { ...TAXONOMIES.category, fr: 'categorie' } }
+		expect(() => taxonomyUrls({ taxonomies: extra })).toThrow(
+			'taxonomies.category segment for "fr" names no localePaths locale'
+		)
+	})
+
+	it('rejects a key that is not a taxonomy type', () => {
+		const typo = { categories: TAXONOMIES.category } as RushTaxonomies
+		expect(() => taxonomyUrls({ taxonomies: typo })).toThrow(
+			'taxonomies key "categories" must be "category" or "tag"'
+		)
+	})
+
+	it('rejects a segment of the unprefixed locale equal to a locale prefix', () => {
+		const shadow = { category: { pt_BR: 'categoria', en: 'br', es: 'categoria' } }
+		expect(() => taxonomyUrls({ taxonomies: shadow })).toThrow(
+			'taxonomies.category segment "br" equals the locale prefix "br"'
+		)
+		expect(() =>
+			createUrls({ localePaths: TAXONOMY_LOCALE_PATHS, taxonomies: shadow })
+		).toThrow('equals the locale prefix')
+	})
+
+	it('rejects a segment that produces the URLs of a collection route or another taxonomy', () => {
+		const blog = { category: { pt_BR: 'categoria', en: 'blog', es: 'categoria' } }
+		expect(() => taxonomyUrls({ taxonomies: blog })).toThrow(
+			'routes "posts" and "taxonomies.category" produce the same URLs'
+		)
+		const shared = { category: TAXONOMIES.category ?? {}, tag: TAXONOMIES.category ?? {} }
+		expect(() => taxonomyUrls({ taxonomies: shared })).toThrow(
+			'routes "taxonomies.category" and "taxonomies.tag" produce the same URLs'
+		)
 	})
 })

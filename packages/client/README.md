@@ -135,8 +135,8 @@ const etagStore: EtagStore = {
 
 ## URLs
 
-`createUrls({ routes, localePaths, collections, pageSegments })` builds site paths from API objects without any
-request.
+`createUrls({ routes, localePaths, collections, pageSegments, taxonomies })` builds site paths from API objects
+without any request.
 
 - `localePaths` maps every CMS locale code to its URL prefix; at most one prefix is `''` (no prefix).
 - `routes` maps a collection id, any locale's collection slug or `'*'` to a pattern with `{locale}`, `{collection}`
@@ -149,6 +149,7 @@ request.
   route key that matches no collection, a collection slug equal to a locale prefix next to `{locale}/{collection}`
   and two routes that produce the same URLs; `match` needs it.
 - `pageSegments` maps a CMS locale code to the segment of list pages after the first (default `page`).
+- `taxonomies` gives categories and tags their listing pages (see [Taxonomies](#taxonomies)).
 
 Misconfigurations throw when `createUrls` runs (`route "<key>" must contain {locale}`,
 `route "<key>" matches no collection`, `routes "<a>" and "<b>" produce the same URLs`, …).
@@ -160,6 +161,7 @@ Misconfigurations throw when `createUrls` runs (`route "<key>" must contain {loc
 | `servedPath(entry, requestedLocale)`                    | The path that answers for an entry as fetched for a locale, fallbacks included               |
 | `moved(params)`                                         | The redirect target of a `moved` error, from its params alone                                |
 | `collection(collection, locale, page?)`                 | The list path of a collection (page 1 when omitted, else `<index>/<segment>/n`)              |
+| `taxonomy(tag, locale, page?)`                          | The listing path of a category or tag (`undefined` when its type has no segment)             |
 | `match(pathname)`                                       | The entry, collection page or homepage a path names (`undefined` when none)                  |
 | `homepage(locale)` / `navigationItem(item, locale)`     | The homepage path / a navigation item's target (`undefined` without one)                     |
 | `localeOf(param)` / `localeParam(locale)`               | The locale of a URL prefix (exact match) / the prefix of a locale                            |
@@ -174,13 +176,45 @@ integer.
 
 `match(pathname)` is the inverse of the builders for the same configuration: it returns
 `{ kind: 'entry', locale, collection, slug }`, `{ kind: 'collection', locale, collection, page }`,
-`{ kind: 'homepage', locale }` or `undefined`. It decodes each segment once, ignores a trailing or repeated slash and
+`{ kind: 'taxonomy', locale, type, slug, page }`, `{ kind: 'homepage', locale }` or `undefined`. It decodes each segment once, ignores a trailing or repeated slash and
 gives `undefined` for upper-case or code-form locale segments (`/EN/blog`, `/pt_BR/blog`).
 
 `alternates(entry | homepage, urls)` returns `{ locale, hreflang, url }` for every translation, in `localePaths`
 order, built from `translatedLocales(entry | homepage)` (the locales it has a translation in) and
 `translatedUrl(entry | homepage, locale, urls)` (its path in one of them), both exported for language switchers that
 need more than the alternates. `toBcp47(code)` turns `pt_BR` into `pt-BR`.
+
+### Taxonomies
+
+`taxonomies` maps a taxonomy type (`category`, `tag`) to its path segment in every locale. A type without a key has
+no listing pages.
+
+```ts
+const urls = createUrls({
+	localePaths: { en: '', pt_BR: 'br', es: 'es' },
+	pageSegments: { pt_BR: 'pagina' },
+	taxonomies: {
+		category: { en: 'category', pt_BR: 'categoria', es: 'categoria' },
+		tag: { en: 'tag', pt_BR: 'tag', es: 'etiqueta' }
+	}
+})
+
+urls.taxonomy(category, 'en')
+urls.taxonomy(category, 'pt_BR', 2)
+```
+
+With a category whose slug is `design`, the two calls return `/category/design` and `/br/categoria/design/pagina/2`.
+`taxonomy(tag, locale, page?)` takes a `Tag` from `tags.list()` or a `TagRef` from an entry's `categories` and
+`tags`, and builds `/<prefix>/<segment>/<slug>`, with `/<pageSegment>/<n>` appended for page `n > 1`. It returns
+`undefined` for a type that has no key; `urls.taxonomyTypes` lists the configured types. The slug is the one the API
+gave for the requested locale, so link a fallback entry's tags with the locale of the page.
+
+`createUrls` rejects, naming the type and locale: a key other than `category` or `tag`, an empty segment or one with
+`/`, a missing segment for a `localePaths` locale or one for a locale `localePaths` lacks, and a segment of the `''`
+prefix locale that equals another locale's prefix. With `collections`, it also rejects a segment whose URLs a route
+already produces (`routes "<key>" and "taxonomies.category" produce the same URLs`, also between the two types). A
+route with more fixed segments wins over a taxonomy listing (a `/{locale}/category/news/{slug}` route makes the
+category `news` unreachable); such overlaps are not detected.
 
 The [`@rushcms/astro` README](https://github.com/rush-cms/js/tree/main/packages/astro#routes) shows these helpers in
 routes, entry pages, redirects and sitemaps.

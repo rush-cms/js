@@ -4,6 +4,7 @@ import type {
 	LocaleCode,
 	RushCollections,
 	RushRoutes,
+	TagType,
 	UrlConfig
 } from '../../src/index'
 
@@ -28,7 +29,19 @@ export type CollectionTemplate = {
 	segments: string[]
 }
 
-export type Template = HomepageTemplate | CollectionTemplate
+export type TaxonomyTemplate = {
+	kind: 'taxonomy-index' | 'taxonomy-page'
+	label: string
+	locale: LocaleCode
+	type: TagType
+	segments: string[]
+}
+
+export type Template = HomepageTemplate | CollectionTemplate | TaxonomyTemplate
+
+export function isTaxonomyTemplate(template: Template): template is TaxonomyTemplate {
+	return template.kind === 'taxonomy-index' || template.kind === 'taxonomy-page'
+}
 
 export const VALUE = '\u0000'
 
@@ -39,6 +52,8 @@ export const LOCALES: LocaleCode[] = ['pt_BR', 'en', 'es']
 export const PREFIXES: Record<LocaleCode, string> = { pt_BR: 'pt', en: 'en', es: 'es' }
 
 export const ROUTE_ANY = '*'
+
+export const TAXONOMY_TYPES: TagType[] = ['category', 'tag']
 
 export function substitute(pattern: string, values: Placeholders): string {
 	const path = pattern
@@ -115,6 +130,45 @@ function collectionTemplates(
 		: templates
 }
 
+function taxonomySegments(
+	config: UrlConfig,
+	type: TagType
+): Record<LocaleCode, string> | undefined {
+	return config.taxonomies?.[type]
+}
+
+function taxonomyTemplates(config: UrlConfig, locale: LocaleCode): TaxonomyTemplate[] {
+	const prefix = config.localePaths[locale] ?? ''
+	return TAXONOMY_TYPES.flatMap((type) => {
+		const segments = taxonomySegments(config, type)
+		if (segments === undefined) {
+			return []
+		}
+		const index = [prefix, segments[locale] ?? '', VALUE].filter((segment) => segment !== '')
+		const base = { label: `taxonomies.${type}`, locale, type }
+		return [
+			{ ...base, kind: 'taxonomy-index', segments: index },
+			{
+				...base,
+				kind: 'taxonomy-page',
+				segments: [...index, pageSegmentFor(config, locale), VALUE]
+			}
+		]
+	})
+}
+
+export function prefixClashes(config: UrlConfig): string[] {
+	const bare = Object.keys(config.localePaths).find((locale) => config.localePaths[locale] === '')
+	const prefixes = Object.values(config.localePaths).filter((prefix) => prefix !== '')
+	return TAXONOMY_TYPES.flatMap((type) => {
+		const segments = taxonomySegments(config, type)
+		const segment = bare === undefined ? undefined : segments?.[bare]
+		return segment !== undefined && prefixes.includes(segment)
+			? [`taxonomies.${type} segment "${segment}" equals the locale prefix "${segment}"`]
+			: []
+	})
+}
+
 export function templatesOf(config: UrlConfig): Template[] {
 	const locales = Object.keys(config.localePaths)
 	const slugs = collectionSlugs(config.collections ?? {})
@@ -130,7 +184,8 @@ export function templatesOf(config: UrlConfig): Template[] {
 			(config.collections?.[locale] ?? []).flatMap((ref) =>
 				collectionTemplates(config, locale, ref, [...(slugs.get(ref.id)?.values() ?? [])])
 			)
-		)
+		),
+		...locales.flatMap((locale) => taxonomyTemplates(config, locale))
 	]
 }
 

@@ -10,10 +10,18 @@ export type {
 	RouteParams,
 	RushCollections,
 	RushPageSegments,
+	RushTaxonomies,
+	RushTaxonomySegments,
 	RushUrls,
 	UrlConfig
 } from './urls'
-export type { CollectionMatch, EntryMatch, HomepageMatch, UrlMatch } from './url-match'
+export type {
+	CollectionMatch,
+	EntryMatch,
+	HomepageMatch,
+	TaxonomyMatch,
+	UrlMatch
+} from './url-match'
 export { RushError, isRushError } from './errors'
 export { navigationLinks } from './navigation-links'
 export type { NavigationLink, NavigationLinkAttributes } from './navigation-links'
@@ -71,5 +79,7 @@ export type {
 	Tag,
 	TagEntriesOptions,
 	TagListOptions,
+	TagRef,
+	TagType,
 	TagsResource
 } from './types'

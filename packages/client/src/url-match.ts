@@ -1,5 +1,5 @@
-import type { LocaleCode } from './types'
-import type { CollectionRef, RushCollections } from './urls'
+import type { LocaleCode, TagType } from './types'
+import type { CollectionRef, RushCollections, TaxonomyKey } from './urls'
 
 export type EntryMatch = {
 	kind: 'entry'
@@ -20,7 +20,15 @@ export type HomepageMatch = {
 	locale: LocaleCode
 }
 
-export type UrlMatch = EntryMatch | CollectionMatch | HomepageMatch
+export type TaxonomyMatch = {
+	kind: 'taxonomy'
+	locale: LocaleCode
+	type: TagType
+	slug: string
+	page: number
+}
+
+export type UrlMatch = EntryMatch | CollectionMatch | HomepageMatch | TaxonomyMatch
 
 export type MatchSource = {
 	locales: readonly LocaleCode[]
@@ -29,6 +37,8 @@ export type MatchSource = {
 	collection(collection: CollectionRef, locale: LocaleCode, page?: number): string
 	hasEntries(collection: CollectionRef): boolean
 	routeKey(collection: CollectionRef): string | undefined
+	taxonomyTypes: readonly TagType[]
+	taxonomy(tag: TaxonomyKey, locale: LocaleCode, page?: number): string | undefined
 }
 
 export type UrlMatcher = (pathname: string) => UrlMatch | undefined
@@ -50,11 +60,26 @@ type CollectionShape = {
 	literals: string[]
 }
 
-type Shape = HomepageShape | CollectionShape
+type TaxonomyShape = {
+	kind: 'taxonomy'
+	label: string
+	locale: LocaleCode
+	type: TagType
+	literals: string[]
+	pageSegment: string
+}
+
+type Shape = HomepageShape | CollectionShape | TaxonomyShape
+
+type ShapeTable = Map<string, Shape>
 
 const HOMEPAGE_LABEL = 'homepage'
 
 const FIRST_PAGE = 1
+
+const SLUG_PROBE = 'slug'
+
+const PAGED_TAIL = 3
 
 export function segmentsOf(path: string): string[] {
 	return path.split('/').filter((segment) => segment !== '')
@@ -69,7 +94,7 @@ function decodedSegments(pathname: string): string[] | undefined {
 }
 
 function isOpen(shape: Shape): boolean {
-	return shape.kind === 'page' || shape.kind === 'entry'
+	return shape.kind !== 'homepage' && shape.kind !== 'index'
 }
 
 function keyOf(literals: string[], open: boolean): string {
@@ -89,9 +114,28 @@ function pageOf(value: string): number | undefined {
 		: undefined
 }
 
+function taxonomyMatch(shape: TaxonomyShape, slug: string, page: number): TaxonomyMatch {
+	return { kind: 'taxonomy', locale: shape.locale, type: shape.type, slug, page }
+}
+
+function readTaxonomyPage(table: ShapeTable, segments: string[]): UrlMatch | undefined {
+	if (segments.length < PAGED_TAIL) {
+		return undefined
+	}
+	const shape = table.get(keyOf(segments.slice(0, -PAGED_TAIL), true))
+	const [slug = '', segment, value = ''] = segments.slice(-PAGED_TAIL)
+	const page = pageOf(value)
+	return shape?.kind !== 'taxonomy' || segment !== shape.pageSegment || page === undefined
+		? undefined
+		: taxonomyMatch(shape, slug, page)
+}
+
 function read(shape: Shape, value: string): UrlMatch | undefined {
 	if (shape.kind === 'homepage') {
 		return { kind: 'homepage', locale: shape.locale }
+	}
+	if (shape.kind === 'taxonomy') {
+		return taxonomyMatch(shape, value, FIRST_PAGE)
 	}
 	const { locale, collection } = shape
 	if (shape.kind === 'entry') {
@@ -123,6 +167,26 @@ function collectionShapes(
 	return source.hasEntries(collection) ? [...shapes, shape('entry', index)] : shapes
 }
 
+function taxonomyShapes(source: MatchSource, locale: LocaleCode): TaxonomyShape[] {
+	return source.taxonomyTypes.flatMap((type) => {
+		const probe = { type, slug: SLUG_PROBE }
+		const index = source.taxonomy(probe, locale)
+		const page = source.taxonomy(probe, locale, FIRST_PAGE + 1)
+		if (index === undefined || page === undefined) {
+			return []
+		}
+		const shape: TaxonomyShape = {
+			kind: 'taxonomy',
+			label: `taxonomies.${type}`,
+			locale,
+			type,
+			literals: segmentsOf(index).slice(0, -1),
+			pageSegment: segmentsOf(page).at(-2) ?? ''
+		}
+		return [shape]
+	})
+}
+
 function shapesOf(source: MatchSource): Shape[] {
 	const homepages = source.locales.map((locale): HomepageShape => ({
 		kind: 'homepage',
@@ -136,11 +200,12 @@ function shapesOf(source: MatchSource): Shape[] {
 			: []
 		).flatMap((collection) => collectionShapes(source, locale, collection))
 	)
-	return [...homepages, ...collections]
+	const taxonomies = source.locales.flatMap((locale) => taxonomyShapes(source, locale))
+	return [...homepages, ...collections, ...taxonomies]
 }
 
 export function createMatcher(source: MatchSource): UrlMatcher {
-	const table = new Map<string, Shape>()
+	const table: ShapeTable = new Map()
 	for (const shape of shapesOf(source)) {
 		const key = keyOf(shape.literals, isOpen(shape))
 		const existing = table.get(key)
@@ -161,6 +226,7 @@ export function createMatcher(source: MatchSource): UrlMatcher {
 		}
 		const value = segments.at(-1)
 		const shape = table.get(keyOf(segments.slice(0, -1), true))
-		return shape === undefined || value === undefined ? undefined : read(shape, value)
+		const open = shape === undefined || value === undefined ? undefined : read(shape, value)
+		return open ?? readTaxonomyPage(table, segments)
 	}
 }
