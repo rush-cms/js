@@ -246,8 +246,7 @@ function entryItem(catalog: Catalog, collectionSlug: string, slug: string): Resp
 
 function serve(catalog: Catalog): void {
 	stub.handle((request) => {
-		const tagged =
-			catalog.taxonomy === undefined ? undefined : tagResponse(catalog.taxonomy, request)
+		const tagged = tagResponse(catalog.taxonomy, request)
 		if (tagged !== undefined) {
 			return tagged
 		}

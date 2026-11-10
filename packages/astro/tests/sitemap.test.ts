@@ -84,8 +84,7 @@ function onlyPortuguese(slug: string, locale: string, fallback: boolean): Entry 
 function serve(catalog: Catalog): void {
 	const entryLists = entryListsByLocale(catalog.entries)
 	stub.handle((request) => {
-		const tagged =
-			catalog.taxonomy === undefined ? undefined : tagResponse(catalog.taxonomy, request)
+		const tagged = tagResponse(catalog.taxonomy, request)
 		if (tagged !== undefined) {
 			return tagged
 		}

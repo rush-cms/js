@@ -91,7 +91,13 @@ export function pagedResponse(
 	})
 }
 
-export function tagResponse(catalog: TagCatalog, request: StubRequest): Response | undefined {
+export function tagResponse(
+	catalog: TagCatalog | undefined,
+	request: StubRequest
+): Response | undefined {
+	if (catalog === undefined) {
+		return undefined
+	}
 	const path = request.path.slice(SITE_PREFIX.length)
 	const locale = request.query.get('locale') ?? ''
 	if (path === '/tags') {
