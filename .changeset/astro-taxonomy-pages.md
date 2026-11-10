@@ -10,8 +10,11 @@ Category and tag listing pages.
   from `tags.entries` restricted to the tag's type; `resolvePage` answers those paths on demand as `{ kind:
 'taxonomy', locale, tag, page, lastPage, entries, alternates }` (`TaxonomyPage`, `TaxonomyEntryPage`), and
   `missing` for an unknown or empty tag or a page past the last. `alternates` is the same tag in every locale where
-  it has entries.
-- `taxonomyAlternates(tag, client, urls)` returns those alternates outside the dispatcher; `alternateLinks` and
-  `absoluteLinks` (with the `HreflangLink` type) are exported to turn alternates into `hreflang` links. `SitePage` gains that member, so an exhaustive `switch` over `page.kind` needs a `taxonomy` case.
+  it has entries. `SitePage` gains that member, so an exhaustive `switch` over `page.kind` needs a `taxonomy` case.
+  A dispatcher that chains `page.kind === …` checks renders an empty `200` page for a taxonomy URL: add its
+  `taxonomy` line before setting `taxonomies`.
+- `taxonomyAlternates(tag, client, urls)` returns those alternates outside the dispatcher.
+- `<Hreflang alternates>` (`@rushcms/astro/components/hreflang.astro`) emits `<link rel="alternate" hreflang>` for a
+  list of alternates, with absolute URLs and `x-default` for the default locale; `<Seo>` renders its links through it.
 - `sitemapResponse` lists page 1 of every taxonomy listing, with alternates to the same tag in the other locales and
   `x-default`.

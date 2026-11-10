@@ -89,8 +89,10 @@ collection, in the API's order and page size (15 per page), fallback entries inc
 A `TaxonomyPage` carries `alternates`: the same tag (by id) in every locale where it has entries, as `Alternate[]` with
 URLs of page 1, for the language switcher and `hreflang` links. A locale where the tag has no entries is left out.
 Outside the dispatcher, `taxonomyAlternates(tag, client, urls)` returns the same list, with one `tags.list({ type,
-locale })` request per locale. `alternateLinks(alternates, defaultLocale)` turns such a list into `hreflang` links with
-`x-default`, and `absoluteLinks(links, site)` makes their URLs absolute.
+locale })` request per locale. [`<Hreflang alternates>`](#seo) renders such a list as `hreflang` links.
+
+A dispatcher that chains `page.kind === …` checks instead of an exhaustive `switch` renders an empty `200` page for a
+taxonomy URL it has no line for: add the `taxonomy` case before setting `taxonomies`.
 
 `sitePaths()` lists every page of every tag whose `entry_count` in that locale is above `0`, for every configured
 type and locale, and `resolvePage` answers such a path on demand. The sitemap lists page 1 of each of them. A tag
@@ -341,6 +343,10 @@ Set `site` in `astro.config`: absolute URLs are built from it and `<Seo>` throws
   hreflang links for the homepage's `translations` and points canonical at the homepage's own locale.
   `homepageTitle(homepage)` returns the title it would emit, or `undefined` (no homepage, or a missing or blank
   `meta.title`), so a page can fall back to a title of its own only then.
+- `<Hreflang alternates={list}>` (`@rushcms/astro/components/hreflang.astro`) emits only the
+  `<link rel="alternate" hreflang>` tags for an `Alternate[]`, such as `collectionAlternates(...)` or a taxonomy page's
+  `alternates`: absolute URLs, plus `x-default` pointing at the site's default locale when the list has it. `<Seo>`
+  renders its links through it. It also needs `site` and throws without it.
 
 ## Forms component
 

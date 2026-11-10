@@ -162,7 +162,7 @@ Misconfigurations throw when `createUrls` runs (`route "<key>" must contain {loc
 | `moved(params)`                                         | The redirect target of a `moved` error, from its params alone                                |
 | `collection(collection, locale, page?)`                 | The list path of a collection (page 1 when omitted, else `<index>/<segment>/n`)              |
 | `taxonomy(tag, locale, page?)`                          | The listing path of a category or tag (`undefined` when its type has no segment)             |
-| `match(pathname)`                                       | The entry, collection page or homepage a path names (`undefined` when none)                  |
+| `match(pathname)`                                       | The entry, collection page, taxonomy page or homepage a path names (`undefined` when none)   |
 | `homepage(locale)` / `navigationItem(item, locale)`     | The homepage path / a navigation item's target (`undefined` without one)                     |
 | `localeOf(param)` / `localeParam(locale)`               | The locale of a URL prefix (exact match) / the prefix of a locale                            |
 | `entryParams(collection, locale, slug)`                 | The route params of an entry path                                                            |
