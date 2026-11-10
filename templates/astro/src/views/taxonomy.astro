@@ -17,4 +17,5 @@ const urls = getUrls(Astro)
 	lastPage={page.lastPage}
 	entries={page.entries.items}
 	pageUrl={(number) => urls.taxonomy(tag, locale, number)}
+	translations={page.alternates}
 />
