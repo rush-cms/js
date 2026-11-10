@@ -11,5 +11,6 @@ Taxonomy listing URLs for categories and tags.
 - `urls.taxonomy(tag, locale, page?)` builds `/<prefix>/<segment>/<slug>`, plus `/<pageSegment>/<n>` for page `n > 1`,
   from a `Tag` or a `TagRef`; `undefined` when the type has no segment. `urls.taxonomyTypes` lists the configured
   types.
-- `urls.match` answers `{ kind: 'taxonomy', locale, type, slug, page }` (`TaxonomyMatch`) for those paths.
+- `urls.match` answers `{ kind: 'taxonomy', locale, type, slug, page }` (`TaxonomyMatch`) for those paths. `UrlMatch`
+  gains that member, so an exhaustive `switch` over `match.kind` needs a `taxonomy` case.
 - New exported types: `RushTaxonomies`, `RushTaxonomySegments`, `TaxonomyMatch`, `TagRef`, `TagType`.
