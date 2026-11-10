@@ -82,6 +82,7 @@ const SLUGS = [
 const SUFFIXES = [
 	'/x',
 	'/page/1',
+	'/x/2',
 	'/page/02',
 	'/page/2.0',
 	'/pagina/1',
@@ -372,7 +373,7 @@ describe('match over generated configs', () => {
 			checkCase(matchCase, tally, mismatches)
 		}
 		expect(mismatches.slice(0, 5)).toEqual([])
-		expect(tally).toEqual({ exact: 26108, shadowed: 270, unmatched: 287016, collisions: 93 })
+		expect(tally).toEqual({ exact: 26108, shadowed: 270, unmatched: 313394, collisions: 93 })
 	})
 
 	const taxonomyCases = matchCases(TAXONOMY_ROUTE_SETS, TAXONOMY_SETS)
@@ -385,7 +386,7 @@ describe('match over generated configs', () => {
 		}
 		expect(taxonomyCases.length).toBe(855)
 		expect(mismatches.slice(0, 5)).toEqual([])
-		expect(tally).toEqual({ exact: 87492, shadowed: 754, unmatched: 962924, collisions: 360 })
+		expect(tally).toEqual({ exact: 87492, shadowed: 754, unmatched: 1051060, collisions: 360 })
 	})
 })
 
