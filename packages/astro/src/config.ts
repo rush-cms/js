@@ -3,7 +3,8 @@ import type {
 	RushCollections,
 	RushLocalePaths,
 	RushPageSegments,
-	RushRoutes
+	RushRoutes,
+	RushTaxonomies
 } from '@rushcms/client'
 import type { Plugin } from 'vite'
 
@@ -17,6 +18,7 @@ export type RushAstroOptions = {
 	routes?: RushRoutes
 	localePaths: RushLocalePaths
 	pageSegments?: RushPageSegments
+	taxonomies?: RushTaxonomies
 	seo?: Record<string, SeoFieldMap>
 	trustedProxies: number
 }
@@ -26,6 +28,7 @@ export type RushSiteConfig = {
 	localePaths: RushLocalePaths
 	collections: RushCollections
 	pageSegments: RushPageSegments
+	taxonomies: RushTaxonomies
 	defaultLocale: LocaleCode
 	seo: Record<string, SeoFieldMap>
 	memo: boolean

@@ -1,7 +1,7 @@
 import { fileURLToPath } from 'node:url'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import type { AstroIntegration } from 'astro'
-import type { RushLocalePaths } from '@rushcms/client'
+import type { RushLocalePaths, RushTaxonomies } from '@rushcms/client'
 import type { SiteLocales } from '@rushcms/client/internal'
 import rush from '../src/index'
 import type { RushAstroOptions } from '../src/index'
@@ -263,6 +263,38 @@ describe('site check at build and dev start', () => {
 		expect(stub.requests).toEqual([])
 	})
 
+	it.each([
+		[
+			{ pt_BR: 'categoria', en: 'a/b', es: 'categoria' },
+			'segment for "en" must not contain "/"'
+		],
+		[{ pt_BR: '', en: 'category', es: 'categoria' }, 'segment for "pt_BR" must not be empty'],
+		[{ pt_BR: 'categoria', en: 'category' }, 'has no segment for locale "es"']
+	])('rejects the taxonomy segments %j before touching the API', async (category, message) => {
+		const integration = rush(options(ALL_LOCALES, { taxonomies: { category } }))
+		await expect(runSetup(integration, useProject(apiEnv()))).rejects.toThrow(
+			`taxonomies.category ${message}`
+		)
+		expect(stub.requests).toEqual([])
+	})
+
+	it('fails the build when a taxonomy segment produces the URLs of a collection route', async () => {
+		const routes = { artigos: '/{locale}/blog/{slug}' }
+		const taxonomies = { tag: { pt_BR: 'blog', en: 'blog', es: 'blog' } }
+		await expect(
+			builtConfig(rush(options(ALL_LOCALES, { routes, taxonomies })))
+		).rejects.toThrow(new Error('routes "artigos" and "taxonomies.tag" produce the same URLs'))
+	})
+
+	it('carries the taxonomies into the site config', async () => {
+		const taxonomies: RushTaxonomies = {
+			category: { pt_BR: 'categoria', en: 'category', es: 'categoria' }
+		}
+		expect((await builtConfig(rush(options(ALL_LOCALES, { taxonomies })))).taxonomies).toEqual(
+			taxonomies
+		)
+	})
+
 	it('carries the page segments into the site config', async () => {
 		const integration = rush(options(ALL_LOCALES, { pageSegments: { pt_BR: 'pagina' } }))
 		expect((await builtConfig(integration)).pageSegments).toEqual({ pt_BR: 'pagina' })
@@ -303,6 +335,7 @@ describe('site check at build and dev start', () => {
 				]
 			},
 			pageSegments: {},
+			taxonomies: {},
 			defaultLocale: 'en',
 			seo: { artigos: { description: 'summary' } },
 			memo: true,

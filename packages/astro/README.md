@@ -29,13 +29,14 @@ export default defineConfig({
 })
 ```
 
-| Option           | Description                                                                                  |
-| ---------------- | -------------------------------------------------------------------------------------------- |
-| `localePaths`    | Required. CMS locale code → URL prefix; at most one `''`; exactly the site's active locales. |
-| `routes`         | Collection id, slug (any locale) or `'*'` → URL pattern (see [Routes](#routes)).             |
-| `pageSegments`   | CMS locale code → segment of collection list pages after the first (default `page`).         |
-| `seo`            | Per collection, the data fields used for title, description and image.                       |
-| `trustedProxies` | Required. Reverse proxies in front of the server that append to `X-Forwarded-For`.           |
+| Option           | Description                                                                                          |
+| ---------------- | ---------------------------------------------------------------------------------------------------- |
+| `localePaths`    | Required. CMS locale code → URL prefix; at most one `''`; exactly the site's active locales.         |
+| `routes`         | Collection id, slug (any locale) or `'*'` → URL pattern (see [Routes](#routes)).                     |
+| `pageSegments`   | CMS locale code → segment of collection list pages after the first (default `page`).                 |
+| `taxonomies`     | `category` / `tag` → CMS locale code → segment of its listing pages (see [Taxonomies](#taxonomies)). |
+| `seo`            | Per collection, the data fields used for title, description and image.                               |
+| `trustedProxies` | Required. Reverse proxies in front of the server that append to `X-Forwarded-For`.                   |
 
 ## Routes
 
@@ -61,6 +62,38 @@ and dev start, once the site's collections are known:
 - `routes "<a>" and "<b>" produce the same URLs`: two routes whose URLs cannot be told apart.
 
 A collection slug equal to a fixed page of the site (`contact`, `sitemap.xml`) is not detected.
+
+## Taxonomies
+
+Categories and tags get listing pages only when `taxonomies` names their type, with one path segment per locale:
+
+```js
+rush({
+	localePaths: { en: '', pt_BR: 'br', es: 'es' },
+	pageSegments: { pt_BR: 'pagina' },
+	taxonomies: {
+		category: { en: 'category', pt_BR: 'categoria', es: 'categoria' },
+		tag: { en: 'tag', pt_BR: 'tag', es: 'etiqueta' }
+	},
+	trustedProxies: 1
+})
+```
+
+The listing of a category is `/<prefix>/<segment>/<slug>` (`/category/design`, `/br/categoria/design`), page `n > 1`
+appends `<pageSegments[locale]>/<n>` (`/br/categoria/design/pagina/2`, `/category/design/page/2`), and
+`urls.taxonomy(tag, locale, page?)` builds it from a `Tag` or from the `TagRef` of an entry's `categories` and `tags`
+(`undefined` for a type without a key). Every page lists the entries of `tags.entries(slug, { locale, page })`, which
+come from every collection, in the API's order and page size (15 per page), fallback entries included.
+
+`sitePaths()` lists every page of every tag whose `entry_count` in that locale is above `0`, for every configured
+type and locale, and `resolvePage` answers such a path on demand. The sitemap lists page 1 of each of them. A tag
+whose listing has no entries in a locale has no page there.
+
+A segment is checked like `pageSegments` when Astro loads the config (not empty, no `/`), and must exist for every
+`localePaths` locale and only for those; a key other than `category` or `tag` fails too. The segment of the `''`
+prefix locale must not equal another locale's prefix. At build and dev start, a segment whose URLs a collection route
+already produces fails with `routes "<key>" and "taxonomies.<type>" produce the same URLs` (also between the two
+types).
 
 ## Environment
 
@@ -331,7 +364,8 @@ preview cookie session is active, with a link to `/_rush/preview/exit` that retu
 
 ## Dispatcher route
 
-The recommended setup is one page for every URL the SDK builds (homepages, collection list pages, entries) plus an
+The recommended setup is one page for every URL the SDK builds (homepages, collection list pages, taxonomy listings,
+entries) plus an
 on-demand `404.astro` for old URLs. Changing URLs then only means changing `routes`, `localePaths` or
 `pageSegments`; no page file encodes a URL shape. `src/pages/[...path].astro`:
 
@@ -372,7 +406,8 @@ Astro.response.status = 404
 
 `sitePaths(rush?)` returns `{ params: { path }, props: { page } }` for the homepage of every locale, every list page
 of every routed collection in every locale (pages `1..meta.last_page`, `per_page` set to the collection's
-`items_per_page`) and every entry of every routed collection (as `entryPaths`, fallback pages included). `path` has
+`items_per_page`), every entry of every routed collection (as `entryPaths`, fallback pages included) and every
+taxonomy listing page (see [Taxonomies](#taxonomies)). `path` has
 no leading slash and is `undefined` for `/`. A URL is listed once: when a root pages route (`'/{locale}/{slug}'`)
 makes a list page 1 equal to a homepage URL, the homepage wins. Pass a client as `rush` to override the default one.
 
@@ -392,6 +427,9 @@ its own options object, which would arrive as `rush`.
     - `{ kind: 'collection', locale, collection, page, lastPage, entries }`: `entries` is the `entries.list` page
       (`items`, `meta`) and `lastPage` is `meta.last_page`, at least 1 (an empty collection has page 1); a page past
       `lastPage` is `missing`, and so is a collection the API no longer has;
+    - `{ kind: 'taxonomy', locale, tag, page, lastPage, entries }`: `tag` is the `Tag` of the path's type and slug
+      in `tags.list({ type, locale })`, `entries` the `tags.entries` page; a tag that is unknown or has no entries in
+      that locale is `missing`, and so is a page past `lastPage`;
     - an entry through `resolveEntry`: `{ kind: 'found', entry, locale }`, `moved` or `missing`;
 - `{ kind: 'missing' }` for a path no route names.
 
@@ -483,7 +521,8 @@ locales fall back to `'*'` or have no route. Every helper that builds a URL for 
 | `urls.routed(c)`                | Whether a `routes` key matches collection `c`.                                          |
 | `urls.entry(entry)`             | The canonical URL (the served translation's own locale).                                |
 | `urls.collection(c, l, page?)`  | The list page URL of `c` in `l` (page 1 when omitted).                                  |
-| `urls.match(pathname)`          | The entry, collection page or homepage a path names (`undefined` when none).            |
+| `urls.taxonomy(t, l, page?)`    | The listing URL of category or tag `t` in `l` (`undefined` when its type has no key).   |
+| `urls.match(pathname)`          | The entry, collection, taxonomy page or homepage a path names (`undefined` when none).  |
 | `urls.servedPath(e, requested)` | The URL that answers `200` for `e` as fetched for `requested`, fallback pages included. |
 | `urls.translation(e, l)`        | The URL of `e`'s translation in `l` (throws when there is none).                        |
 | `urls.moved(params)`            | The URL from `moved` error params, routed by `collection_id` then `collection_slug`.    |
@@ -513,10 +552,12 @@ export const GET = (context) => sitemapResponse({ context, collections: ['artigo
   locale, the front page of every locale is listed without `lastmod` (the dispatcher renders a static front page);
 - page 1 of every listed collection in every locale it exists in, without `lastmod` (later list pages are never
   listed), except an index whose URL is a homepage URL: the dispatcher renders the homepage there;
-- canonical entry URLs only (fallback pages are excluded), with `lastmod` from `updated_at`.
+- canonical entry URLs only (fallback pages are excluded), with `lastmod` from `updated_at`;
+- page 1 of every [taxonomy](#taxonomies) listing in every locale where the tag has entries, without `lastmod`,
+  whatever `collections` names.
 
-Homepage and collection URLs carry `xhtml:link` alternates to the same page in the other listed locales, entries to
-their translations; each adds `x-default` pointing at the site's default locale when that locale's page is listed.
+Homepage, collection and taxonomy URLs carry `xhtml:link` alternates to the same page (for a taxonomy, the same tag
+id) in the other listed locales, entries to their translations; each adds `x-default` pointing at the site's default locale when that locale's page is listed.
 `homepageAlternates(urls)` and `collectionAlternates(collection, urls)` (a collection id or slug) return the same
 alternates as `Alternate[]` for a language switcher. Without `collections` it lists every collection that has a
 route; naming a collection without a route throws.

@@ -48,6 +48,7 @@ export async function loadSiteConfig(request: RushSiteRequest): Promise<RushSite
 		localePaths: options.localePaths,
 		collections: await listCollectionsByLocale(client, locales),
 		pageSegments: options.pageSegments ?? {},
+		taxonomies: options.taxonomies ?? {},
 		defaultLocale: site.default_locale,
 		seo: options.seo ?? {},
 		memo: request.memo,

@@ -54,6 +54,7 @@ export function siteConfig(overrides: Partial<RushSiteConfig> = {}): RushSiteCon
 		localePaths: { pt_BR: '', en: 'en', es: 'es' },
 		collections: {},
 		pageSegments: {},
+		taxonomies: {},
 		defaultLocale: 'en',
 		seo: {},
 		memo: true,

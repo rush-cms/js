@@ -1,6 +1,16 @@
-import type { Alternate, Entry, Homepage, LocaleCode, RushClient, RushUrls } from '@rushcms/client'
+import type {
+	Alternate,
+	Entry,
+	Homepage,
+	LocaleCode,
+	RushClient,
+	RushUrls,
+	Tag,
+	TagType
+} from '@rushcms/client'
 import {
 	absoluteLinks,
+	alternateIn,
 	alternateLinks,
 	collectionAlternates,
 	homepageAlternates,
@@ -14,6 +24,7 @@ import { runtimeOf } from './runtime'
 import type { RushContext } from './runtime'
 import { findHomepage } from './site-pages'
 import { absoluteUrl, requireSite } from './site-origin'
+import { listedTags } from './taxonomies'
 
 export type SitemapContext = RushContext & {
 	site: URL | undefined
@@ -35,6 +46,11 @@ export type SitemapSource = {
 	urls: RushUrls
 	defaultLocale: LocaleCode
 	site: URL
+}
+
+type LocaleTags = {
+	locale: LocaleCode
+	tags: Tag[]
 }
 
 type ListedHomepage = {
@@ -117,6 +133,33 @@ function indexUrls(collection: string, source: SitemapSource): SitemapUrl[] {
 	return localizedUrls(list, source)
 }
 
+async function localeTags(
+	source: SitemapSource,
+	type: TagType,
+	locale: LocaleCode
+): Promise<LocaleTags> {
+	return { locale, tags: await listedTags(source.client, type, locale) }
+}
+
+async function taxonomyUrls(source: SitemapSource): Promise<SitemapUrl[]> {
+	const { urls } = source
+	const lists = await Promise.all(
+		urls.taxonomyTypes.flatMap((type) =>
+			urls.locales.map((locale) => localeTags(source, type, locale))
+		)
+	)
+	const byTag = new Map<string, Alternate[]>()
+	for (const { locale, tags } of lists) {
+		for (const tag of tags) {
+			const url = urls.taxonomy(tag, locale)
+			if (url !== undefined) {
+				byTag.set(tag.id, [...(byTag.get(tag.id) ?? []), alternateIn(locale, url)])
+			}
+		}
+	}
+	return [...byTag.values()].flatMap((list) => localizedUrls(list, source))
+}
+
 function renderLink(link: HreflangLink): string {
 	return `<xhtml:link rel="alternate" hreflang="${escapeXml(link.hreflang)}" href="${escapeXml(link.url)}"/>`
 }
@@ -157,7 +200,8 @@ export async function collectSitemap(
 		[
 			...(await homepageUrls(source)),
 			...names.flatMap((name) => indexUrls(name, source)),
-			...groups.flat()
+			...groups.flat(),
+			...(await taxonomyUrls(source))
 		],
 		(url) => url.loc
 	)

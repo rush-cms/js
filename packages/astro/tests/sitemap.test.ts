@@ -5,8 +5,17 @@ import { renderSitemap, sitemapResponse } from '../src/sitemap'
 import type { SitemapContext } from '../src/sitemap'
 import { entryExample, homepageExample } from '../../client/tests/fixtures/contract'
 import { COLLECTION_SLUGS } from '../../client/tests/fixtures/slugs'
-import { SITE_PREFIX, apiError, entryListsByLocale, envelope, startStubApi } from './fixtures/api'
-import type { StubApi } from './fixtures/api'
+import { TAXONOMIES, tagOf } from '../../client/tests/fixtures/taxonomies'
+import type { TagInit } from '../../client/tests/fixtures/taxonomies'
+import {
+	SITE_PREFIX,
+	apiError,
+	entryListsByLocale,
+	envelope,
+	startStubApi,
+	tagResponse
+} from './fixtures/api'
+import type { StubApi, TagCatalog } from './fixtures/api'
 import {
 	ARTICLES,
 	LOCALE_PATHS,
@@ -23,6 +32,7 @@ type Catalog = {
 	entries: Record<string, Entry[]>
 	homepages: Record<string, Homepage>
 	collections?: CollectionRef[]
+	taxonomy?: TagCatalog
 }
 
 const SITE = new URL(SITE_ORIGIN)
@@ -40,6 +50,19 @@ const HOMEPAGES = ['pt', 'en', 'es'].map((prefix) => `${SITE_ORIGIN}/${prefix}`)
 const INDEXES = ['pt/artigos', 'en/blog', 'es/articulos'].map((path) => `${SITE_ORIGIN}/${path}`)
 const NEWS_INDEXES = ['pt', 'en', 'es'].map((prefix) => `${SITE_ORIGIN}/${prefix}/news`)
 const NOT_FOUND = { error: 'not found', code: 'not_found', params: { resource: 'homepage' } }
+const TAXONOMY_CONFIG: RushSiteConfig = { ...SITE_CONFIG, taxonomies: TAXONOMIES }
+const DESIGN: Omit<TagInit, 'slug'> = { type: 'category', id: 'category-design', entryCount: 20 }
+const TAXONOMY: TagCatalog = {
+	tags: {
+		pt_BR: [
+			tagOf({ ...DESIGN, slug: 'design' }),
+			tagOf({ type: 'tag', slug: 'vazia', entryCount: 0 })
+		],
+		en: [tagOf({ ...DESIGN, slug: 'design' }), tagOf({ type: 'tag', slug: 'astro' })],
+		es: [tagOf({ ...DESIGN, slug: 'diseno' })]
+	},
+	entries: {}
+}
 
 let stub: StubApi
 
@@ -61,6 +84,11 @@ function onlyPortuguese(slug: string, locale: string, fallback: boolean): Entry 
 function serve(catalog: Catalog): void {
 	const entryLists = entryListsByLocale(catalog.entries)
 	stub.handle((request) => {
+		const tagged =
+			catalog.taxonomy === undefined ? undefined : tagResponse(catalog.taxonomy, request)
+		if (tagged !== undefined) {
+			return tagged
+		}
 		const locale = request.query.get('locale') ?? ''
 		if (request.path === `${SITE_PREFIX}/homepage`) {
 			const homepage = catalog.homepages[locale]
@@ -319,6 +347,38 @@ describe('sitemap', () => {
 		await expect(
 			sitemapResponse({ context: contextFor(SITE, NEWS_ONLY_CONFIG), collections: ['blog'] })
 		).rejects.toThrow('collection "blog" has no route')
+	})
+
+	it('lists page 1 of every tag with entries in every locale, with alternates by tag id', async () => {
+		const xml = await sitemap(
+			{ entries: {}, homepages: {}, taxonomy: TAXONOMY },
+			[],
+			TAXONOMY_CONFIG
+		)
+		const design = ['pt/categoria/design', 'en/category/design', 'es/categoria/diseno'].map(
+			(path) => `${SITE_ORIGIN}/${path}`
+		)
+		expect(locs(xml)).toEqual([...HOMEPAGES, ...design, `${SITE_ORIGIN}/en/tag/astro`])
+		for (const loc of design) {
+			const block = blockFor(xml, loc)
+			expect(block).not.toContain('<lastmod>')
+			expect(hreflangs(block)).toEqual([
+				`pt-BR ${SITE_ORIGIN}/pt/categoria/design`,
+				`en ${SITE_ORIGIN}/en/category/design`,
+				`es ${SITE_ORIGIN}/es/categoria/diseno`,
+				`x-default ${SITE_ORIGIN}/en/category/design`
+			])
+		}
+		expect(hreflangs(blockFor(xml, `${SITE_ORIGIN}/en/tag/astro`))).toEqual([
+			`en ${SITE_ORIGIN}/en/tag/astro`,
+			`x-default ${SITE_ORIGIN}/en/tag/astro`
+		])
+		expect(xml).not.toContain('vazia')
+	})
+
+	it('asks for no tags without taxonomies', async () => {
+		await sitemap({ entries: {}, homepages: {}, taxonomy: TAXONOMY }, [])
+		expect(stub.requests.filter((request) => request.path.endsWith('/tags'))).toEqual([])
 	})
 
 	it('escapes xml in urls', () => {

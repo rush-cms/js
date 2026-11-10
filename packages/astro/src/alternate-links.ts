@@ -9,7 +9,7 @@ export type HreflangLink = {
 
 export const X_DEFAULT = 'x-default'
 
-function alternateIn(locale: LocaleCode, url: string): Alternate {
+export function alternateIn(locale: LocaleCode, url: string): Alternate {
 	return { locale, hreflang: toBcp47(locale), url }
 }
 

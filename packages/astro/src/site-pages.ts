@@ -6,8 +6,12 @@ import type {
 	EntryMatch,
 	Homepage,
 	LocaleCode,
+	PaginationMeta,
 	RushClient,
-	RushUrls
+	RushUrls,
+	Tag,
+	TagsResource,
+	TaxonomyMatch
 } from '@rushcms/client'
 import { MISSING, resolveEntry } from './entry-route'
 import type { EntryFound, EntryMissing, EntryMoved, EntryRouteContext } from './entry-route'
@@ -15,8 +19,11 @@ import { firstByKey } from './first-by-key'
 import { collectEntryPages } from './paths'
 import { runtimeOf } from './runtime'
 import type { RushContext, RushRuntime } from './runtime'
+import { listedTags } from './taxonomies'
 
 export type EntryListPage = Awaited<ReturnType<EntriesResource['list']>>
+
+export type TaxonomyEntryPage = Awaited<ReturnType<TagsResource['entries']>>
 
 export type HomepagePage = {
 	kind: 'homepage'
@@ -33,7 +40,16 @@ export type CollectionPage = {
 	entries: EntryListPage
 }
 
-export type SitePage = HomepagePage | CollectionPage | EntryFound
+export type TaxonomyPage = {
+	kind: 'taxonomy'
+	locale: LocaleCode
+	tag: Tag
+	page: number
+	lastPage: number
+	entries: TaxonomyEntryPage
+}
+
+export type SitePage = HomepagePage | CollectionPage | TaxonomyPage | EntryFound
 
 export type PageResolution = SitePage | EntryMoved | EntryMissing
 
@@ -63,6 +79,18 @@ type LocaleCollections = {
 	collections: Collection[]
 }
 
+type PagedPage = {
+	page: number
+	lastPage: number
+}
+
+type PageLoader<P> = (page: number) => Promise<P>
+
+type ListedPage = {
+	url: string
+	page: SitePage
+}
+
 const FIRST_PAGE = 1
 
 const NO_PROPS: EntryRouteContext['props'] = {}
@@ -78,6 +106,22 @@ async function homepagePage(client: RushClient, locale: LocaleCode): Promise<Hom
 	return { kind: 'homepage', locale, homepage: await findHomepage(client, locale) }
 }
 
+function lastPageOf(meta: PaginationMeta): number {
+	return Math.max(FIRST_PAGE, meta.last_page)
+}
+
+async function everyPage<P extends PagedPage>(load: PageLoader<P>): Promise<P[]> {
+	const first = await load(FIRST_PAGE)
+	const rest = Array.from({ length: first.lastPage - FIRST_PAGE }, (_, index) =>
+		load(FIRST_PAGE + 1 + index)
+	)
+	return [first, ...(await Promise.all(rest))]
+}
+
+function withinLastPage<P extends PagedPage>(found: P): P | EntryMissing {
+	return found.page > found.lastPage ? MISSING : found
+}
+
 async function collectionPage(
 	client: RushClient,
 	collection: Collection,
@@ -89,20 +133,46 @@ async function collectionPage(
 		page,
 		per_page: collection.items_per_page
 	})
-	const lastPage = Math.max(FIRST_PAGE, entries.meta.last_page)
-	return { kind: 'collection', locale, collection, page, lastPage, entries }
+	return {
+		kind: 'collection',
+		locale,
+		collection,
+		page,
+		lastPage: lastPageOf(entries.meta),
+		entries
+	}
 }
 
-async function collectionPages(
+function collectionPages(
 	client: RushClient,
 	collection: Collection,
 	locale: LocaleCode
 ): Promise<CollectionPage[]> {
-	const first = await collectionPage(client, collection, locale, FIRST_PAGE)
-	const rest = Array.from({ length: first.lastPage - FIRST_PAGE }, (_, index) =>
-		collectionPage(client, collection, locale, FIRST_PAGE + 1 + index)
+	return everyPage((page) => collectionPage(client, collection, locale, page))
+}
+
+async function taxonomyPage(
+	client: RushClient,
+	tag: Tag,
+	locale: LocaleCode,
+	page: number
+): Promise<TaxonomyPage> {
+	const entries = await client.tags.entries(tag.slug, { locale, page })
+	return { kind: 'taxonomy', locale, tag, page, lastPage: lastPageOf(entries.meta), entries }
+}
+
+async function taxonomyPages(
+	client: RushClient,
+	urls: RushUrls,
+	locale: LocaleCode
+): Promise<TaxonomyPage[]> {
+	const lists = await Promise.all(
+		urls.taxonomyTypes.map((type) => listedTags(client, type, locale))
 	)
-	return [first, ...(await Promise.all(rest))]
+	const pages = await Promise.all(
+		lists.flat().map((tag) => everyPage((page) => taxonomyPage(client, tag, locale, page)))
+	)
+	return pages.flat()
 }
 
 async function routedCollections(
@@ -121,15 +191,22 @@ function collectionKeys(lists: LocaleCollections[]): string[] {
 	).map((collection) => collection.slug)
 }
 
-function urlOf(page: SitePage, urls: RushUrls): string {
+function urlOf(page: SitePage, urls: RushUrls): string | undefined {
 	switch (page.kind) {
 		case 'homepage':
 			return urls.homepage(page.locale)
 		case 'collection':
 			return urls.collection(page.collection, page.locale, page.page)
+		case 'taxonomy':
+			return urls.taxonomy(page.tag, page.locale, page.page)
 		case 'found':
 			return urls.servedPath(page.entry, page.locale)
 	}
+}
+
+function listed(page: SitePage, urls: RushUrls): ListedPage[] {
+	const url = urlOf(page, urls)
+	return url === undefined ? [] : [{ url, page }]
 }
 
 function pathParam(url: string): string | undefined {
@@ -153,13 +230,15 @@ export async function collectSitePaths(
 	const entryPages = await Promise.all(
 		collectionKeys(lists).map((key) => collectEntryPages(key, client, urls))
 	)
+	const taxonomies = await Promise.all(
+		urls.locales.map((locale) => taxonomyPages(client, urls, locale))
+	)
 	const entries = entryPages
 		.flat()
 		.map(({ locale, entry }): EntryFound => ({ kind: 'found', entry, locale }))
-	const pages = [...homepages, ...listPages.flat(), ...entries].map((page) => ({
-		url: urlOf(page, urls),
-		page
-	}))
+	const pages = [...homepages, ...listPages.flat(), ...entries, ...taxonomies.flat()].flatMap(
+		(page) => listed(page, urls)
+	)
 	return firstByKey(pages, ({ url }) => url).map(({ url, page }) => ({
 		params: { path: pathParam(url) },
 		props: { page }
@@ -182,8 +261,21 @@ async function resolveCollection(
 	if (collection === undefined) {
 		return MISSING
 	}
-	const found = await collectionPage(client, collection, locale, match.page)
-	return found.page > found.lastPage ? MISSING : found
+	return withinLastPage(await collectionPage(client, collection, locale, match.page))
+}
+
+async function resolveTaxonomy(
+	runtime: RushRuntime,
+	context: SitePageContext,
+	match: TaxonomyMatch
+): Promise<TaxonomyPage | EntryMissing> {
+	const { locale } = match
+	const client = runtime.clientIn(context, locale)
+	const tags = await listedTags(client, match.type, locale)
+	const tag = tags.find((candidate) => candidate.slug === match.slug)
+	return tag === undefined
+		? MISSING
+		: withinLastPage(await taxonomyPage(client, tag, locale, match.page))
 }
 
 function resolveMatchedEntry(
@@ -218,6 +310,8 @@ export async function resolvePage(context: SitePageContext): Promise<PageResolut
 			return homepagePage(runtime.clientIn(context, match.locale), match.locale)
 		case 'collection':
 			return resolveCollection(runtime, context, match)
+		case 'taxonomy':
+			return resolveTaxonomy(runtime, context, match)
 		case 'entry':
 			return resolveMatchedEntry(runtime, context, match)
 		case undefined:

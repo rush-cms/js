@@ -14,8 +14,17 @@ import { resolvePage } from '../src/index'
 import type { PageResolution, SitePage, SitePageContext, SiteStaticPath } from '../src/index'
 import { runtimeOf } from '../src/runtime'
 import { collectSitePaths } from '../src/site-pages'
-import { SITE_PREFIX, apiError, envelope, exampleData, startStubApi } from './fixtures/api'
-import type { StubApi, StubRequest } from './fixtures/api'
+import { TAXONOMIES, TAXONOMY_LOCALE_PATHS, tagOf } from '../../client/tests/fixtures/taxonomies'
+import {
+	SITE_PREFIX,
+	apiError,
+	envelope,
+	exampleData,
+	pagedResponse,
+	startStubApi,
+	tagResponse
+} from './fixtures/api'
+import type { StubApi, StubRequest, TagCatalog } from './fixtures/api'
 import {
 	ARTICLES,
 	GENERIC_ROUTES,
@@ -31,6 +40,7 @@ type Catalog = {
 	collections: Record<LocaleCode, Collection[]>
 	entries: Record<string, Entry[]>
 	moved: Record<string, CollectionRef>
+	taxonomy?: TagCatalog
 }
 
 const LOCALE_PATHS = { pt_BR: '', en: 'en' }
@@ -44,6 +54,21 @@ const WALK_PAGE_SIZE = '100'
 const ENTRY_LIST = /^\/collections\/([^/]+)\/entries$/
 const ENTRY_ITEM = /^\/collections\/([^/]+)\/entries\/([^/]+)$/
 const COLLECTION_ITEM = /^\/collections\/([^/]+)$/
+
+const TAXONOMY_ARTICLE_SLUGS = { pt_BR: 'artigos', en: 'blog', es: 'articulos' }
+const TAG_PAGE_SIZE = 15
+const DESIGN_COUNT = TAG_PAGE_SIZE + 2
+const DESIGN_SLUGS: Record<LocaleCode, string> = { pt_BR: 'design', en: 'design', es: 'diseno' }
+
+const TAXONOMY_CONFIG: RushSiteConfig = siteConfig({
+	localePaths: TAXONOMY_LOCALE_PATHS,
+	routes: { [ARTICLES]: '/{locale}/blog/{slug}' },
+	collections: collectionsOf(ARTICLES, TAXONOMY_ARTICLE_SLUGS),
+	pageSegments: { pt_BR: 'pagina' },
+	taxonomies: TAXONOMIES,
+	defaultLocale: 'pt_BR',
+	memo: false
+})
 
 const GENERIC_CONFIG: RushSiteConfig = siteConfig({
 	localePaths: LOCALE_PATHS,
@@ -149,28 +174,52 @@ function withRootPages(catalog: Catalog): Catalog {
 	}
 }
 
+function taxonomyCatalog(): Catalog {
+	const locales = Object.keys(TAXONOMY_LOCALE_PATHS)
+	const refs = refsOf(ARTICLES, TAXONOMY_ARTICLE_SLUGS)
+	const ref = (locale: LocaleCode): CollectionRef =>
+		refs[locale] ?? { id: ARTICLES, slug: 'blog' }
+	const design = (locale: LocaleCode) =>
+		tagOf({
+			type: 'category',
+			slug: DESIGN_SLUGS[locale] ?? 'design',
+			entryCount: DESIGN_COUNT,
+			id: 'category-design'
+		})
+	const empty = tagOf({ type: 'category', slug: 'empty', entryCount: 0 })
+	const astro = tagOf({ type: 'tag', slug: 'astro' })
+	return {
+		homepages: {},
+		collections: Object.fromEntries(
+			locales.map((locale) => [locale, [collection(ref(locale))]])
+		),
+		entries: {},
+		moved: {},
+		taxonomy: {
+			tags: {
+				pt_BR: [design('pt_BR'), empty],
+				en: [design('en'), empty, astro],
+				es: [design('es'), empty]
+			},
+			entries: {
+				...Object.fromEntries(
+					locales.map((locale) => [
+						`${locale}:${design(locale).slug}`,
+						entriesOf(ref(locale), locale, DESIGN_COUNT)
+					])
+				),
+				'en:astro': entriesOf(ref('en'), 'en', 1)
+			}
+		}
+	}
+}
+
 function notFound(resource: string): Response {
 	return apiError(404, { error: 'not found', code: 'not_found', params: { resource } })
 }
 
-function positive(value: string | null, fallback: number): number {
-	const parsed = Number(value)
-	return value === null || !Number.isInteger(parsed) || parsed < 1 ? fallback : parsed
-}
-
 function entryPage(catalog: Catalog, slug: string, request: StubRequest): Response {
-	const all = catalog.entries[slug] ?? []
-	const perPage = positive(request.query.get('per_page'), 12)
-	const page = positive(request.query.get('page'), 1)
-	return Response.json({
-		data: all.slice((page - 1) * perPage, page * perPage),
-		meta: {
-			total: all.length,
-			per_page: perPage,
-			current_page: page,
-			last_page: Math.ceil(all.length / perPage)
-		}
-	})
+	return pagedResponse(catalog.entries[slug] ?? [], request, 12)
 }
 
 function entryItem(catalog: Catalog, collectionSlug: string, slug: string): Response {
@@ -197,6 +246,11 @@ function entryItem(catalog: Catalog, collectionSlug: string, slug: string): Resp
 
 function serve(catalog: Catalog): void {
 	stub.handle((request) => {
+		const tagged =
+			catalog.taxonomy === undefined ? undefined : tagResponse(catalog.taxonomy, request)
+		if (tagged !== undefined) {
+			return tagged
+		}
 		const locale = request.query.get('locale') ?? ''
 		const path = request.path.slice(SITE_PREFIX.length)
 		if (path === '/homepage') {
@@ -250,7 +304,23 @@ async function resolveAt(pathname: string, catalog: Catalog = articlesCatalog())
 }
 
 function entrySlugs(page: PageResolution | undefined): string[] {
-	return page?.kind === 'collection' ? page.entries.items.map((item) => item.slug) : []
+	return page?.kind === 'collection' || page?.kind === 'taxonomy'
+		? page.entries.items.map((item) => item.slug)
+		: []
+}
+
+async function taxonomyAt(pathname: string): Promise<PageResolution> {
+	serve(taxonomyCatalog())
+	return resolvePage(pageContext(pathname, TAXONOMY_CONFIG))
+}
+
+function tagRequests(): string[] {
+	return stub.requests
+		.filter((request) => request.path.startsWith(`${SITE_PREFIX}/tags`))
+		.map(
+			(request) =>
+				`${request.path.slice(SITE_PREFIX.length)}?${[...request.query].map(([key, value]) => `${key}=${value}`).join('&')}`
+		)
 }
 
 beforeAll(async () => {
@@ -337,6 +407,78 @@ describe('collectSitePaths', () => {
 			const match = urls.match(pathOf(path))
 			expect(match?.kind).toBe(page.kind === 'found' ? 'entry' : page.kind)
 			expect(match?.locale).toBe(page.locale)
+		}
+	})
+})
+
+describe('collectSitePaths with taxonomies', () => {
+	it('lists every page of every tag with entries, per configured type and locale', async () => {
+		const paths = await sitePathsOf(taxonomyCatalog(), TAXONOMY_CONFIG)
+		expect(paths.map(pathOf)).toEqual([
+			'/br',
+			'/',
+			'/es',
+			'/br/blog',
+			'/blog',
+			'/es/blog',
+			'/br/categoria/design',
+			'/br/categoria/design/pagina/2',
+			'/category/design',
+			'/category/design/page/2',
+			'/tag/astro',
+			'/es/categoria/diseno',
+			'/es/categoria/diseno/page/2'
+		])
+	})
+
+	it('gives each taxonomy path its tag and the entries of that page', async () => {
+		const paths = await sitePathsOf(taxonomyCatalog(), TAXONOMY_CONFIG)
+		const byPath = new Map(paths.map((path) => [pathOf(path), path.props.page]))
+		const second = byPath.get('/es/categoria/diseno/page/2')
+		expect(second).toMatchObject({
+			kind: 'taxonomy',
+			locale: 'es',
+			page: 2,
+			lastPage: 2,
+			tag: { id: 'category-design', slug: 'diseno', type: 'category' },
+			entries: { meta: { total: DESIGN_COUNT, current_page: 2 } }
+		})
+		expect(entrySlugs(second)).toEqual(['articulos-16', 'articulos-17'])
+		expect(byPath.get('/tag/astro')).toMatchObject({ kind: 'taxonomy', page: 1, lastPage: 1 })
+	})
+
+	it('asks for the tags of each configured type in each locale and never for empty ones', async () => {
+		await sitePathsOf(taxonomyCatalog(), TAXONOMY_CONFIG)
+		const requests = tagRequests()
+		for (const locale of ['pt_BR', 'en', 'es']) {
+			for (const type of ['category', 'tag']) {
+				expect(requests).toContain(`/tags?locale=${locale}&type=${type}`)
+			}
+		}
+		expect(requests.filter((request) => request.includes('/empty/'))).toEqual([])
+	})
+
+	it('asks for no tags without taxonomies', async () => {
+		await sitePathsOf(taxonomyCatalog(), { ...TAXONOMY_CONFIG, taxonomies: {} })
+		expect(tagRequests()).toEqual([])
+	})
+
+	it('names with urls.match every taxonomy page it lists', async () => {
+		const paths = await sitePathsOf(taxonomyCatalog(), TAXONOMY_CONFIG)
+		const urls = createUrls(TAXONOMY_CONFIG)
+		const listed = paths.flatMap((path) => {
+			const { page } = path.props
+			return page.kind === 'taxonomy' ? [{ url: pathOf(path), page }] : []
+		})
+		expect(listed).toHaveLength(7)
+		for (const { url, page } of listed) {
+			expect(urls.match(url)).toStrictEqual({
+				kind: 'taxonomy',
+				locale: page.locale,
+				type: page.tag.type,
+				slug: page.tag.slug,
+				page: page.page
+			})
 		}
 	})
 })
@@ -429,6 +571,33 @@ describe('resolvePage', () => {
 		expect(await resolveAt('/en/blog/page/1')).toEqual({ kind: 'missing' })
 		expect(await resolveAt('/de/blog/x/y')).toEqual({ kind: 'missing' })
 		expect(stub.requests).toHaveLength(0)
+	})
+
+	it('fetches a taxonomy page from the tag entries in the path locale', async () => {
+		const resolved = await taxonomyAt('/br/categoria/design/pagina/2')
+		expect(resolved).toMatchObject({
+			kind: 'taxonomy',
+			locale: 'pt_BR',
+			page: 2,
+			lastPage: 2,
+			tag: { slug: 'design', type: 'category' }
+		})
+		expect(entrySlugs(resolved)).toEqual(['artigos-16', 'artigos-17'])
+		expect(tagRequests()).toEqual([
+			'/tags?locale=pt_BR&type=category',
+			'/tags/design/entries?locale=pt_BR&page=2'
+		])
+	})
+
+	it('answers missing past the last page, for an empty or unknown tag and for the other type', async () => {
+		for (const path of [
+			'/category/design/page/3',
+			'/category/empty',
+			'/category/unknown',
+			'/tag/design'
+		]) {
+			expect(await taxonomyAt(path), path).toEqual({ kind: 'missing' })
+		}
 	})
 
 	it('reads drafts with the preview session token', async () => {

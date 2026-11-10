@@ -26,7 +26,9 @@ export type {
 	SitePageRoute,
 	SitePathParams,
 	SitePathProps,
-	SiteStaticPath
+	SiteStaticPath,
+	TaxonomyEntryPage,
+	TaxonomyPage
 } from './site-pages'
 export { sitemapResponse } from './sitemap'
 export { homepageTitle } from './seo-model'

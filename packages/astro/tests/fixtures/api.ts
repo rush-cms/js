@@ -3,7 +3,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { parameterExample, responseExample } from '../../../client/tests/fixtures/contract'
 import { isRecord } from '@rushcms/client/internal'
-import type { Entry } from '@rushcms/client'
+import type { Entry, LocaleCode, Tag } from '@rushcms/client'
 import type { RushApiSettings } from '../../src/settings'
 
 export type StubRequest = {
@@ -16,6 +16,11 @@ export type StubRequest = {
 
 export type StubHandler = (request: StubRequest) => Response | Promise<Response>
 
+export type TagCatalog = {
+	tags: Record<LocaleCode, Tag[]>
+	entries: Record<string, Entry[]>
+}
+
 export type StubApi = {
 	api: RushApiSettings
 	requests: StubRequest[]
@@ -26,6 +31,9 @@ export type StubApi = {
 export const SITE_ID = parameterExample('SiteId')
 export const TOKEN = 'stub-delivery-token'
 export const SITE_PREFIX = `/api/v1/${SITE_ID}`
+export const TAG_ENTRIES = /^\/tags\/([^/]+)\/entries$/
+
+const TAG_PAGE_SIZE = 15
 
 function headersOf(message: IncomingMessage): Headers {
 	const headers = new Headers()
@@ -58,6 +66,42 @@ export function entryListsByLocale(entriesByLocale: Record<string, Entry[]>): St
 			data: entriesByLocale[request.query.get('locale') ?? ''] ?? [],
 			meta: PAGE_META
 		})
+}
+
+function positive(value: string | null, fallback: number): number {
+	const parsed = Number(value)
+	return value === null || !Number.isInteger(parsed) || parsed < 1 ? fallback : parsed
+}
+
+export function pagedResponse(
+	all: Entry[],
+	request: StubRequest,
+	defaultPerPage: number
+): Response {
+	const perPage = positive(request.query.get('per_page'), defaultPerPage)
+	const page = positive(request.query.get('page'), 1)
+	return Response.json({
+		data: all.slice((page - 1) * perPage, page * perPage),
+		meta: {
+			total: all.length,
+			per_page: perPage,
+			current_page: page,
+			last_page: Math.ceil(all.length / perPage)
+		}
+	})
+}
+
+export function tagResponse(catalog: TagCatalog, request: StubRequest): Response | undefined {
+	const path = request.path.slice(SITE_PREFIX.length)
+	const locale = request.query.get('locale') ?? ''
+	if (path === '/tags') {
+		const type = request.query.get('type') ?? 'tag'
+		return envelope((catalog.tags[locale] ?? []).filter((tag) => tag.type === type))
+	}
+	const [, slug] = TAG_ENTRIES.exec(path) ?? []
+	return slug === undefined
+		? undefined
+		: pagedResponse(catalog.entries[`${locale}:${slug}`] ?? [], request, TAG_PAGE_SIZE)
 }
 
 export function envelope(data: unknown, status = 200): Response {
