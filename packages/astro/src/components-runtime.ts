@@ -1,3 +1,4 @@
+export { hreflangLinks } from './alternate-links'
 export { runtimeOf } from './runtime'
 export { entrySeo, homepageSeo } from './seo-model'
 export type { SeoSettings, SeoTags, SeoImage } from './seo-model'

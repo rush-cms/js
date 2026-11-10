@@ -1,6 +1,8 @@
 ---
+import { alternates } from '@rushcms/client'
 import type { Entry, Homepage } from '@rushcms/client'
 import { entrySeo, homepageSeo, requireSite, runtimeOf } from '@rushcms/astro/components-runtime'
+import Hreflang from './hreflang.astro'
 
 type Props = { entry: Entry; homepage?: never } | { homepage: Homepage; entry?: never }
 
@@ -13,12 +15,13 @@ const settings = {
 	site: requireSite(Astro.site, '<Seo>')
 }
 const tags = entry ? entrySeo(entry, settings) : homepageSeo(homepage, settings)
+const translations = entry ? alternates(entry, runtime.urls) : alternates(homepage, runtime.urls)
 ---
 
 {tags.title && <title>{tags.title}</title>}
 {tags.description && <meta name="description" content={tags.description} />}
 <link rel="canonical" href={tags.canonical} />
-{tags.links.map((link) => <link rel="alternate" hreflang={link.hreflang} href={link.url} />)}
+<Hreflang alternates={translations} />
 <meta property="og:type" content={tags.type} />
 <meta property="og:url" content={tags.canonical} />
 {tags.title && <meta property="og:title" content={tags.title} />}

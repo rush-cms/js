@@ -32,13 +32,6 @@ export type {
 } from './site-pages'
 export { sitemapResponse } from './sitemap'
 export { homepageTitle } from './seo-model'
-export {
-	absoluteLinks,
-	alternateLinks,
-	collectionAlternates,
-	homepageAlternates,
-	taxonomyAlternates
-} from './alternate-links'
-export type { HreflangLink } from './alternate-links'
+export { collectionAlternates, homepageAlternates, taxonomyAlternates } from './alternate-links'
 export type { SitemapContext, SitemapOptions } from './sitemap'
 export type { RushContext } from './runtime'

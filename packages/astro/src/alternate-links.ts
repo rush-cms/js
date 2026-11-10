@@ -1,13 +1,5 @@
-import { alternates, toBcp47 } from '@rushcms/client'
-import type {
-	Alternate,
-	Entry,
-	Homepage,
-	LocaleCode,
-	RushClient,
-	RushUrls,
-	Tag
-} from '@rushcms/client'
+import { toBcp47 } from '@rushcms/client'
+import type { Alternate, LocaleCode, RushClient, RushUrls, Tag } from '@rushcms/client'
 import { absoluteUrl } from './site-origin'
 import { tagsByLocale } from './taxonomies'
 import type { LocaleTags } from './taxonomies'
@@ -52,20 +44,20 @@ export async function taxonomyAlternates(
 	return tagAlternates(await tagsByLocale(client, urls, tag.type), tag.id, urls)
 }
 
-export function alternateLinks(list: Alternate[], defaultLocale: LocaleCode): HreflangLink[] {
+function alternateLinks(list: Alternate[], defaultLocale: LocaleCode): HreflangLink[] {
 	const links = list.map(({ hreflang, url }) => ({ hreflang, url }))
 	const fallback = list.find((alternate) => alternate.locale === defaultLocale)
 	return fallback === undefined ? links : [...links, { hreflang: X_DEFAULT, url: fallback.url }]
 }
 
-export function hreflangLinks(
-	source: Entry | Homepage,
-	urls: RushUrls,
-	defaultLocale: LocaleCode
-): HreflangLink[] {
-	return alternateLinks(alternates(source, urls), defaultLocale)
+function absoluteLinks(links: HreflangLink[], site: URL): HreflangLink[] {
+	return links.map((link) => ({ ...link, url: absoluteUrl(link.url, site) }))
 }
 
-export function absoluteLinks(links: HreflangLink[], site: URL): HreflangLink[] {
-	return links.map((link) => ({ ...link, url: absoluteUrl(link.url, site) }))
+export function hreflangLinks(
+	list: Alternate[],
+	defaultLocale: LocaleCode,
+	site: URL
+): HreflangLink[] {
+	return absoluteLinks(alternateLinks(list, defaultLocale), site)
 }

@@ -1,0 +1,14 @@
+---
+import type { Alternate } from '@rushcms/client'
+import { hreflangLinks, requireSite, runtimeOf } from '@rushcms/astro/components-runtime'
+
+type Props = {
+	alternates: Alternate[]
+}
+
+const { alternates } = Astro.props
+const runtime = runtimeOf(Astro.locals)
+const links = hreflangLinks(alternates, runtime.defaultLocale, requireSite(Astro.site, '<Hreflang>'))
+---
+
+{links.map((link) => <link rel="alternate" hreflang={link.hreflang} href={link.url} />)}

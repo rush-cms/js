@@ -1,8 +1,8 @@
-import { toBcp47, translatedLocales } from '@rushcms/client'
+import { alternates, toBcp47, translatedLocales } from '@rushcms/client'
 import { isRecord } from '@rushcms/client/internal'
 import type { Entry, Homepage, LocaleCode, Media, RushUrls } from '@rushcms/client'
 import type { SeoFieldMap } from './config'
-import { absoluteLinks, hreflangLinks } from './alternate-links'
+import { hreflangLinks } from './alternate-links'
 import type { HreflangLink } from './alternate-links'
 import { absoluteUrl } from './site-origin'
 
@@ -109,7 +109,7 @@ export function entrySeo(entry: Entry, settings: SeoSettings): SeoTags {
 		canonical: absoluteUrl(urls.entry(entry), site),
 		locale: toBcp47(entry.locale),
 		alternateLocales: ogAlternateLocales(entry),
-		links: absoluteLinks(hreflangLinks(entry, urls, settings.defaultLocale), site)
+		links: hreflangLinks(alternates(entry, urls), settings.defaultLocale, site)
 	}
 	withText(
 		tags,
@@ -131,7 +131,7 @@ export function homepageSeo(homepage: Homepage, settings: SeoSettings): SeoTags 
 		canonical: absoluteUrl(urls.homepage(homepage.locale), site),
 		locale: toBcp47(homepage.locale),
 		alternateLocales: ogAlternateLocales(homepage),
-		links: absoluteLinks(hreflangLinks(homepage, urls, settings.defaultLocale), site)
+		links: hreflangLinks(alternates(homepage, urls), settings.defaultLocale, site)
 	}
 	withText(tags, homepageTitle(homepage), filled(meta?.description))
 	const image = filled(meta?.og_image)

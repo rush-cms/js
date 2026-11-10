@@ -1,6 +1,6 @@
 ---
-import { absoluteLinks, alternateLinks, getRush, getUrls } from '@rushcms/astro'
-import { runtimeOf } from '@rushcms/astro/components-runtime'
+import { getRush, getUrls } from '@rushcms/astro'
+import Hreflang from '@rushcms/astro/components/hreflang.astro'
 import RushImage from '@rushcms/astro/components/rush-image.astro'
 import type { Alternate, Entry, LocaleCode } from '@rushcms/client'
 import Base from '../layouts/base.astro'
@@ -26,16 +26,11 @@ const next = page < lastPage ? pageUrl(page + 1) : undefined
 const current = pageUrl(page)
 const canonical = Astro.site && current !== undefined ? new URL(current, Astro.site) : undefined
 const heading = page > 1 ? `${title} (${page}/${lastPage})` : title
-const { defaultLocale } = runtimeOf(Astro.locals)
-const links =
-	Astro.site && page === 1
-		? absoluteLinks(alternateLinks(translations, defaultLocale), Astro.site)
-		: []
 ---
 
 <Base locale={locale} title={`${heading} | ${site.name}`} translations={translations}>
 	{canonical && <link slot="head" rel="canonical" href={canonical.href} />}
-	{links.map((link) => <link slot="head" rel="alternate" hreflang={link.hreflang} href={link.url} />)}
+	{page === 1 && <Hreflang slot="head" alternates={translations} />}
 	<div class="mx-auto max-w-6xl px-6 py-16">
 		<header class="max-w-3xl">
 			<h1 class="text-4xl font-semibold tracking-tight">{title}</h1>
