@@ -166,6 +166,14 @@ describe('resources', () => {
 		expect(calls[0]?.url.search).toBe('?page=3&per_page=5&q=hello+world')
 	})
 
+	it('sends the taxonomy type of a tag entries listing', async () => {
+		const { client, calls } = testClient(() => jsonResponse(responseExample('EntryPageOk')))
+
+		await client.tags.entries('design', { type: 'category', page: 2 })
+
+		expect(calls[0]?.url.search).toBe('?page=2&type=category')
+	})
+
 	it('encodes path segments', async () => {
 		const { client, calls } = testClient(() => jsonResponse(responseExample('EntryOk')))
 

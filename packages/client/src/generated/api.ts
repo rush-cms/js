@@ -299,6 +299,12 @@ export interface paths {
 		 * Entries carrying a tag or category
 		 * @description Paginated; `per_page` defaults to 15. Entries of every active collection, content rule as in `listEntries`
 		 *     (each carries its own `collection`). Order: `published_at` descending, then entry id descending.
+		 *
+		 *     Tag and category slugs are unique per type, so one slug can name both a tag and a category. Pass `type` to
+		 *     resolve the slug within that taxonomy only; a slug absent from it answers `404 not_found`. Without `type`
+		 *     the slug resolves across both taxonomies: the translation earliest in the locale preference order wins, and
+		 *     on a tie a tag wins over a category. Always pass `type` when a slug may exist in both taxonomies.
+		 *     A `type` other than `tag` or `category` answers `400 bad_request`.
 		 */
 		get: operations['listTagEntries']
 		put?: never
@@ -701,10 +707,7 @@ export interface components {
 		Timestamp: string
 		/** @enum {string} */
 		Perspective: 'published' | 'draft'
-		/**
-		 * @default tag
-		 * @enum {string}
-		 */
+		/** @enum {string} */
 		TagType: 'tag' | 'category'
 		/** @description Any JSON value, including null. */
 		JsonValue: unknown
@@ -2611,8 +2614,10 @@ export interface components {
 		 * @example hello world
 		 */
 		Query: string
-		/** @description Which taxonomy to list. Any other value answers `400 bad_request`. */
+		/** @description Which taxonomy to list; `tag` when omitted. Any other value answers `400 bad_request`. */
 		TagType: components['schemas']['TagType']
+		/** @description Restricts the slug to one taxonomy. Without it the slug resolves across both. Any other value answers `400 bad_request`. */
+		EntriesTagType: components['schemas']['TagType']
 		/**
 		 * @description An `ETag` from an earlier response; a match answers `304`.
 		 * @example "9f86d081884c7d659a2feaa0c55ad015"
@@ -3019,7 +3024,7 @@ export interface operations {
 	listTags: {
 		parameters: {
 			query?: {
-				/** @description Which taxonomy to list. Any other value answers `400 bad_request`. */
+				/** @description Which taxonomy to list; `tag` when omitted. Any other value answers `400 bad_request`. */
 				type?: components['parameters']['TagType']
 				/**
 				 * @description Requested locale. Matching ignores case and `-`/`_` and accepts a base language (`pt` → `pt_BR`). When absent,
@@ -3063,6 +3068,8 @@ export interface operations {
 	listTagEntries: {
 		parameters: {
 			query?: {
+				/** @description Restricts the slug to one taxonomy. Without it the slug resolves across both. Any other value answers `400 bad_request`. */
+				type?: components['parameters']['EntriesTagType']
 				/**
 				 * @description Requested locale. Matching ignores case and `-`/`_` and accepts a base language (`pt` → `pt_BR`). When absent,
 				 *     `Accept-Language` decides, then the site default. A value the site does not serve answers

@@ -531,8 +531,11 @@
 					"Tags"
 				],
 				"summary": "Entries carrying a tag or category",
-				"description": "Paginated; `per_page` defaults to 15. Entries of every active collection, content rule as in `listEntries`\n(each carries its own `collection`). Order: `published_at` descending, then entry id descending.\n",
+				"description": "Paginated; `per_page` defaults to 15. Entries of every active collection, content rule as in `listEntries`\n(each carries its own `collection`). Order: `published_at` descending, then entry id descending.\n\nTag and category slugs are unique per type, so one slug can name both a tag and a category. Pass `type` to\nresolve the slug within that taxonomy only; a slug absent from it answers `404 not_found`. Without `type`\nthe slug resolves across both taxonomies: the translation earliest in the locale preference order wins, and\non a tie a tag wins over a category. Always pass `type` when a slug may exist in both taxonomies.\nA `type` other than `tag` or `category` answers `400 bad_request`.\n",
 				"parameters": [
+					{
+						"$ref": "#/components/parameters/EntriesTagType"
+					},
 					{
 						"$ref": "#/components/parameters/Locale"
 					},
@@ -1400,7 +1403,16 @@
 				"name": "type",
 				"in": "query",
 				"required": false,
-				"description": "Which taxonomy to list. Any other value answers `400 bad_request`.",
+				"description": "Which taxonomy to list; `tag` when omitted. Any other value answers `400 bad_request`.",
+				"schema": {
+					"$ref": "#/components/schemas/TagType"
+				}
+			},
+			"EntriesTagType": {
+				"name": "type",
+				"in": "query",
+				"required": false,
+				"description": "Restricts the slug to one taxonomy. Without it the slug resolves across both. Any other value answers `400 bad_request`.",
 				"schema": {
 					"$ref": "#/components/schemas/TagType"
 				}
@@ -2942,8 +2954,7 @@
 				"enum": [
 					"tag",
 					"category"
-				],
-				"default": "tag"
+				]
 			},
 			"JsonValue": {
 				"description": "Any JSON value, including null.",
