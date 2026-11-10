@@ -13,4 +13,6 @@ Taxonomy listing URLs for categories and tags.
   types.
 - `urls.match` answers `{ kind: 'taxonomy', locale, type, slug, page }` (`TaxonomyMatch`) for those paths. `UrlMatch`
   gains that member, so an exhaustive `switch` over `match.kind` needs a `taxonomy` case.
+- `tags.entries(slug, { type })` restricts the slug to one taxonomy (the API contract gained the `type` query), so a
+  category and a tag that share a slug list their own entries.
 - New exported types: `RushTaxonomies`, `RushTaxonomySegments`, `TaxonomyMatch`, `TagRef`, `TagType`.

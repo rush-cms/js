@@ -82,8 +82,15 @@ rush({
 The listing of a category is `/<prefix>/<segment>/<slug>` (`/category/design`, `/br/categoria/design`), page `n > 1`
 appends `<pageSegments[locale]>/<n>` (`/br/categoria/design/pagina/2`, `/category/design/page/2`), and
 `urls.taxonomy(tag, locale, page?)` builds it from a `Tag` or from the `TagRef` of an entry's `categories` and `tags`
-(`undefined` for a type without a key). Every page lists the entries of `tags.entries(slug, { locale, page })`, which
-come from every collection, in the API's order and page size (15 per page), fallback entries included.
+(`undefined` for a type without a key). Every page lists the entries of `tags.entries(slug, { type, locale, page })`
+with the tag's own type, so a category and a tag that share a slug keep their own listings. The entries come from every
+collection, in the API's order and page size (15 per page), fallback entries included.
+
+A `TaxonomyPage` carries `alternates`: the same tag (by id) in every locale where it has entries, as `Alternate[]` with
+URLs of page 1, for the language switcher and `hreflang` links. A locale where the tag has no entries is left out.
+Outside the dispatcher, `taxonomyAlternates(tag, client, urls)` returns the same list, with one `tags.list({ type,
+locale })` request per locale. `alternateLinks(alternates, defaultLocale)` turns such a list into `hreflang` links with
+`x-default`, and `absoluteLinks(links, site)` makes their URLs absolute.
 
 `sitePaths()` lists every page of every tag whose `entry_count` in that locale is above `0`, for every configured
 type and locale, and `resolvePage` answers such a path on demand. The sitemap lists page 1 of each of them. A tag
@@ -558,6 +565,6 @@ export const GET = (context) => sitemapResponse({ context, collections: ['artigo
 
 Homepage, collection and taxonomy URLs carry `xhtml:link` alternates to the same page (for a taxonomy, the same tag
 id) in the other listed locales, entries to their translations; each adds `x-default` pointing at the site's default locale when that locale's page is listed.
-`homepageAlternates(urls)` and `collectionAlternates(collection, urls)` (a collection id or slug) return the same
-alternates as `Alternate[]` for a language switcher. Without `collections` it lists every collection that has a
+`homepageAlternates(urls)`, `collectionAlternates(collection, urls)` (a collection id or slug) and
+`taxonomyAlternates(tag, client, urls)` return the same alternates as `Alternate[]` for a language switcher. Without `collections` it lists every collection that has a
 route; naming a collection without a route throws.

@@ -209,6 +209,10 @@ With a category whose slug is `design`, the two calls return `/category/design` 
 `undefined` for a type that has no key; `urls.taxonomyTypes` lists the configured types. The slug is the one the API
 gave for the requested locale, so link a fallback entry's tags with the locale of the page.
 
+A tag and a category may share a slug, so list a listing's entries with its type:
+`tags.entries(tag.slug, { type: tag.type, locale, page })`. Without `type` the API resolves the slug across both
+taxonomies (a tag wins a tie), and the listing of a category could show the entries of a tag.
+
 `createUrls` rejects, naming the type and locale: a key other than `category` or `tag`, an empty segment or one with
 `/`, a missing segment for a `localePaths` locale or one for a locale `localePaths` lacks, and a segment of the `''`
 prefix locale that equals another locale's prefix. With `collections`, it also rejects a segment whose URLs a route

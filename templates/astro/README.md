@@ -94,6 +94,8 @@ taxonomies: {
 
 Each category or tag with entries then gets a listing page per locale (`/category/design`, `/pt/categoria/design`,
 `/category/design/page/2`), rendered by `src/views/taxonomy.astro` (`TaxonomyViewProps`) and listed in the sitemap.
+The language switcher and the `hreflang` links of a listing point at the same category or tag in the other locales
+(`page.alternates`); a locale where it has no entries links to its homepage instead.
 Link to one with `getUrls(Astro).taxonomy(tag, locale)`, for instance from an entry's `categories`. See
 [Taxonomies](https://github.com/rush-cms/js/tree/main/packages/astro#taxonomies) for the rules.
 
