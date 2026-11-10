@@ -3,7 +3,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { parameterExample, responseExample } from '../../../client/tests/fixtures/contract'
 import { isRecord } from '@rushcms/client/internal'
-import type { Entry, LocaleCode, Tag } from '@rushcms/client'
+import type { Entry, LocaleCode, Tag, TagType } from '@rushcms/client'
 import type { RushApiSettings } from '../../src/settings'
 
 export type StubRequest = {
@@ -34,6 +34,8 @@ export const SITE_PREFIX = `/api/v1/${SITE_ID}`
 export const TAG_ENTRIES = /^\/tags\/([^/]+)\/entries$/
 
 const TAG_PAGE_SIZE = 15
+
+const TIE_ORDER: readonly TagType[] = ['tag', 'category']
 
 function headersOf(message: IncomingMessage): Headers {
 	const headers = new Headers()
@@ -91,6 +93,17 @@ export function pagedResponse(
 	})
 }
 
+export function tagEntriesKey(locale: LocaleCode, tag: Pick<Tag, 'type' | 'slug'>): string {
+	return `${locale}:${tag.type}:${tag.slug}`
+}
+
+function slugTag(tags: Tag[], slug: string, type: string | null): Tag | undefined {
+	const types = type === null ? TIE_ORDER : TIE_ORDER.filter((candidate) => candidate === type)
+	return types
+		.map((candidate) => tags.find((tag) => tag.type === candidate && tag.slug === slug))
+		.find((tag) => tag !== undefined)
+}
+
 export function tagResponse(
 	catalog: TagCatalog | undefined,
 	request: StubRequest
@@ -100,14 +113,19 @@ export function tagResponse(
 	}
 	const path = request.path.slice(SITE_PREFIX.length)
 	const locale = request.query.get('locale') ?? ''
+	const tags = catalog.tags[locale] ?? []
 	if (path === '/tags') {
 		const type = request.query.get('type') ?? 'tag'
-		return envelope((catalog.tags[locale] ?? []).filter((tag) => tag.type === type))
+		return envelope(tags.filter((tag) => tag.type === type))
 	}
 	const [, slug] = TAG_ENTRIES.exec(path) ?? []
-	return slug === undefined
-		? undefined
-		: pagedResponse(catalog.entries[`${locale}:${slug}`] ?? [], request, TAG_PAGE_SIZE)
+	if (slug === undefined) {
+		return undefined
+	}
+	const tag = slugTag(tags, slug, request.query.get('type'))
+	return tag === undefined
+		? notFound('tag')
+		: pagedResponse(catalog.entries[tagEntriesKey(locale, tag)] ?? [], request, TAG_PAGE_SIZE)
 }
 
 export function envelope(data: unknown, status = 200): Response {
@@ -116,6 +134,10 @@ export function envelope(data: unknown, status = 200): Response {
 
 export function apiError(status: number, body: Record<string, unknown>): Response {
 	return Response.json(body, { status })
+}
+
+export function notFound(resource: string): Response {
+	return apiError(404, { error: 'not found', code: 'not_found', params: { resource } })
 }
 
 export function exampleData(name: string): Record<string, unknown> {

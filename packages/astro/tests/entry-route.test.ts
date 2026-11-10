@@ -6,7 +6,7 @@ import { COLLECTION_SLUGS, ENTRY_SLUGS } from '../../client/tests/fixtures/slugs
 import type { RushSiteConfig } from '../src/config'
 import { resolveEntry } from '../src/index'
 import type { EntryRoute } from '../src/index'
-import { SITE_PREFIX, apiError, envelope, startStubApi } from './fixtures/api'
+import { SITE_PREFIX, apiError, envelope, notFound, startStubApi } from './fixtures/api'
 import type { StubApi, StubHandler, StubRequest } from './fixtures/api'
 import {
 	ARTICLES,
@@ -59,12 +59,8 @@ function serving(handler: StubHandler): void {
 	stub.handle(handler)
 }
 
-function entryNotFound(): Response {
-	return apiError(404, { error: 'not found', code: 'not_found', params: { resource: 'entry' } })
-}
-
 function serveEntryAt(path: string): StubHandler {
-	return (request) => (request.path === path ? envelope(servedEntry(request)) : entryNotFound())
+	return (request) => (request.path === path ? envelope(servedEntry(request)) : notFound('entry'))
 }
 
 function echoingSlug(request: StubRequest): Response {
@@ -86,7 +82,7 @@ function resolvingSlugs(request: StubRequest): Response {
 	const locale = request.query.get('locale') ?? ''
 	const known = Object.values(COLLECTION_SLUGS).includes(collection)
 	if (!known || slugOwner(slug) === undefined) {
-		return entryNotFound()
+		return notFound('entry')
 	}
 	const canonical = { slug: ENTRY_SLUGS[locale], collection: COLLECTION_SLUGS[locale] }
 	if (canonical.slug === slug && canonical.collection === collection) {

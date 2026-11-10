@@ -1,20 +1,11 @@
-import type {
-	Alternate,
-	Entry,
-	Homepage,
-	LocaleCode,
-	RushClient,
-	RushUrls,
-	Tag,
-	TagType
-} from '@rushcms/client'
+import type { Alternate, Entry, Homepage, LocaleCode, RushClient, RushUrls } from '@rushcms/client'
 import {
 	absoluteLinks,
-	alternateIn,
 	alternateLinks,
 	collectionAlternates,
 	homepageAlternates,
-	hreflangLinks
+	hreflangLinks,
+	tagAlternates
 } from './alternate-links'
 import type { HreflangLink } from './alternate-links'
 import { firstByKey } from './first-by-key'
@@ -24,7 +15,8 @@ import { runtimeOf } from './runtime'
 import type { RushContext } from './runtime'
 import { findHomepage } from './site-pages'
 import { absoluteUrl, requireSite } from './site-origin'
-import { listedTags } from './taxonomies'
+import { tagsByLocale } from './taxonomies'
+import type { LocaleTags } from './taxonomies'
 
 export type SitemapContext = RushContext & {
 	site: URL | undefined
@@ -46,11 +38,6 @@ export type SitemapSource = {
 	urls: RushUrls
 	defaultLocale: LocaleCode
 	site: URL
-}
-
-type LocaleTags = {
-	locale: LocaleCode
-	tags: Tag[]
 }
 
 type ListedHomepage = {
@@ -133,31 +120,20 @@ function indexUrls(collection: string, source: SitemapSource): SitemapUrl[] {
 	return localizedUrls(list, source)
 }
 
-async function localeTags(
-	source: SitemapSource,
-	type: TagType,
-	locale: LocaleCode
-): Promise<LocaleTags> {
-	return { locale, tags: await listedTags(source.client, type, locale) }
+function typeUrls(lists: LocaleTags[], source: SitemapSource): SitemapUrl[] {
+	const tags = firstByKey(
+		lists.flatMap((list) => list.tags),
+		(tag) => tag.id
+	)
+	return tags.flatMap((tag) => localizedUrls(tagAlternates(lists, tag.id, source.urls), source))
 }
 
 async function taxonomyUrls(source: SitemapSource): Promise<SitemapUrl[]> {
-	const { urls } = source
-	const lists = await Promise.all(
-		urls.taxonomyTypes.flatMap((type) =>
-			urls.locales.map((locale) => localeTags(source, type, locale))
-		)
+	const { client, urls } = source
+	const groups = await Promise.all(
+		urls.taxonomyTypes.map((type) => tagsByLocale(client, urls, type))
 	)
-	const byTag = new Map<string, Alternate[]>()
-	for (const { locale, tags } of lists) {
-		for (const tag of tags) {
-			const url = urls.taxonomy(tag, locale)
-			if (url !== undefined) {
-				byTag.set(tag.id, [...(byTag.get(tag.id) ?? []), alternateIn(locale, url)])
-			}
-		}
-	}
-	return [...byTag.values()].flatMap((list) => localizedUrls(list, source))
+	return groups.flatMap((lists) => typeUrls(lists, source))
 }
 
 function renderLink(link: HreflangLink): string {

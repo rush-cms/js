@@ -4,15 +4,18 @@ import type {
 	CollectionRef,
 	Entry,
 	Homepage,
+	Alternate,
 	LocaleCode,
-	RushRoutes
+	RushRoutes,
+	Tag
 } from '@rushcms/client'
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { entryExample, homepageExample } from '../../client/tests/fixtures/contract'
 import type { RushSiteConfig } from '../src/config'
-import { resolvePage } from '../src/index'
+import { resolvePage, taxonomyAlternates } from '../src/index'
 import type { PageResolution, SitePage, SitePageContext, SiteStaticPath } from '../src/index'
 import { runtimeOf } from '../src/runtime'
+import type { RushRuntime } from '../src/runtime'
 import { collectSitePaths } from '../src/site-pages'
 import { TAXONOMIES, TAXONOMY_LOCALE_PATHS, tagOf } from '../../client/tests/fixtures/taxonomies'
 import {
@@ -20,8 +23,10 @@ import {
 	apiError,
 	envelope,
 	exampleData,
+	notFound,
 	pagedResponse,
 	startStubApi,
+	tagEntriesKey,
 	tagResponse
 } from './fixtures/api'
 import type { StubApi, StubRequest, TagCatalog } from './fixtures/api'
@@ -59,6 +64,12 @@ const TAXONOMY_ARTICLE_SLUGS = { pt_BR: 'artigos', en: 'blog', es: 'articulos' }
 const TAG_PAGE_SIZE = 15
 const DESIGN_COUNT = TAG_PAGE_SIZE + 2
 const DESIGN_SLUGS: Record<LocaleCode, string> = { pt_BR: 'design', en: 'design', es: 'diseno' }
+const SHARED_SLUG_ENTRY = 'tagged-design'
+const DESIGN_ALTERNATES = [
+	{ locale: 'pt_BR', hreflang: 'pt-BR', url: '/br/categoria/design' },
+	{ locale: 'en', hreflang: 'en', url: '/category/design' },
+	{ locale: 'es', hreflang: 'es', url: '/es/categoria/diseno' }
+]
 
 const TAXONOMY_CONFIG: RushSiteConfig = siteConfig({
 	localePaths: TAXONOMY_LOCALE_PATHS,
@@ -174,48 +185,69 @@ function withRootPages(catalog: Catalog): Catalog {
 	}
 }
 
-function taxonomyCatalog(): Catalog {
-	const locales = Object.keys(TAXONOMY_LOCALE_PATHS)
-	const refs = refsOf(ARTICLES, TAXONOMY_ARTICLE_SLUGS)
-	const ref = (locale: LocaleCode): CollectionRef =>
-		refs[locale] ?? { id: ARTICLES, slug: 'blog' }
-	const design = (locale: LocaleCode) =>
-		tagOf({
-			type: 'category',
-			slug: DESIGN_SLUGS[locale] ?? 'design',
-			entryCount: DESIGN_COUNT,
-			id: 'category-design'
-		})
+const TAXONOMY_REFS = refsOf(ARTICLES, TAXONOMY_ARTICLE_SLUGS)
+const TAXONOMY_LOCALES = Object.keys(TAXONOMY_LOCALE_PATHS)
+
+function taxonomyRef(locale: LocaleCode): CollectionRef {
+	return TAXONOMY_REFS[locale] ?? { id: ARTICLES, slug: 'blog' }
+}
+
+function designOf(locale: LocaleCode): Tag {
+	return tagOf({
+		type: 'category',
+		slug: DESIGN_SLUGS[locale] ?? 'design',
+		entryCount: DESIGN_COUNT,
+		id: 'category-design'
+	})
+}
+
+function designTaxonomy(): TagCatalog {
 	const empty = tagOf({ type: 'category', slug: 'empty', entryCount: 0 })
 	const astro = tagOf({ type: 'tag', slug: 'astro' })
 	return {
-		homepages: {},
-		collections: Object.fromEntries(
-			locales.map((locale) => [locale, [collection(ref(locale))]])
-		),
-		entries: {},
-		moved: {},
-		taxonomy: {
-			tags: {
-				pt_BR: [design('pt_BR'), empty],
-				en: [design('en'), empty, astro],
-				es: [design('es'), empty]
-			},
-			entries: {
-				...Object.fromEntries(
-					locales.map((locale) => [
-						`${locale}:${design(locale).slug}`,
-						entriesOf(ref(locale), locale, DESIGN_COUNT)
-					])
-				),
-				'en:astro': entriesOf(ref('en'), 'en', 1)
-			}
+		tags: {
+			pt_BR: [designOf('pt_BR'), empty],
+			en: [designOf('en'), empty, astro],
+			es: [designOf('es'), empty]
+		},
+		entries: {
+			...Object.fromEntries(
+				TAXONOMY_LOCALES.map((locale) => [
+					tagEntriesKey(locale, designOf(locale)),
+					entriesOf(taxonomyRef(locale), locale, DESIGN_COUNT)
+				])
+			),
+			[tagEntriesKey('en', astro)]: entriesOf(taxonomyRef('en'), 'en', 1)
 		}
 	}
 }
 
-function notFound(resource: string): Response {
-	return apiError(404, { error: 'not found', code: 'not_found', params: { resource } })
+function sharedSlugTaxonomy(): TagCatalog {
+	const { tags, entries } = designTaxonomy()
+	const tag = tagOf({ type: 'tag', slug: 'design' })
+	return {
+		tags: {
+			...tags,
+			en: [...(tags.en ?? []), tag],
+			es: [...(tags.es ?? []), { ...tag, entry_count: 0 }]
+		},
+		entries: {
+			...entries,
+			[tagEntriesKey('en', tag)]: [entry(taxonomyRef('en'), 'en', SHARED_SLUG_ENTRY)]
+		}
+	}
+}
+
+function taxonomyCatalog(taxonomy: TagCatalog = designTaxonomy()): Catalog {
+	return {
+		homepages: {},
+		collections: Object.fromEntries(
+			TAXONOMY_LOCALES.map((locale) => [locale, [collection(taxonomyRef(locale))]])
+		),
+		entries: {},
+		moved: {},
+		taxonomy
+	}
 }
 
 function entryPage(catalog: Catalog, slug: string, request: StubRequest): Response {
@@ -279,10 +311,29 @@ function pathOf(path: SiteStaticPath): string {
 	return `/${path.params.path ?? ''}`
 }
 
-async function sitePathsOf(catalog: Catalog, config: RushSiteConfig): Promise<SiteStaticPath[]> {
+function runtimeServing(catalog: Catalog, config: RushSiteConfig): RushRuntime {
 	serve(catalog)
-	const runtime = runtimeOf(rushLocals(stub.api, config))
+	return runtimeOf(rushLocals(stub.api, config))
+}
+
+async function sitePathsOf(catalog: Catalog, config: RushSiteConfig): Promise<SiteStaticPath[]> {
+	const runtime = runtimeServing(catalog, config)
 	return collectSitePaths(runtime.onDemandClient(), runtime.urls)
+}
+
+async function taxonomyPathsOf(taxonomy: TagCatalog): Promise<Map<string, SitePage>> {
+	const paths = await sitePathsOf(taxonomyCatalog(taxonomy), TAXONOMY_CONFIG)
+	return new Map(paths.map((path) => [pathOf(path), path.props.page]))
+}
+
+function alternatesOf(page: PageResolution | undefined): Alternate[] | undefined {
+	return page?.kind === 'taxonomy' ? page.alternates : undefined
+}
+
+function only(locale: LocaleCode, url: string): Alternate[] {
+	return DESIGN_ALTERNATES.filter((alternate) => alternate.locale === locale).map(
+		(alternate) => ({ ...alternate, url })
+	)
 }
 
 function pageContext(
@@ -308,8 +359,11 @@ function entrySlugs(page: PageResolution | undefined): string[] {
 		: []
 }
 
-async function taxonomyAt(pathname: string): Promise<PageResolution> {
-	serve(taxonomyCatalog())
+async function taxonomyAt(
+	pathname: string,
+	catalog: Catalog = taxonomyCatalog()
+): Promise<PageResolution> {
+	serve(catalog)
 	return resolvePage(pageContext(pathname, TAXONOMY_CONFIG))
 }
 
@@ -410,6 +464,21 @@ describe('collectSitePaths', () => {
 	})
 })
 
+describe('taxonomyAlternates', () => {
+	it('resolves the same tag in each locale and skips locales without its entries', async () => {
+		const runtime = runtimeServing(taxonomyCatalog(sharedSlugTaxonomy()), TAXONOMY_CONFIG)
+		const { urls } = runtime
+		const client = runtime.onDemandClient()
+		expect(await taxonomyAlternates(designOf('es'), client, urls)).toEqual(DESIGN_ALTERNATES)
+		expect(
+			await taxonomyAlternates(tagOf({ type: 'tag', slug: 'design' }), client, urls)
+		).toEqual(only('en', '/tag/design'))
+		expect(
+			await taxonomyAlternates(tagOf({ type: 'tag', slug: 'astro' }), client, urls)
+		).toEqual(only('en', '/tag/astro'))
+	})
+})
+
 describe('collectSitePaths with taxonomies', () => {
 	it('lists every page of every tag with entries, per configured type and locale', async () => {
 		const paths = await sitePathsOf(taxonomyCatalog(), TAXONOMY_CONFIG)
@@ -424,9 +493,9 @@ describe('collectSitePaths with taxonomies', () => {
 			'/br/categoria/design/pagina/2',
 			'/category/design',
 			'/category/design/page/2',
-			'/tag/astro',
 			'/es/categoria/diseno',
-			'/es/categoria/diseno/page/2'
+			'/es/categoria/diseno/page/2',
+			'/tag/astro'
 		])
 	})
 
@@ -455,6 +524,24 @@ describe('collectSitePaths with taxonomies', () => {
 			}
 		}
 		expect(requests.filter((request) => request.includes('/empty/'))).toEqual([])
+	})
+
+	it('lists each taxonomy page with its own entries when a tag and a category share a slug', async () => {
+		const byPath = await taxonomyPathsOf(sharedSlugTaxonomy())
+		const category = entrySlugs(byPath.get('/category/design'))
+		expect(category).toHaveLength(TAG_PAGE_SIZE)
+		expect(category).not.toContain(SHARED_SLUG_ENTRY)
+		expect(entrySlugs(byPath.get('/tag/design'))).toEqual([SHARED_SLUG_ENTRY])
+		expect(tagRequests()).toContain('/tags/design/entries?locale=en&page=1&type=category')
+		expect(tagRequests()).toContain('/tags/design/entries?locale=en&page=1&type=tag')
+	})
+
+	it('gives each taxonomy page the same tag in every locale that lists it with entries', async () => {
+		const byPath = await taxonomyPathsOf(sharedSlugTaxonomy())
+		expect(alternatesOf(byPath.get('/br/categoria/design'))).toEqual(DESIGN_ALTERNATES)
+		expect(alternatesOf(byPath.get('/es/categoria/diseno/page/2'))).toEqual(DESIGN_ALTERNATES)
+		expect(alternatesOf(byPath.get('/tag/astro'))).toEqual(only('en', '/tag/astro'))
+		expect(alternatesOf(byPath.get('/tag/design'))).toEqual(only('en', '/tag/design'))
 	})
 
 	it('asks for no tags without taxonomies', async () => {
@@ -584,8 +671,25 @@ describe('resolvePage', () => {
 		expect(entrySlugs(resolved)).toEqual(['artigos-16', 'artigos-17'])
 		expect(tagRequests()).toEqual([
 			'/tags?locale=pt_BR&type=category',
-			'/tags/design/entries?locale=pt_BR&page=2'
+			'/tags?locale=en&type=category',
+			'/tags?locale=es&type=category',
+			'/tags/design/entries?locale=pt_BR&page=2&type=category'
 		])
+	})
+
+	it('fetches only the category entries for a category page whose slug a tag shares', async () => {
+		const resolved = await taxonomyAt('/category/design', taxonomyCatalog(sharedSlugTaxonomy()))
+		const slugs = entrySlugs(resolved)
+		expect(slugs).toHaveLength(TAG_PAGE_SIZE)
+		expect(slugs).not.toContain(SHARED_SLUG_ENTRY)
+		expect(tagRequests()).toContain('/tags/design/entries?locale=en&page=1&type=category')
+	})
+
+	it('gives a taxonomy page the same tag in the other locales', async () => {
+		expect(alternatesOf(await taxonomyAt('/br/categoria/design/pagina/2'))).toEqual(
+			DESIGN_ALTERNATES
+		)
+		expect(alternatesOf(await taxonomyAt('/tag/astro'))).toEqual(only('en', '/tag/astro'))
 	})
 
 	it('answers missing past the last page, for an empty or unknown tag and for the other type', async () => {

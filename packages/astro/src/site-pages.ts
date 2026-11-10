@@ -1,5 +1,6 @@
 import { optional } from '@rushcms/client'
 import type {
+	Alternate,
 	Collection,
 	CollectionMatch,
 	EntriesResource,
@@ -19,7 +20,9 @@ import { firstByKey } from './first-by-key'
 import { collectEntryPages } from './paths'
 import { runtimeOf } from './runtime'
 import type { RushContext, RushRuntime } from './runtime'
-import { listedTags } from './taxonomies'
+import { tagAlternates } from './alternate-links'
+import { tagsByLocale } from './taxonomies'
+import type { LocaleTags } from './taxonomies'
 
 export type EntryListPage = Awaited<ReturnType<EntriesResource['list']>>
 
@@ -47,6 +50,7 @@ export type TaxonomyPage = {
 	page: number
 	lastPage: number
 	entries: TaxonomyEntryPage
+	alternates: Alternate[]
 }
 
 export type SitePage = HomepagePage | CollectionPage | TaxonomyPage | EntryFound
@@ -155,23 +159,39 @@ async function taxonomyPage(
 	client: RushClient,
 	tag: Tag,
 	locale: LocaleCode,
-	page: number
+	page: number,
+	alternates: Alternate[]
 ): Promise<TaxonomyPage> {
-	const entries = await client.tags.entries(tag.slug, { locale, page })
-	return { kind: 'taxonomy', locale, tag, page, lastPage: lastPageOf(entries.meta), entries }
+	const entries = await client.tags.entries(tag.slug, { type: tag.type, locale, page })
+	return {
+		kind: 'taxonomy',
+		locale,
+		tag,
+		page,
+		lastPage: lastPageOf(entries.meta),
+		entries,
+		alternates
+	}
 }
 
-async function taxonomyPages(
+function typePages(
 	client: RushClient,
 	urls: RushUrls,
-	locale: LocaleCode
-): Promise<TaxonomyPage[]> {
-	const lists = await Promise.all(
-		urls.taxonomyTypes.map((type) => listedTags(client, type, locale))
+	lists: LocaleTags[]
+): Promise<TaxonomyPage[]>[] {
+	return lists.flatMap(({ locale, tags }) =>
+		tags.map((tag) => {
+			const alternates = tagAlternates(lists, tag.id, urls)
+			return everyPage((page) => taxonomyPage(client, tag, locale, page, alternates))
+		})
 	)
-	const pages = await Promise.all(
-		lists.flat().map((tag) => everyPage((page) => taxonomyPage(client, tag, locale, page)))
+}
+
+async function taxonomyPages(client: RushClient, urls: RushUrls): Promise<TaxonomyPage[]> {
+	const groups = await Promise.all(
+		urls.taxonomyTypes.map((type) => tagsByLocale(client, urls, type))
 	)
+	const pages = await Promise.all(groups.flatMap((lists) => typePages(client, urls, lists)))
 	return pages.flat()
 }
 
@@ -230,14 +250,12 @@ export async function collectSitePaths(
 	const entryPages = await Promise.all(
 		collectionKeys(lists).map((key) => collectEntryPages(key, client, urls))
 	)
-	const taxonomies = await Promise.all(
-		urls.locales.map((locale) => taxonomyPages(client, urls, locale))
-	)
+	const taxonomies = await taxonomyPages(client, urls)
 	const entries = entryPages
 		.flat()
 		.map(({ locale, entry }): EntryFound => ({ kind: 'found', entry, locale }))
-	const pages = [...homepages, ...listPages.flat(), ...entries, ...taxonomies.flat()].flatMap(
-		(page) => listed(page, urls)
+	const pages = [...homepages, ...listPages.flat(), ...entries, ...taxonomies].flatMap((page) =>
+		listed(page, urls)
 	)
 	return firstByKey(pages, ({ url }) => url).map(({ url, page }) => ({
 		params: { path: pathParam(url) },
@@ -271,11 +289,15 @@ async function resolveTaxonomy(
 ): Promise<TaxonomyPage | EntryMissing> {
 	const { locale } = match
 	const client = runtime.clientIn(context, locale)
-	const tags = await listedTags(client, match.type, locale)
-	const tag = tags.find((candidate) => candidate.slug === match.slug)
-	return tag === undefined
-		? MISSING
-		: withinLastPage(await taxonomyPage(client, tag, locale, match.page))
+	const lists = await tagsByLocale(client, runtime.urls, match.type)
+	const tag = lists
+		.find((list) => list.locale === locale)
+		?.tags.find((candidate) => candidate.slug === match.slug)
+	if (tag === undefined) {
+		return MISSING
+	}
+	const alternates = tagAlternates(lists, tag.id, runtime.urls)
+	return withinLastPage(await taxonomyPage(client, tag, locale, match.page, alternates))
 }
 
 function resolveMatchedEntry(

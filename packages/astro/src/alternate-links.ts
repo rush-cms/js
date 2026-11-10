@@ -1,6 +1,16 @@
 import { alternates, toBcp47 } from '@rushcms/client'
-import type { Alternate, Entry, Homepage, LocaleCode, RushUrls } from '@rushcms/client'
+import type {
+	Alternate,
+	Entry,
+	Homepage,
+	LocaleCode,
+	RushClient,
+	RushUrls,
+	Tag
+} from '@rushcms/client'
 import { absoluteUrl } from './site-origin'
+import { tagsByLocale } from './taxonomies'
+import type { LocaleTags } from './taxonomies'
 
 export type HreflangLink = {
 	hreflang: string
@@ -24,6 +34,22 @@ export function collectionAlternates(collection: string, urls: RushUrls): Altern
 			? [alternateIn(locale, urls.collection(ref, locale))]
 			: []
 	})
+}
+
+export function tagAlternates(lists: LocaleTags[], id: string, urls: RushUrls): Alternate[] {
+	return lists.flatMap(({ locale, tags }) => {
+		const tag = tags.find((candidate) => candidate.id === id)
+		const url = tag === undefined ? undefined : urls.taxonomy(tag, locale)
+		return url === undefined ? [] : [alternateIn(locale, url)]
+	})
+}
+
+export async function taxonomyAlternates(
+	tag: Tag,
+	client: RushClient,
+	urls: RushUrls
+): Promise<Alternate[]> {
+	return tagAlternates(await tagsByLocale(client, urls, tag.type), tag.id, urls)
 }
 
 export function alternateLinks(list: Alternate[], defaultLocale: LocaleCode): HreflangLink[] {
