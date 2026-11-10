@@ -138,7 +138,10 @@ const TAXONOMY_SETS: RushTaxonomies[] = [
 	{ category: { pt_BR: 'c', en: 'c', es: 'c' }, tag: { pt_BR: 'c', en: 't', es: 't' } }
 ]
 
-const TAXONOMY_ROUTE_SETS = ROUTE_SETS.slice(0, 3)
+const TAXONOMY_ROUTE_SETS: RushRoutes[] = [
+	...ROUTE_SETS.slice(0, 3),
+	{ docs: '/{locale}/blog/sobre', posts: '/{locale}/noticias/{slug}' }
+]
 
 function localePathsVariants(): RushLocalePaths[] {
 	return nonEmptySubsets(LOCALES).flatMap((locales) =>
@@ -384,9 +387,9 @@ describe('match over generated configs', () => {
 		for (const matchCase of taxonomyCases) {
 			checkCase(matchCase, tally, mismatches)
 		}
-		expect(taxonomyCases.length).toBe(855)
+		expect(taxonomyCases.length).toBe(1140)
 		expect(mismatches.slice(0, 5)).toEqual([])
-		expect(tally).toEqual({ exact: 87492, shadowed: 754, unmatched: 1051060, collisions: 360 })
+		expect(tally).toEqual({ exact: 119982, shadowed: 862, unmatched: 1441486, collisions: 408 })
 	})
 })
 
