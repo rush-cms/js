@@ -1,5 +1,24 @@
 # @rushcms/client
 
+## 4.1.0
+
+### Minor Changes
+
+- [`3cee317`](https://github.com/rush-cms/js/commit/3cee3179e14a1fd579152890c87ebf4a0b604fa6) Thanks [@rmarsigli](https://github.com/rmarsigli)! - Taxonomy listing URLs for categories and tags.
+  
+  - `createUrls({ taxonomies })`: `category` and `tag` map to a path segment per locale. Each segment must be non-empty
+    and free of `/`, exist for every `localePaths` locale and only for those, and, for the `''` prefix locale, differ
+    from every other locale's prefix. With `collections`, a segment whose URLs a route already produces throws
+    `routes "<key>" and "taxonomies.<type>" produce the same URLs` (also between the two types).
+  - `urls.taxonomy(tag, locale, page?)` builds `/<prefix>/<segment>/<slug>`, plus `/<pageSegment>/<n>` for page `n > 1`,
+    from a `Tag` or a `TagRef`; `undefined` when the type has no segment. `urls.taxonomyTypes` lists the configured
+    types.
+  - `urls.match` answers `{ kind: 'taxonomy', locale, type, slug, page }` (`TaxonomyMatch`) for those paths. `UrlMatch`
+    gains that member, so an exhaustive `switch` over `match.kind` needs a `taxonomy` case.
+  - `tags.entries(slug, { type })` restricts the slug to one taxonomy (the API contract gained the `type` query), so a
+    category and a tag that share a slug list their own entries.
+  - New exported types: `RushTaxonomies`, `RushTaxonomySegments`, `TaxonomyMatch`, `TagRef`, `TagType`.
+
 ## 4.0.0
 
 ### Major Changes
