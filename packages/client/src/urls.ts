@@ -358,9 +358,7 @@ export function createUrls(config: UrlConfig): RushUrls {
 	}
 
 	function translation(entry: Entry, locale: LocaleCode): string {
-		const target = Object.hasOwn(entry.translations, locale)
-			? entry.translations[locale]
-			: undefined
+		const target = ownValue(entry.translations, locale)
 		if (target === undefined) {
 			throw new Error(`entry "${entry.id}" has no translation for locale "${locale}"`)
 		}
