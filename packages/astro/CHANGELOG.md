@@ -1,5 +1,11 @@
 # @rushcms/astro
 
+## 0.3.1
+
+### Patch Changes
+
+- [`a9b3a46`](https://github.com/rush-cms/js/commit/a9b3a46a556a6a66a91ec61e6935f1a154fab6b0) Thanks [@rmarsigli](https://github.com/rmarsigli)! - `x-default` now points at the locale served at the site root (the empty URL prefix) when there is one, and at the CMS default locale otherwise.
+
 ## 0.3.0
 
 ### Minor Changes

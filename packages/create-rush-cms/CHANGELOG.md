@@ -1,5 +1,11 @@
 # create-rush-cms
 
+## 0.2.1
+
+### Patch Changes
+
+- [`a9b3a46`](https://github.com/rush-cms/js/commit/a9b3a46a556a6a66a91ec61e6935f1a154fab6b0) Thanks [@rmarsigli](https://github.com/rmarsigli)! - Scaffolded sites pick up the new `@rushcms/astro` `x-default` rule: the locale served at the site root, else the CMS default locale.
+
 ## 0.2.0
 
 ### Minor Changes
