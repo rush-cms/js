@@ -144,6 +144,7 @@ const EN = entry({
 	updated_at: '2026-04-04T04:00:00Z'
 })
 const FALLBACK = onlyPortuguese('so-pt', 'fb', true)
+const EVERY_LOCALE_FALLBACK = { pt_BR: [FALLBACK], en: [FALLBACK], es: [FALLBACK] }
 const PT_HOME: Homepage = {
 	...homepageExample(),
 	locale: 'pt_BR',
@@ -178,7 +179,7 @@ describe('sitemap', () => {
 		const xml = await sitemap({ entries: { pt_BR: [PT], en: [EN] }, homepages: {} }, ['blog'])
 		expect(locs(xml)).toEqual([
 			...HOMEPAGES,
-			...INDEXES,
+			...INDEXES.slice(0, 2),
 			'https://site.example/pt/artigos/ola-mundo',
 			'https://site.example/en/blog/hello-world'
 		])
@@ -280,7 +281,7 @@ describe('sitemap', () => {
 	})
 
 	it('lists page 1 of every collection in every locale, with alternates and no lastmod', async () => {
-		const xml = await sitemap({ entries: {}, homepages: {} })
+		const xml = await sitemap({ entries: EVERY_LOCALE_FALLBACK, homepages: {} })
 		expect(locs(xml)).toEqual([...HOMEPAGES, ...INDEXES])
 		expect(xml).not.toContain('/page/')
 		for (const loc of INDEXES) {
@@ -290,6 +291,30 @@ describe('sitemap', () => {
 			expect(block).toContain('hreflang="en" href="https://site.example/en/blog"')
 			expect(block).toContain('hreflang="es" href="https://site.example/es/articulos"')
 			expect(block).toContain('hreflang="x-default" href="https://site.example/en/blog"')
+		}
+	})
+
+	it('lists a collection index only in the locales whose listing has entries, for every subset', async () => {
+		const locales = ['pt_BR', 'en', 'es']
+		const hreflangOf = ['pt-BR', 'en', 'es']
+		for (let mask = 0; mask < 2 ** locales.length; mask += 1) {
+			const listed = locales.filter((_, index) => (mask >> index) & 1)
+			const entries = Object.fromEntries(
+				listed.map((locale, index) => [locale, [index % 2 === 0 ? FALLBACK : PT]])
+			)
+			const xml = await sitemap({ entries, homepages: {} }, ['blog'])
+			const kept = INDEXES.flatMap((loc, index) =>
+				listed.includes(locales[index] ?? '') ? [`${hreflangOf[index] ?? ''} ${loc}`] : []
+			)
+			const expected = kept.map((link) => link.split(' ')[1] ?? '')
+			expect(
+				locs(xml).filter((loc) => INDEXES.includes(loc)),
+				listed.join()
+			).toEqual(expected)
+			const xDefault = listed.includes('en') ? [`x-default ${SITE_ORIGIN}/en/blog`] : []
+			for (const loc of expected) {
+				expect(hreflangs(blockFor(xml, loc)), listed.join()).toEqual([...kept, ...xDefault])
+			}
 		}
 	})
 
@@ -309,7 +334,7 @@ describe('sitemap', () => {
 		const xml = await sitemap({ entries: { pt_BR: [PT] }, homepages: {} })
 		expect(locs(xml)).toEqual([
 			...HOMEPAGES,
-			...INDEXES,
+			INDEXES[0],
 			'https://site.example/pt/artigos/ola-mundo'
 		])
 	})
@@ -333,7 +358,7 @@ describe('sitemap', () => {
 		)
 		expect(locs(xml)).toEqual([
 			...HOMEPAGES,
-			...NEWS_INDEXES,
+			NEWS_INDEXES[1],
 			'https://site.example/en/news/launch'
 		])
 		expect(
@@ -345,7 +370,11 @@ describe('sitemap', () => {
 
 	it('lists only the named collections', async () => {
 		const xml = await sitemap(
-			{ entries: {}, homepages: {}, collections: [{ id: ARTICLES, slug: 'blog' }, NEWS] },
+			{
+				entries: EVERY_LOCALE_FALLBACK,
+				homepages: {},
+				collections: [{ id: ARTICLES, slug: 'blog' }, NEWS]
+			},
 			['news'],
 			NEWS_ONLY_CONFIG
 		)

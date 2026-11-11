@@ -44,6 +44,12 @@ type ListedHomepage = {
 	lastmod: string
 }
 
+type CollectionListing = {
+	collection: string
+	entries: SitemapUrl[]
+	listed: Set<LocaleCode>
+}
+
 const XML_ESCAPES: Record<string, string> = {
 	'&': '&amp;',
 	'<': '&lt;',
@@ -65,14 +71,23 @@ function entryUrl(entry: Entry, source: SitemapSource): SitemapUrl {
 	}
 }
 
-async function entryUrls(collection: string, source: SitemapSource): Promise<SitemapUrl[]> {
-	const found: SitemapUrl[] = []
-	for await (const { entry } of localizedEntries(collection, source.client, source.urls)) {
+async function collectionListing(
+	collection: string,
+	source: SitemapSource
+): Promise<CollectionListing> {
+	const entries: SitemapUrl[] = []
+	const listed = new Set<LocaleCode>()
+	for await (const { locale, entry } of localizedEntries(
+		collection,
+		source.client,
+		source.urls
+	)) {
+		listed.add(locale)
 		if (!entry.fallback) {
-			found.push(entryUrl(entry, source))
+			entries.push(entryUrl(entry, source))
 		}
 	}
-	return found
+	return { collection, entries, listed }
 }
 
 function localizedUrls(
@@ -111,10 +126,10 @@ async function homepageUrls(source: SitemapSource): Promise<SitemapUrl[]> {
 	)
 }
 
-function indexUrls(collection: string, source: SitemapSource): SitemapUrl[] {
+function indexUrls(listing: CollectionListing, source: SitemapSource): SitemapUrl[] {
 	const homepages = new Set(homepageAlternates(source.urls).map((alternate) => alternate.url))
-	const list = collectionAlternates(collection, source.urls).filter(
-		(alternate) => !homepages.has(alternate.url)
+	const list = collectionAlternates(listing.collection, source.urls).filter(
+		(alternate) => listing.listed.has(alternate.locale) && !homepages.has(alternate.url)
 	)
 	return localizedUrls(list, source)
 }
@@ -170,12 +185,12 @@ export async function collectSitemap(
 	collections?: string[]
 ): Promise<SitemapUrl[]> {
 	const names = collections ?? (await allCollections(source))
-	const groups = await Promise.all(names.map((name) => entryUrls(name, source)))
+	const listings = await Promise.all(names.map((name) => collectionListing(name, source)))
 	return firstByKey(
 		[
 			...(await homepageUrls(source)),
-			...names.flatMap((name) => indexUrls(name, source)),
-			...groups.flat(),
+			...listings.flatMap((listing) => indexUrls(listing, source)),
+			...listings.flatMap((listing) => listing.entries),
 			...(await taxonomyUrls(source))
 		],
 		(url) => url.loc
