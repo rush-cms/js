@@ -38,6 +38,7 @@ const heading = page > 1 ? `${title} (${page}/${lastPage})` : title
 		}}
 		titleSuffix={` | ${site.name}`}
 	/>
+	{entries.length === 0 && <meta slot="head" name="robots" content="noindex" />}
 	<div class="mx-auto max-w-6xl px-6 py-16">
 		<header class="max-w-3xl">
 			<h1 class="text-4xl font-semibold tracking-tight">{title}</h1>
