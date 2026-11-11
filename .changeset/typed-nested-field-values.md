@@ -1,6 +1,6 @@
 ---
 '@rushcms/client': major
-'@rushcms/astro': patch
+'@rushcms/astro': minor
 ---
 
 Breaking for TypeScript users: nested field values are typed. The API contract now describes `Entry['data']`, homepage section values, site option group values, Block values and rich-text custom block values with named schemas instead of free objects, and the generated types follow. Runtime behaviour does not change.
@@ -13,4 +13,4 @@ Existing code that compiled against the free-object types can stop compiling:
 - Block values cannot contain block fields.
 - Admin field widths are no longer served on public Block definitions.
 
-New exported types: `FieldValue`, `FieldValues`, `BlockValue`, `BlockValues`, `RepeaterItem`, `NestedRepeaterItem`, `ExpandedDatabaseItem`. `@rushcms/astro` only moves its `@rushcms/client` range to the new major.
+New exported types: `FieldValue`, `FieldValues`, `BlockValue`, `BlockValues`, `RepeaterItem`, `NestedRepeaterItem`, `ExpandedDatabaseItem`. `@rushcms/astro` moves its `@rushcms/client` range to the new major, so sites typed against the old client types may need the same adjustments.
