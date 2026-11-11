@@ -1,5 +1,11 @@
 # create-rush-cms
 
+## 0.2.2
+
+### Patch Changes
+
+- [`4edd89b`](https://github.com/rush-cms/js/commit/4edd89b13eac94e2b767feb1c006fde8316d2e84) Thanks [@rmarsigli](https://github.com/rmarsigli)! - Scaffolded list and taxonomy pages use `<Seo page>` with a site-name `titleSuffix`, list cards pass `sizes` and `aspectRatio` to `RushImage`, the entry cover loads with `priority`, and an empty list page is marked `noindex`, as the sitemap leaves it out.
+
 ## 0.2.1
 
 ### Patch Changes
