@@ -54,7 +54,7 @@ function text(value: unknown): string {
 	return typeof value === 'string' ? value : ''
 }
 
-function positive(value: unknown): number | undefined {
+export function positive(value: unknown): number | undefined {
 	return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : undefined
 }
 

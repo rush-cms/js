@@ -1,34 +1,71 @@
 ---
-import { Image } from 'astro:assets'
+import { Image, imageConfig, inferRemoteSize } from 'astro:assets'
 import type { ImageOutputFormat, ImageQuality } from 'astro'
 import type { HTMLAttributes } from 'astro/types'
 import type { RichTextMedia } from './rich-text-model'
+import type { ImageLayout } from './rush-image-model'
+import {
+	boxStyle,
+	imageFrame,
+	isOptimizable,
+	probeOnce,
+	responsiveProps
+} from './rush-image-model'
 
 type Props = Omit<HTMLAttributes<'img'>, 'src' | 'width' | 'height' | 'alt'> & {
 	media: RichTextMedia | undefined
 	alt?: string
 	quality?: ImageQuality
 	format?: ImageOutputFormat
+	layout?: ImageLayout
+	widths?: number[]
+	aspectRatio?: number
+	priority?: boolean
 }
 
-const { media, alt, ...rest } = Astro.props
-const { quality, format, ...attributes } = rest
-const url = media?.url
+const { media, alt, aspectRatio, layout, widths, ...rest } = Astro.props
+const { quality, format, priority, ...attributes } = rest
 const text = alt ?? media?.alt ?? ''
-const plain = { loading: 'lazy' as const, decoding: 'async' as const, ...attributes }
+const plain = {
+	loading: priority ? ('eager' as const) : ('lazy' as const),
+	decoding: 'async' as const,
+	...attributes
+}
+const frame = await imageFrame(media, aspectRatio, (url) =>
+	probeOnce(url, (src) => inferRemoteSize(src, imageConfig))
+)
+const responsive =
+	frame?.kind === 'sized'
+		? responsiveProps(frame.size, {
+				optimizable: isOptimizable(frame.url, imageConfig),
+				layout,
+				widths,
+				configLayout: imageConfig.layout,
+				breakpoints: imageConfig.breakpoints
+			})
+		: undefined
 ---
 
 {
-	url &&
-		(media.width && media.height ? (
-			<Image
-				{...rest}
-				src={url}
-				width={media.width}
-				height={media.height}
-				alt={text}
-			/>
-		) : (
-			<img {...plain} src={url} alt={text} />
-		))
+	frame?.kind === 'sized' && (
+		<Image
+			{...rest}
+			{...responsive}
+			src={frame.url}
+			width={frame.size.width}
+			height={frame.size.height}
+			alt={text}
+		/>
+	)
 }
+{
+	frame?.kind === 'boxed' && (
+		<img
+			{...plain}
+			style={boxStyle(frame.aspectRatio, attributes.style)}
+			src={frame.url}
+			alt={text}
+		/>
+	)
+}
+{frame?.kind === 'plain' && <img {...plain} src={frame.url} alt={text} />}
