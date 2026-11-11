@@ -32,6 +32,8 @@ export type {
 } from './site-pages'
 export { sitemapResponse } from './sitemap'
 export { homepageTitle } from './seo-model'
+export type { SeoPage } from './seo-model'
+export type { ImageLayout } from './components/rush-image-model'
 export { collectionAlternates, homepageAlternates, taxonomyAlternates } from './alternate-links'
 export type { SitemapContext, SitemapOptions } from './sitemap'
 export type { RushContext } from './runtime'
