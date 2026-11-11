@@ -392,6 +392,25 @@ describe('preview deployment mode', () => {
 		}
 	)
 
+	it('injects no forms route with forms: false and keeps the middleware', async () => {
+		const setup = await runSetup(
+			rush(options(ALL_LOCALES, { forms: false })),
+			useProject(apiEnv())
+		)
+		expect(setup.routes).toEqual([])
+		expect(setup.middlewares).toEqual([
+			{ order: 'pre', entrypoint: '@rushcms/astro/middleware' }
+		])
+	})
+
+	it('injects the forms route with forms: true', async () => {
+		const setup = await runSetup(
+			rush(options(ALL_LOCALES, { forms: true })),
+			useProject(apiEnv())
+		)
+		expect(setup.routes.map((route) => route.pattern)).toEqual(['/_rush/forms/[key]'])
+	})
+
 	it('injects the preview routes only in preview mode', async () => {
 		const preview = await runSetup(
 			rush(options(ALL_LOCALES)),

@@ -37,6 +37,11 @@ export default defineConfig({
 | `taxonomies`     | `category` / `tag` → CMS locale code → segment of its listing pages (see [Taxonomies](#taxonomies)). |
 | `seo`            | Per collection, the data fields used for title, description and image.                               |
 | `trustedProxies` | Required. Reverse proxies in front of the server that append to `X-Forwarded-For`.                   |
+| `forms`          | `false` stops injecting the on-demand `/_rush/forms/[key]` route (default `true`; see below).        |
+
+With `forms: false` the integration injects no route outside a preview deployment, so a purely static site needs no
+adapter (`create-rush-cms --ssg` sets it). A preview deployment needs a server: it injects the preview routes and
+renders every page on demand, so keep the default setup for it.
 
 ## Routes
 
@@ -479,6 +484,31 @@ which redirects retired slugs and other locales' slugs (`moved`) and answers `40
 deployment the dispatcher itself renders on demand, so the same `resolvePage` call fetches drafts and answers
 `moved` there. Static pages such as `src/pages/[...locale]/contact.astro` take precedence over the dispatcher's
 rest parameter.
+
+### Static sites
+
+Without an adapter (`output: 'static'`, `forms: false`) no server answers unknown URLs and nothing redirects moved
+slugs: the host serves `404.html`. Drop `export const prerender = false` and the `resolvePage` call from `404.astro`,
+so it is prerendered and renders with the locale of the `/404` path, the site's `''` prefix locale or default
+locale:
+
+```astro
+---
+import NotFound from '../views/not-found.astro'
+---
+
+<NotFound />
+```
+
+For a 404 page per locale, add a prerendered `404.astro` under each locale's prefix, for instance `src/pages/pt/404.astro`
+for the prefix `pt`; the locale of `/pt/404` is `pt`. Each builds to `dist/<prefix>/404.html`. Hosts with nested 404
+pages serve the nearest one; with nginx, name one `error_page` per prefix:
+
+```nginx
+location /pt/ {
+	error_page 404 /pt/404.html;
+}
+```
 
 ## Entry pages
 

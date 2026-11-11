@@ -14,7 +14,7 @@ type RushRoute = {
 	entrypoint: string
 }
 
-const SITE_ROUTES: RushRoute[] = [
+const FORMS_ROUTES: RushRoute[] = [
 	{ pattern: '/_rush/forms/[key]', entrypoint: `${PACKAGE_NAME}/routes/forms` }
 ]
 
@@ -69,7 +69,8 @@ export function rush(options: RushAstroOptions): AstroIntegration {
 					}
 				})
 				addMiddleware({ order: 'pre', entrypoint: `${PACKAGE_NAME}/middleware` })
-				for (const route of preview ? [...SITE_ROUTES, ...PREVIEW_ROUTES] : SITE_ROUTES) {
+				const siteRoutes = options.forms === false ? [] : FORMS_ROUTES
+				for (const route of preview ? [...siteRoutes, ...PREVIEW_ROUTES] : siteRoutes) {
 					injectRoute({ ...route, prerender: false })
 				}
 			},

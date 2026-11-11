@@ -21,6 +21,7 @@ export type RushAstroOptions = {
 	taxonomies?: RushTaxonomies
 	seo?: Record<string, SeoFieldMap>
 	trustedProxies: number
+	forms?: boolean
 }
 
 export type RushSiteConfig = {
