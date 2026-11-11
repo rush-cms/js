@@ -1,5 +1,11 @@
 # create-rush-cms
 
+## 0.3.1
+
+### Patch Changes
+
+- [`6ce573c`](https://github.com/rush-cms/js/commit/6ce573c9790f6e138efe2bfccf81f4005cd4af0c) Thanks [@rmarsigli](https://github.com/rmarsigli)! - Docs: a prefixed `404.astro` builds to `dist/<prefix>/404/index.html` with Astro's default build format, not `dist/<prefix>/404.html`; the nginx examples point there.
+
 ## 0.3.0
 
 ### Minor Changes
