@@ -1,5 +1,11 @@
 # @rushcms/astro
 
+## 0.5.0
+
+### Minor Changes
+
+- [`8ee296a`](https://github.com/rush-cms/js/commit/8ee296a103a6247b291d60edd869643f394840bb) Thanks [@rmarsigli](https://github.com/rmarsigli)! - Add the `forms` option: `forms: false` stops injecting the on-demand `/_rush/forms/[key]` route, for sites built without an adapter.
+
 ## 0.4.0
 
 ### Minor Changes

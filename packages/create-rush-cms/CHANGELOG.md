@@ -1,5 +1,11 @@
 # create-rush-cms
 
+## 0.3.0
+
+### Minor Changes
+
+- [`39990e9`](https://github.com/rush-cms/js/commit/39990e9c5988517387ab886cc1c97fb1f4c8ba7f) Thanks [@rmarsigli](https://github.com/rmarsigli)! - Add the `--ssg` flag: scaffolds a purely static site with no Node adapter, no contact page and no forms route, and one prerendered `404.astro`.
+
 ## 0.2.2
 
 ### Patch Changes
