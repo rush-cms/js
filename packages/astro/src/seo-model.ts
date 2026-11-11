@@ -1,9 +1,7 @@
-import { alternates, toBcp47, translatedLocales } from '@rushcms/client'
+import { alternates, toBcp47 } from '@rushcms/client'
 import { isRecord } from '@rushcms/client/internal'
-import type { Entry, Homepage, LocaleCode, Media, RushUrls } from '@rushcms/client'
+import type { Alternate, Entry, Homepage, LocaleCode, Media, RushUrls } from '@rushcms/client'
 import type { SeoFieldMap } from './config'
-import { hreflangLinks } from './alternate-links'
-import type { HreflangLink } from './alternate-links'
 import { absoluteUrl } from './site-origin'
 
 export type SeoSettings = {
@@ -20,16 +18,55 @@ export type SeoImage = {
 	alt?: string
 }
 
+export type TwitterCard = 'summary' | 'summary_large_image'
+
 export type SeoTags = {
 	title?: string
+	documentTitle?: string
 	description?: string
 	image?: SeoImage
 	type: 'article' | 'website'
+	card: TwitterCard
 	canonical: string
 	locale: string
 	alternateLocales: string[]
-	links: HreflangLink[]
+	alternates: Alternate[]
 }
+
+export type SeoPage = {
+	locale: LocaleCode
+	canonical: string
+	title?: string | undefined
+	description?: string | undefined
+	alternates?: Alternate[] | undefined
+	image?: Media | undefined
+}
+
+export type SeoOptions = {
+	titleSuffix?: string | undefined
+}
+
+export type SeoEntryProps = SeoOptions & {
+	entry: Entry
+	homepage?: never
+	page?: never
+}
+
+export type SeoHomepageProps = SeoOptions & {
+	homepage: Homepage
+	entry?: never
+	page?: never
+}
+
+export type SeoPageProps = SeoOptions & {
+	page: SeoPage
+	entry?: never
+	homepage?: never
+}
+
+export type SeoProps = SeoEntryProps | SeoHomepageProps | SeoPageProps
+
+type SeoBase = Pick<SeoTags, 'type' | 'canonical' | 'locale' | 'alternates'>
 
 function filled(value: unknown): string | undefined {
 	return typeof value === 'string' && value.trim() !== '' ? value : undefined
@@ -79,10 +116,22 @@ function entryImage(entry: Entry, field: string | undefined): SeoImage | undefin
 	return url === undefined ? undefined : describedImage(mediaByUrl(entry, url), url)
 }
 
-function ogAlternateLocales(source: Entry | Homepage): string[] {
-	return translatedLocales(source)
-		.filter((locale) => locale !== source.locale)
-		.map(toBcp47)
+export function ogLocale(code: LocaleCode): string {
+	return toBcp47(code).replaceAll('-', '_')
+}
+
+function seoTags(base: SeoBase, site: URL): SeoTags {
+	const locale = ogLocale(base.locale)
+	const alternateLocales = [
+		...new Set(base.alternates.map((alternate) => ogLocale(alternate.locale)))
+	].filter((alternate) => alternate !== locale)
+	return {
+		...base,
+		canonical: absoluteUrl(base.canonical, site),
+		locale,
+		alternateLocales,
+		card: 'summary'
+	}
 }
 
 function withText(tags: SeoTags, title: string | undefined, description: string | undefined) {
@@ -97,6 +146,7 @@ function withText(tags: SeoTags, title: string | undefined, description: string 
 function withImage(tags: SeoTags, image: SeoImage | undefined, site: URL): SeoTags {
 	if (image !== undefined) {
 		tags.image = { ...image, url: absoluteUrl(image.url, site) }
+		tags.card = 'summary_large_image'
 	}
 	return tags
 }
@@ -104,13 +154,15 @@ function withImage(tags: SeoTags, image: SeoImage | undefined, site: URL): SeoTa
 export function entrySeo(entry: Entry, settings: SeoSettings): SeoTags {
 	const { urls, site } = settings
 	const fields = fieldMapOf(entry, settings)
-	const tags: SeoTags = {
-		type: 'article',
-		canonical: absoluteUrl(urls.entry(entry), site),
-		locale: toBcp47(entry.locale),
-		alternateLocales: ogAlternateLocales(entry),
-		links: hreflangLinks(alternates(entry, urls), urls, settings.defaultLocale, site)
-	}
+	const tags = seoTags(
+		{
+			type: 'article',
+			canonical: urls.entry(entry),
+			locale: entry.locale,
+			alternates: alternates(entry, urls)
+		},
+		site
+	)
 	withText(
 		tags,
 		mappedText(entry, fields.title) ?? filled(entry.title),
@@ -126,14 +178,47 @@ export function homepageTitle(homepage: Homepage | undefined): string | undefine
 export function homepageSeo(homepage: Homepage, settings: SeoSettings): SeoTags {
 	const { urls, site } = settings
 	const meta = homepage.meta
-	const tags: SeoTags = {
-		type: 'website',
-		canonical: absoluteUrl(urls.homepage(homepage.locale), site),
-		locale: toBcp47(homepage.locale),
-		alternateLocales: ogAlternateLocales(homepage),
-		links: hreflangLinks(alternates(homepage, urls), urls, settings.defaultLocale, site)
-	}
+	const tags = seoTags(
+		{
+			type: 'website',
+			canonical: urls.homepage(homepage.locale),
+			locale: homepage.locale,
+			alternates: alternates(homepage, urls)
+		},
+		site
+	)
 	withText(tags, homepageTitle(homepage), filled(meta?.description))
 	const image = filled(meta?.og_image)
 	return withImage(tags, image === undefined ? undefined : { url: image }, site)
+}
+
+export function pageSeo(page: SeoPage, { site }: SeoSettings): SeoTags {
+	const tags = seoTags(
+		{
+			type: 'website',
+			canonical: page.canonical,
+			locale: page.locale,
+			alternates: page.alternates ?? []
+		},
+		site
+	)
+	withText(tags, filled(page.title), filled(page.description))
+	return withImage(tags, describedImage(page.image), site)
+}
+
+function formSeo(props: SeoProps, settings: SeoSettings): SeoTags {
+	if (props.entry !== undefined) {
+		return entrySeo(props.entry, settings)
+	}
+	return props.homepage !== undefined
+		? homepageSeo(props.homepage, settings)
+		: pageSeo(props.page, settings)
+}
+
+export function seoOf(props: SeoProps, settings: SeoSettings): SeoTags {
+	const tags = formSeo(props, settings)
+	if (tags.title !== undefined) {
+		tags.documentTitle = `${tags.title}${props.titleSuffix ?? ''}`
+	}
+	return tags
 }

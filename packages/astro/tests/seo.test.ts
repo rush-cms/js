@@ -2,8 +2,11 @@ import { describe, expect, it } from 'vitest'
 import Seo from '../src/components/seo.astro'
 import { createUrls } from '@rushcms/client'
 import type { Homepage, RushCollections } from '@rushcms/client'
-import { homepageSeo, homepageTitle } from '../src/seo-model'
-import type { SeoSettings } from '../src/seo-model'
+import { toBcp47 } from '@rushcms/client'
+import type { Entry, Media } from '@rushcms/client'
+import { alternateIn } from '../src/alternate-links'
+import { homepageSeo, homepageTitle, ogLocale } from '../src/seo-model'
+import type { SeoPage, SeoProps, SeoSettings } from '../src/seo-model'
 import type { SeoFieldMap } from '../src/config'
 import { entryExample, homepageExample } from '../../client/tests/fixtures/contract'
 import { linkHrefs, metaContent, renderComponent } from './fixtures/render'
@@ -148,7 +151,7 @@ describe('Seo for an entry', () => {
 		expect(html).toContain(
 			'<link rel="alternate" hreflang="x-default" href="https://site.example/en/blog/hello-world">'
 		)
-		expect(metaContent(html, 'property', 'og:locale')).toEqual(['pt-BR'])
+		expect(metaContent(html, 'property', 'og:locale')).toEqual(['pt_BR'])
 		expect(metaContent(html, 'property', 'og:locale:alternate')).toEqual(['en', 'es'])
 	})
 
@@ -213,7 +216,7 @@ describe('Seo for the homepage', () => {
 		expect(metaContent(html, 'name', 'description')).toEqual([homepage.meta?.description])
 		expect(metaContent(html, 'property', 'og:image')).toEqual([homepage.meta?.og_image])
 		expect(metaContent(html, 'property', 'og:type')).toEqual(['website'])
-		expect(metaContent(html, 'property', 'og:locale')).toEqual(['pt-BR'])
+		expect(metaContent(html, 'property', 'og:locale')).toEqual(['pt_BR'])
 		expect(linkHrefs(html, 'canonical')).toEqual(['https://site.example/pt'])
 	})
 
@@ -294,5 +297,247 @@ describe('homepageTitle', () => {
 		expect(homepageTitle({ ...homepageExample(), meta: {} })).toBeUndefined()
 		const untyped: unknown = { ...homepageExample(), meta: { title: 7 } }
 		expect(homepageTitle(untyped as Homepage)).toBeUndefined()
+	})
+})
+
+const BANNER: Media = {
+	url: 'https://cdn.example.com/banner/master',
+	width: 1200,
+	height: 630,
+	alt: 'Banner'
+}
+
+const LIST_ALTERNATES = [
+	alternateIn('pt_BR', '/pt/artigos'),
+	alternateIn('en', '/en/blog'),
+	alternateIn('es', '/es/articulos')
+]
+
+function pageOf(overrides: Partial<SeoPage> = {}): SeoPage {
+	return {
+		locale: 'pt_BR',
+		canonical: '/pt/artigos',
+		title: 'Artigos',
+		description: 'Todos os artigos',
+		alternates: LIST_ALTERNATES,
+		...overrides
+	}
+}
+
+function renderSeo(props: SeoProps): Promise<string> {
+	return renderComponent(Seo, { props, locals: localesFor() })
+}
+
+describe('Seo for a page', () => {
+	it('emits title, description, canonical, Open Graph, Twitter and hreflang for a list page', async () => {
+		const html = await renderSeo({ page: pageOf({ image: BANNER }) })
+		expect(html).toContain('<title>Artigos</title>')
+		expect(metaContent(html, 'name', 'description')).toEqual(['Todos os artigos'])
+		expect(linkHrefs(html, 'canonical')).toEqual(['https://site.example/pt/artigos'])
+		expect(metaContent(html, 'property', 'og:url')).toEqual(['https://site.example/pt/artigos'])
+		expect(metaContent(html, 'property', 'og:type')).toEqual(['website'])
+		expect(metaContent(html, 'property', 'og:title')).toEqual(['Artigos'])
+		expect(metaContent(html, 'property', 'og:description')).toEqual(['Todos os artigos'])
+		expect(metaContent(html, 'property', 'og:image')).toEqual([BANNER.url])
+		expect(metaContent(html, 'property', 'og:image:width')).toEqual(['1200'])
+		expect(metaContent(html, 'property', 'og:image:height')).toEqual(['630'])
+		expect(metaContent(html, 'property', 'og:image:alt')).toEqual(['Banner'])
+		expect(metaContent(html, 'property', 'og:locale')).toEqual(['pt_BR'])
+		expect(metaContent(html, 'property', 'og:locale:alternate')).toEqual(['en', 'es'])
+		expect(metaContent(html, 'name', 'twitter:card')).toEqual(['summary_large_image'])
+		expect(metaContent(html, 'name', 'twitter:image')).toEqual([BANNER.url])
+		expect(metaContent(html, 'name', 'twitter:image:alt')).toEqual(['Banner'])
+		expect(linkHrefs(html, 'alternate')).toEqual([
+			'https://site.example/pt/artigos',
+			'https://site.example/en/blog',
+			'https://site.example/es/articulos',
+			'https://site.example/en/blog'
+		])
+		expect(html).toContain(
+			'<link rel="alternate" hreflang="x-default" href="https://site.example/en/blog">'
+		)
+	})
+
+	it('keeps an absolute canonical and resolves a relative image against the site', async () => {
+		const html = await renderSeo({
+			page: pageOf({
+				canonical: 'https://site.example/pt/artigos/page/2',
+				image: { url: '/banner.png' }
+			})
+		})
+		expect(linkHrefs(html, 'canonical')).toEqual(['https://site.example/pt/artigos/page/2'])
+		expect(metaContent(html, 'property', 'og:image')).toEqual([
+			'https://site.example/banner.png'
+		])
+		expect(metaContent(html, 'property', 'og:image:width')).toEqual([])
+	})
+
+	it('emits only the url, type, locale and card tags for a bare page', async () => {
+		const html = await renderSeo({ page: { locale: 'en', canonical: '/en/tag/astro' } })
+		expect(html).not.toContain('<title>')
+		expect(html).not.toContain('hreflang')
+		expect(metaContent(html, 'property', 'og:url')).toEqual([
+			'https://site.example/en/tag/astro'
+		])
+		expect(metaContent(html, 'property', 'og:locale')).toEqual(['en'])
+		expect(metaContent(html, 'property', 'og:locale:alternate')).toEqual([])
+		expect(metaContent(html, 'name', 'twitter:card')).toEqual(['summary'])
+		expect(metaContent(html, 'name', 'twitter:title')).toEqual([])
+	})
+
+	it('drops blank title and description', async () => {
+		const html = await renderSeo({ page: pageOf({ title: '  ', description: '' }) })
+		expect(html).not.toContain('<title>')
+		expect(metaContent(html, 'property', 'og:title')).toEqual([])
+		expect(metaContent(html, 'name', 'description')).toEqual([])
+	})
+})
+
+type SeoCase = {
+	name: string
+	props: SeoProps
+	image: string | undefined
+}
+
+function entryCase(image: boolean): SeoCase {
+	const entry: Entry = entryExample()
+	if (!image) {
+		delete entry.featured_image
+	}
+	return { name: `entry image=${image}`, props: { entry }, image: entry.featured_image?.url }
+}
+
+function homepageCase(image: boolean): SeoCase {
+	const base = homepageExample()
+	const homepage: Homepage = image ? base : { ...base, meta: { ...base.meta, og_image: '' } }
+	return {
+		name: `homepage image=${image}`,
+		props: { homepage },
+		image: image ? (base.meta?.og_image ?? undefined) : undefined
+	}
+}
+
+function pageCase(image: boolean): SeoCase {
+	return {
+		name: `page image=${image}`,
+		props: { page: pageOf(image ? { image: BANNER } : {}) },
+		image: image ? BANNER.url : undefined
+	}
+}
+
+const UNTITLED: SeoCase = {
+	name: 'page untitled image=false',
+	props: { page: pageOf({ title: undefined }) },
+	image: undefined
+}
+
+const TITLE_SUFFIXES = [undefined, '', ' | Site name']
+
+function documentTitles(html: string): string[] {
+	return [...html.matchAll(/<title>([^<]*)<\/title>/g)].map((match) => match[1] ?? '')
+}
+
+describe('Seo head for every form', () => {
+	it('shares canonical, og:url, Open Graph and Twitter tags across forms, image presence and title suffix', async () => {
+		const cases = [
+			...[entryCase, homepageCase, pageCase].flatMap((make) => [make(true), make(false)]),
+			UNTITLED
+		].flatMap((item) =>
+			TITLE_SUFFIXES.map((titleSuffix) => ({
+				...item,
+				name: `${item.name} suffix=${String(titleSuffix)}`,
+				props: { ...item.props, titleSuffix }
+			}))
+		)
+		expect(cases).toHaveLength(21)
+		for (const item of cases) {
+			expect(item.image === undefined, item.name).toBe(item.name.includes('=false'))
+			const html = await renderSeo(item.props)
+			const ogTitle = metaContent(html, 'property', 'og:title')
+			expect(documentTitles(html), item.name).toEqual(
+				ogTitle.map((title) => `${title}${item.props.titleSuffix ?? ''}`)
+			)
+			expect(
+				ogTitle.some((title) => title.endsWith(' | Site name')),
+				item.name
+			).toBe(false)
+			const canonical = linkHrefs(html, 'canonical')
+			expect(canonical, item.name).toHaveLength(1)
+			expect(metaContent(html, 'property', 'og:url'), item.name).toEqual(canonical)
+			expect(metaContent(html, 'property', 'og:type'), item.name).toHaveLength(1)
+			expect(metaContent(html, 'property', 'og:image'), item.name).toEqual(
+				item.image === undefined ? [] : [item.image]
+			)
+			expect(metaContent(html, 'name', 'twitter:image'), item.name).toEqual(
+				metaContent(html, 'property', 'og:image')
+			)
+			expect(metaContent(html, 'name', 'twitter:card'), item.name).toEqual([
+				item.image === undefined ? 'summary' : 'summary_large_image'
+			])
+			expect(metaContent(html, 'name', 'twitter:title'), item.name).toEqual(ogTitle)
+			expect(metaContent(html, 'name', 'twitter:description'), item.name).toEqual(
+				metaContent(html, 'property', 'og:description')
+			)
+			const locales = [
+				...metaContent(html, 'property', 'og:locale'),
+				...metaContent(html, 'property', 'og:locale:alternate')
+			]
+			expect(
+				locales.some((locale) => locale.includes('-')),
+				item.name
+			).toBe(false)
+		}
+	})
+})
+
+const LANGUAGES = ['en', 'pt', 'zh', 'haw']
+const SCRIPTS = [undefined, 'Hant']
+const REGIONS = [undefined, 'BR', '419']
+const SEPARATORS = ['_', '-']
+
+type LocaleForm = {
+	code: string
+	og: string
+}
+
+function localeForms(): LocaleForm[] {
+	return LANGUAGES.flatMap((language) =>
+		SCRIPTS.flatMap((script) =>
+			REGIONS.flatMap((region) =>
+				SEPARATORS.map((separator) => {
+					const parts = [language, script, region].filter((part) => part !== undefined)
+					return { code: parts.join(separator), og: parts.join('_') }
+				})
+			)
+		)
+	)
+}
+
+describe('ogLocale', () => {
+	it('joins every subtag with an underscore and never invents a territory', () => {
+		const forms = localeForms()
+		expect(forms).toHaveLength(48)
+		for (const { code, og } of forms) {
+			expect(ogLocale(code)).toBe(og)
+		}
+	})
+
+	it('reaches og:locale and og:locale:alternate while hreflang stays BCP 47', async () => {
+		for (const { code, og } of localeForms()) {
+			const html = await renderSeo({
+				page: {
+					locale: code,
+					canonical: '/x',
+					alternates: [alternateIn(code, '/x'), alternateIn('en', '/en/x')]
+				}
+			})
+			expect(metaContent(html, 'property', 'og:locale'), code).toEqual([og])
+			expect(metaContent(html, 'property', 'og:locale:alternate'), code).toEqual(
+				og === 'en' ? [] : ['en']
+			)
+			expect(html, code).toContain(
+				`hreflang="${toBcp47(code)}" href="https://site.example/x"`
+			)
+		}
 	})
 })

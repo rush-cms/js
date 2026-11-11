@@ -1,7 +1,7 @@
 export { hreflangLinks } from './alternate-links'
 export { runtimeOf } from './runtime'
-export { entrySeo, homepageSeo } from './seo-model'
-export type { SeoSettings, SeoTags, SeoImage } from './seo-model'
+export { seoOf } from './seo-model'
+export type { SeoPage, SeoProps } from './seo-model'
 export { requireSite } from './site-origin'
 export {
 	TURNSTILE_SCRIPT,

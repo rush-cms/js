@@ -1,27 +1,23 @@
 ---
-import { alternates } from '@rushcms/client'
-import type { Entry, Homepage } from '@rushcms/client'
-import { entrySeo, homepageSeo, requireSite, runtimeOf } from '@rushcms/astro/components-runtime'
+import { requireSite, runtimeOf, seoOf } from '@rushcms/astro/components-runtime'
+import type { SeoProps } from '@rushcms/astro/components-runtime'
 import Hreflang from './hreflang.astro'
 
-type Props = { entry: Entry; homepage?: never } | { homepage: Homepage; entry?: never }
+type Props = SeoProps
 
-const { entry, homepage } = Astro.props
 const runtime = runtimeOf(Astro.locals)
-const settings = {
+const tags = seoOf(Astro.props, {
 	urls: runtime.urls,
 	seo: runtime.seo,
 	defaultLocale: runtime.defaultLocale,
 	site: requireSite(Astro.site, '<Seo>')
-}
-const tags = entry ? entrySeo(entry, settings) : homepageSeo(homepage, settings)
-const translations = entry ? alternates(entry, runtime.urls) : alternates(homepage, runtime.urls)
+})
 ---
 
-{tags.title && <title>{tags.title}</title>}
+{tags.documentTitle && <title>{tags.documentTitle}</title>}
 {tags.description && <meta name="description" content={tags.description} />}
 <link rel="canonical" href={tags.canonical} />
-<Hreflang alternates={translations} />
+<Hreflang alternates={tags.alternates} />
 <meta property="og:type" content={tags.type} />
 <meta property="og:url" content={tags.canonical} />
 {tags.title && <meta property="og:title" content={tags.title} />}
@@ -32,3 +28,8 @@ const translations = entry ? alternates(entry, runtime.urls) : alternates(homepa
 {tags.image?.alt && <meta property="og:image:alt" content={tags.image.alt} />}
 <meta property="og:locale" content={tags.locale} />
 {tags.alternateLocales.map((locale) => <meta property="og:locale:alternate" content={locale} />)}
+<meta name="twitter:card" content={tags.card} />
+{tags.title && <meta name="twitter:title" content={tags.title} />}
+{tags.description && <meta name="twitter:description" content={tags.description} />}
+{tags.image && <meta name="twitter:image" content={tags.image.url} />}
+{tags.image?.alt && <meta name="twitter:image:alt" content={tags.image.alt} />}
