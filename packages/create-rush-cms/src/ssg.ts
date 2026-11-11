@@ -30,12 +30,12 @@ needs a server: scaffold without \`--ssg\` for it).
 \`src/pages/404.astro\` is prerendered into \`dist/404.html\` and renders with the default locale. A static host serves it
 for every unknown URL. The template never guesses your locales: to give a locale its own 404 page, add a page under
 that locale's prefix from \`localePaths\` (the prefix \`pt\` is an example): copy \`src/pages/404.astro\` to
-\`src/pages/pt/404.astro\` and add one \`../\` to the path of its \`NotFound\` import. It builds to \`dist/pt/404.html\`
-and renders with that locale, because the locale comes from the first path segment.
+\`src/pages/pt/404.astro\` and add one \`../\` to the path of its \`NotFound\` import. It renders with that locale,
+because the locale comes from the first path segment. Only the root page builds to \`dist/404.html\`: with Astro's
+default \`build.format: 'directory'\` this one builds to \`dist/pt/404/index.html\`.
 
-Then make the host serve it. Hosts that support nested 404 pages answer an unknown URL with the nearest \`404.html\`
-above it, so \`/pt/missing\` gets \`/pt/404.html\` without configuration; check your host's documentation. With nginx,
-name one \`error_page\` per locale prefix:
+Then make the host serve it. Hosts that look for a nested \`404.html\` do not find that file, so point the host at it.
+With nginx, name one \`error_page\` per locale prefix:
 
 \`\`\`nginx
 server {
@@ -43,11 +43,11 @@ server {
 	error_page 404 /404.html;
 
 	location /pt/ {
-		error_page 404 /pt/404.html;
+		error_page 404 /pt/404/index.html;
 	}
 
 	location /es/ {
-		error_page 404 /es/404.html;
+		error_page 404 /es/404/index.html;
 	}
 }
 \`\`\`

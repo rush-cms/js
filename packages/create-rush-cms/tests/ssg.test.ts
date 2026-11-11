@@ -116,7 +116,7 @@ describe('--ssg scaffold', () => {
 		const { ssg } = await bothScaffolds()
 		const readme = textOf(ssg, 'README.md')
 		expect(readme).toContain('## 404 pages')
-		expect(readme).toContain('error_page 404 /pt/404.html')
+		expect(readme).toContain('error_page 404 /pt/404/index.html')
 	})
 
 	it('names the generated mode in the next steps', async () => {

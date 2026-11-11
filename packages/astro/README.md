@@ -501,12 +501,13 @@ import NotFound from '../views/not-found.astro'
 ```
 
 For a 404 page per locale, add a prerendered `404.astro` under each locale's prefix, for instance `src/pages/pt/404.astro`
-for the prefix `pt`; the locale of `/pt/404` is `pt`. Each builds to `dist/<prefix>/404.html`. Hosts with nested 404
-pages serve the nearest one; with nginx, name one `error_page` per prefix:
+for the prefix `pt`; the locale of `/pt/404` is `pt`. Only the root page builds to `dist/404.html`: with Astro's default
+`build.format: 'directory'`, `src/pages/pt/404.astro` builds to `dist/pt/404/index.html`, so hosts that look for a
+nested `404.html` do not find it. Point the host at that file; with nginx, name one `error_page` per prefix:
 
 ```nginx
 location /pt/ {
-	error_page 404 /pt/404.html;
+	error_page 404 /pt/404/index.html;
 }
 ```
 
