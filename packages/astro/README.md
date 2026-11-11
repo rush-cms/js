@@ -333,7 +333,8 @@ Set `site` in `astro.config`: absolute URLs are built from it and `<Seo>` throws
 - `<Seo entry>` emits `<title>`, the meta description, Open Graph (`og:title`, `og:description`, `og:image` with
   width and height when the media has them, `og:url`, `og:type`, `og:locale` and `og:locale:alternate` in BCP 47),
   `rel="canonical"` and `<link rel="alternate" hreflang>` for every translation, plus `x-default` pointing at the
-  site's default locale when that translation exists.
+  locale served at the root of the site (the one with the `''` prefix), else the site's default locale, when that
+  translation exists.
 - Title, description and image come from the `seo` option for the entry's collection (keyed by the collection id or
   the collection slug of any locale), naming data fields. Defaults: `title`, `excerpt`, `featured_image`. A mapped
   field that is empty falls back to the default.
@@ -345,7 +346,7 @@ Set `site` in `astro.config`: absolute URLs are built from it and `<Seo>` throws
   `meta.title`), so a page can fall back to a title of its own only then.
 - `<Hreflang alternates={list}>` (`@rushcms/astro/components/hreflang.astro`) emits only the
   `<link rel="alternate" hreflang>` tags for an `Alternate[]`, such as `collectionAlternates(...)` or a taxonomy page's
-  `alternates`: absolute URLs, plus `x-default` pointing at the site's default locale when the list has it. `<Seo>`
+  `alternates`: absolute URLs, plus `x-default` pointing at the root-prefix locale, else the site's default locale, when the list has it. `<Seo>`
   renders its links through it. It also needs `site` and throws without it.
 
 ## Forms component
@@ -570,7 +571,7 @@ export const GET = (context) => sitemapResponse({ context, collections: ['artigo
   whatever `collections` names.
 
 Homepage, collection and taxonomy URLs carry `xhtml:link` alternates to the same page (for a taxonomy, the same tag
-id) in the other listed locales, entries to their translations; each adds `x-default` pointing at the site's default locale when that locale's page is listed.
+id) in the other listed locales, entries to their translations; each adds `x-default` pointing at the root-prefix locale, else the site's default locale, when that locale's page is listed.
 `homepageAlternates(urls)`, `collectionAlternates(collection, urls)` (a collection id or slug) and
 `taxonomyAlternates(tag, client, urls)` return the same alternates as `Alternate[]` for a language switcher. Without `collections` it lists every collection that has a
 route; naming a collection without a route throws.
