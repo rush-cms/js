@@ -20,7 +20,9 @@ import type {
 	ResponsiveProps,
 	ResponsiveRequest
 } from '../src/components/rush-image-model'
-import { startImageServer } from './fixtures/images'
+import { probeRemoteSize } from '../src/components/remote-size'
+import type { RemoteFetch } from '../src/components/remote-size'
+import { pngHeader, startImageServer } from './fixtures/images'
 import type { ImageServer } from './fixtures/images'
 
 type ImageAttributes = Record<string, string>
@@ -33,6 +35,18 @@ type Candidate = {
 type ControlledDeadline = ProbeDeadline & {
 	expire(): void
 	cancelled(): number
+}
+
+type StreamedImage = {
+	fetcher: RemoteFetch
+	requested(): string[]
+	bytesRead(): number
+	cancelled(): number
+}
+
+type RecordedFetch = {
+	fetcher: RemoteFetch
+	signals(): (AbortSignal | null | undefined)[]
 }
 
 type ResponsiveCase = {
@@ -114,6 +128,75 @@ function controlledDeadline(): ControlledDeadline {
 		expire: () => expire(),
 		cancelled: () => cancels
 	}
+}
+
+const REMOTE_CONFIG = { remotePatterns: [{ protocol: 'https', hostname: 'cdn.example.com' }] }
+const CHUNK_BYTES = 8
+const TRAILING_CHUNKS = 6
+
+function chunked(bytes: Uint8Array): Uint8Array[] {
+	const chunks: Uint8Array[] = []
+	for (let start = 0; start < bytes.length; start += CHUNK_BYTES) {
+		chunks.push(bytes.slice(start, start + CHUNK_BYTES))
+	}
+	return chunks
+}
+
+function streamedImage(size: ImageSize): StreamedImage {
+	const requested: string[] = []
+	const chunks = [
+		...chunked(pngHeader(size)),
+		...Array.from({ length: TRAILING_CHUNKS }, () => new Uint8Array(CHUNK_BYTES))
+	]
+	let read = 0
+	let cancels = 0
+	let next = 0
+	return {
+		fetcher: (input) => {
+			requested.push(input instanceof Request ? input.url : String(input))
+			const body = new ReadableStream<Uint8Array>(
+				{
+					pull(controller) {
+						const chunk = chunks[next]
+						next += 1
+						if (chunk === undefined) {
+							controller.close()
+							return
+						}
+						read += chunk.length
+						controller.enqueue(chunk)
+					},
+					cancel() {
+						cancels += 1
+					}
+				},
+				{ highWaterMark: 0 }
+			)
+			return Promise.resolve(new Response(body, { status: 200 }))
+		},
+		requested: () => requested,
+		bytesRead: () => read,
+		cancelled: () => cancels
+	}
+}
+
+function recordedFetch(
+	respond: (signal: AbortSignal | null | undefined) => Promise<Response>
+): RecordedFetch {
+	const signals: (AbortSignal | null | undefined)[] = []
+	return {
+		fetcher: (_input, init) => {
+			signals.push(init?.signal)
+			return respond(init?.signal)
+		},
+		signals: () => signals
+	}
+}
+
+function abortable(signal: AbortSignal | null | undefined): Promise<Response> {
+	return new Promise<Response>((_resolve, reject) => {
+		signal?.addEventListener('abort', () => reject(new Error('aborted')))
+	})
 }
 
 function isAscending(widths: number[]): boolean {
@@ -354,8 +437,10 @@ describe('probeOnce', () => {
 	it('gives up on a probe that never settles once its deadline expires, and remembers it', async () => {
 		const deadline = controlledDeadline()
 		const calls: string[] = []
-		const hang = (url: string) => {
+		const signals: AbortSignal[] = []
+		const hang = (url: string, signal: AbortSignal) => {
 			calls.push(url)
+			signals.push(signal)
 			return new Promise<ImageSize>(() => undefined)
 		}
 		const url = 'https://cdn.example.com/probe-hang'
@@ -364,7 +449,22 @@ describe('probeOnce', () => {
 		expect(await pending).toBeUndefined()
 		expect(await probeOnce(url, hang, () => deadline)).toBeUndefined()
 		expect(calls).toEqual([url])
+		expect(signals).toHaveLength(1)
+		expect(signals[0]?.aborted).toBe(true)
 		expect(deadline.cancelled()).toBe(1)
+	})
+
+	it('leaves the signal alone when the probe answers first', async () => {
+		const signals: AbortSignal[] = []
+		await probeOnce(
+			'https://cdn.example.com/probe-quiet',
+			(_url, signal) => {
+				signals.push(signal)
+				return Promise.resolve({ width: 4, height: 3 })
+			},
+			() => controlledDeadline()
+		)
+		expect(signals[0]?.aborted).toBe(false)
 	})
 
 	it('cancels the deadline when the probe answers first', async () => {
@@ -376,6 +476,82 @@ describe('probeOnce', () => {
 		)
 		expect(size).toEqual({ width: 4, height: 3 })
 		expect(deadline.cancelled()).toBe(1)
+	})
+})
+
+describe('probeRemoteSize', () => {
+	const url = 'https://cdn.example.com/photo.png'
+	const live = new AbortController().signal
+
+	it('reads the size, stops reading once it is known and cancels the body', async () => {
+		const image = streamedImage({ width: 640, height: 480 })
+		const size = await probeRemoteSize(url, REMOTE_CONFIG, live, image.fetcher)
+		expect(size).toEqual({ width: 640, height: 480 })
+		expect(image.requested()).toEqual([url])
+		expect(image.bytesRead()).toBeLessThanOrEqual(
+			pngHeader({ width: 1, height: 1 }).length + CHUNK_BYTES
+		)
+		expect(image.bytesRead()).toBeLessThan((TRAILING_CHUNKS + 1) * CHUNK_BYTES)
+		expect(image.cancelled()).toBe(1)
+	})
+
+	it('cancels the body and fails when no dimensions can be found', async () => {
+		const garbage: RemoteFetch = () =>
+			Promise.resolve(
+				new Response(
+					new ReadableStream<Uint8Array>({
+						start(controller) {
+							controller.enqueue(new Uint8Array(CHUNK_BYTES))
+							controller.close()
+						}
+					})
+				)
+			)
+		await expect(probeRemoteSize(url, REMOTE_CONFIG, live, garbage)).rejects.toThrow(
+			'no image dimensions'
+		)
+	})
+
+	it('never fetches a host outside the allowlist', async () => {
+		const image = streamedImage({ width: 1, height: 1 })
+		await expect(
+			probeRemoteSize('https://other.example.net/x.png', REMOTE_CONFIG, live, image.fetcher)
+		).rejects.toThrow('not an allowed remote image')
+		expect(image.requested()).toEqual([])
+	})
+
+	it('rejects a redirect to a host outside the allowlist', async () => {
+		const redirecting: RemoteFetch = () =>
+			Promise.resolve(
+				new Response(null, {
+					status: 302,
+					headers: { Location: 'https://other.example.net/x.png' }
+				})
+			)
+		await expect(probeRemoteSize(url, REMOTE_CONFIG, live, redirecting)).rejects.toThrow(
+			'not an allowed remote location'
+		)
+	})
+
+	it('fails on a response without a usable body', async () => {
+		const missing: RemoteFetch = () => Promise.resolve(new Response(null, { status: 404 }))
+		await expect(probeRemoteSize(url, REMOTE_CONFIG, live, missing)).rejects.toThrow('404')
+	})
+
+	it('aborts the request when the probe deadline expires, and remembers the failure', async () => {
+		const deadline = controlledDeadline()
+		const recorded = recordedFetch(abortable)
+		const probe = (target: string, signal: AbortSignal) =>
+			probeRemoteSize(target, REMOTE_CONFIG, signal, recorded.fetcher)
+		const target = 'https://cdn.example.com/stalled.png'
+		const pending = probeOnce(target, probe, () => deadline)
+		await vi.waitFor(() => expect(recorded.signals()).toHaveLength(1))
+		expect(recorded.signals()[0]?.aborted).toBe(false)
+		deadline.expire()
+		expect(await pending).toBeUndefined()
+		expect(recorded.signals()[0]?.aborted).toBe(true)
+		expect(await probeOnce(target, probe, () => deadline)).toBeUndefined()
+		expect(recorded.signals()).toHaveLength(1)
 	})
 })
 
