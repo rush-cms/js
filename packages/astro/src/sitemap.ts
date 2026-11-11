@@ -61,7 +61,7 @@ function entryUrl(entry: Entry, source: SitemapSource): SitemapUrl {
 	return {
 		loc: absoluteUrl(urls.entry(entry), site),
 		lastmod: entry.updated_at,
-		links: hreflangLinks(alternates(entry, urls), source.defaultLocale, site)
+		links: hreflangLinks(alternates(entry, urls), urls, source.defaultLocale, site)
 	}
 }
 
@@ -80,7 +80,7 @@ function localizedUrls(
 	source: SitemapSource,
 	lastmods: (string | undefined)[] = []
 ): SitemapUrl[] {
-	const links = hreflangLinks(list, source.defaultLocale, source.site)
+	const links = hreflangLinks(list, source.urls, source.defaultLocale, source.site)
 	return list.map((alternate, index) => ({
 		loc: absoluteUrl(alternate.url, source.site),
 		lastmod: lastmods[index],

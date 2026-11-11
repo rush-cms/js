@@ -109,7 +109,7 @@ export function entrySeo(entry: Entry, settings: SeoSettings): SeoTags {
 		canonical: absoluteUrl(urls.entry(entry), site),
 		locale: toBcp47(entry.locale),
 		alternateLocales: ogAlternateLocales(entry),
-		links: hreflangLinks(alternates(entry, urls), settings.defaultLocale, site)
+		links: hreflangLinks(alternates(entry, urls), urls, settings.defaultLocale, site)
 	}
 	withText(
 		tags,
@@ -131,7 +131,7 @@ export function homepageSeo(homepage: Homepage, settings: SeoSettings): SeoTags 
 		canonical: absoluteUrl(urls.homepage(homepage.locale), site),
 		locale: toBcp47(homepage.locale),
 		alternateLocales: ogAlternateLocales(homepage),
-		links: hreflangLinks(alternates(homepage, urls), settings.defaultLocale, site)
+		links: hreflangLinks(alternates(homepage, urls), urls, settings.defaultLocale, site)
 	}
 	withText(tags, homepageTitle(homepage), filled(meta?.description))
 	const image = filled(meta?.og_image)

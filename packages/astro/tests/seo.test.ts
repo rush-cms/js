@@ -152,6 +152,17 @@ describe('Seo for an entry', () => {
 		expect(metaContent(html, 'property', 'og:locale:alternate')).toEqual(['en', 'es'])
 	})
 
+	it('points x-default at the root-prefix locale when one exists', async () => {
+		const locals = rushLocals(
+			OFFLINE_API,
+			siteConfig({ defaultLocale: 'en', localePaths: { pt_BR: '', en: 'en', es: 'es' } })
+		)
+		const html = await renderComponent(Seo, { props: { entry: entryExample() }, locals })
+		expect(html).toContain(
+			'<link rel="alternate" hreflang="x-default" href="https://site.example/artigos/ola-mundo">'
+		)
+	})
+
 	it('omits x-default when the default locale has no translation', async () => {
 		const entry = entryExample()
 		delete entry.translations.en

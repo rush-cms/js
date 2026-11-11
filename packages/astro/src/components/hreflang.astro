@@ -8,7 +8,12 @@ type Props = {
 
 const { alternates } = Astro.props
 const runtime = runtimeOf(Astro.locals)
-const links = hreflangLinks(alternates, runtime.defaultLocale, requireSite(Astro.site, '<Hreflang>'))
+const links = hreflangLinks(
+	alternates,
+	runtime.urls,
+	runtime.defaultLocale,
+	requireSite(Astro.site, '<Hreflang>')
+)
 ---
 
 {links.map((link) => <link rel="alternate" hreflang={link.hreflang} href={link.url} />)}

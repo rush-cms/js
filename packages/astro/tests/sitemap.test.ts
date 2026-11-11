@@ -220,6 +220,17 @@ describe('sitemap', () => {
 		)
 	})
 
+	it('points x-default at the root-prefix locale when one exists', async () => {
+		const config: RushSiteConfig = {
+			...SITE_CONFIG,
+			localePaths: { pt_BR: '', en: 'en', es: 'es' }
+		}
+		const xml = await sitemap({ entries: { pt_BR: [PT] }, homepages: {} }, ['blog'], config)
+		const links = hreflangs(blockFor(xml, 'https://site.example/artigos/ola-mundo'))
+		expect(links).toContain('x-default https://site.example/artigos/ola-mundo')
+		expect(links).not.toContain('x-default https://site.example/en/blog/hello-world')
+	})
+
 	it('lists only the homepages that are not a fallback, with lastmod from each', async () => {
 		const xml = await sitemap(
 			{ entries: {}, homepages: { pt_BR: PT_HOME, en: EN_HOME, es: FALLBACK_HOME } },

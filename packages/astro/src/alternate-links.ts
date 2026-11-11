@@ -44,9 +44,14 @@ export async function taxonomyAlternates(
 	return tagAlternates(await tagsByLocale(client, urls, tag.type), tag.id, urls)
 }
 
-function alternateLinks(list: Alternate[], defaultLocale: LocaleCode): HreflangLink[] {
+function alternateLinks(
+	list: Alternate[],
+	urls: RushUrls,
+	defaultLocale: LocaleCode
+): HreflangLink[] {
 	const links = list.map(({ hreflang, url }) => ({ hreflang, url }))
-	const fallback = list.find((alternate) => alternate.locale === defaultLocale)
+	const xDefaultLocale = urls.localeOf(undefined) ?? defaultLocale
+	const fallback = list.find((alternate) => alternate.locale === xDefaultLocale)
 	return fallback === undefined ? links : [...links, { hreflang: X_DEFAULT, url: fallback.url }]
 }
 
@@ -56,8 +61,9 @@ function absoluteLinks(links: HreflangLink[], site: URL): HreflangLink[] {
 
 export function hreflangLinks(
 	list: Alternate[],
+	urls: RushUrls,
 	defaultLocale: LocaleCode,
 	site: URL
 ): HreflangLink[] {
-	return absoluteLinks(alternateLinks(list, defaultLocale), site)
+	return absoluteLinks(alternateLinks(list, urls, defaultLocale), site)
 }
