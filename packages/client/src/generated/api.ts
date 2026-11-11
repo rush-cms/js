@@ -519,7 +519,7 @@ export interface paths {
 				 */
 				site_id: components['parameters']['SiteId']
 				/**
-				 * @description Database slug in any locale of the preference order.
+				 * @description The database slug.
 				 * @example services
 				 */
 				database: components['parameters']['DatabaseSlug']
@@ -528,7 +528,7 @@ export interface paths {
 		}
 		/**
 		 * One database with its items
-		 * @description `{database}` matches the database slug of any locale of the preference order. Items form a flat list
+		 * @description `{database}` matches the database slug. Items form a flat list
 		 *     ordered by `order`, then creation time; rebuild the tree with `parent_item_id`.
 		 */
 		get: operations['getDatabase']
@@ -836,14 +836,99 @@ export interface components {
 			created_at: components['schemas']['Timestamp']
 			updated_at: components['schemas']['Timestamp']
 		}
+		/** @description The entry's field values (see `FieldValues`). */
+		EntryData: components['schemas']['FieldValues']
 		/**
-		 * @description Blueprint field values keyed by field name: shared fields merged with the served translation's localized
-		 *     fields. Rich-text fields hold a `RichText` document; markdown fields a string; image and file fields a media
-		 *     URL (joined with `media`); block fields `{block: <slug> | null, values}`; database fields an array of
-		 *     `{id, name, description, parent_id}`. Unsafe URLs are blanked; text is returned verbatim.
+		 * @description Field values keyed by field name; each value takes the form its field type gives it (see `FieldValue`). In
+		 *     entries, shared fields are merged with the served translation's localized fields. Only fields the current
+		 *     blueprint declares are returned, at every depth (top level, repeater items, block values, rich-text custom
+		 *     blocks); values under keys it no longer declares are omitted. A collection without a declared field layout
+		 *     returns its top-level values as stored. Unsafe URLs are blanked; text is returned verbatim. Admin presentation
+		 *     settings of the fields (such as widths) are never part of the values.
 		 */
-		EntryData: {
-			[key: string]: unknown
+		FieldValues: {
+			[key: string]: components['schemas']['FieldValue']
+		}
+		/**
+		 * @description The value of a top-level field of an entry or a site option group: a `NonBlockFieldValue`, or a `BlockValue`
+		 *     for block fields.
+		 */
+		FieldValue:
+			components['schemas']['NonBlockFieldValue'] | components['schemas']['BlockValue']
+		/**
+		 * @description The value of a top-level field of any type except block: a `LeafFieldValue`, or a `RepeaterValue` for
+		 *     repeater fields. Blocks cannot contain block fields, so every value of a block's own fields takes this form.
+		 */
+		NonBlockFieldValue:
+			components['schemas']['LeafFieldValue'] | components['schemas']['RepeaterValue']
+		/**
+		 * @description A value that may appear at every depth. Text, textarea, select, color and markdown fields hold a string; image
+		 *     and file fields a media URL (joined with `media`); checkbox, list, gallery and category fields a
+		 *     `StringListValue`; rich-text fields a `RichText` document; database fields a `DatabaseFieldValue`. `null` when
+		 *     unfilled, and for a block field whose block no longer exists.
+		 */
+		LeafFieldValue:
+			| (string | null)
+			| number
+			| boolean
+			| components['schemas']['StringListValue']
+			| components['schemas']['RichText']
+			| components['schemas']['DatabaseFieldValue']
+		/** @description Selected options, list rows, gallery media URLs or category ids. */
+		StringListValue: string[]
+		/** @description The value of a block field; `values` follow the block's fields. */
+		BlockValue: {
+			/** @description Block slug. */
+			block: string
+			values: components['schemas']['BlockValues']
+		}
+		/**
+		 * @description The values of a block's fields keyed by field name, with the same rules as `FieldValues`. Blocks cannot
+		 *     contain block fields, so each value is a `NonBlockFieldValue`.
+		 */
+		BlockValues: {
+			[key: string]: components['schemas']['NonBlockFieldValue']
+		}
+		/**
+		 * @description The selected items of a database field, at any depth, resolved in the requested locale and in stored order;
+		 *     unknown or deleted items are left out. Always an array, also for single-choice fields (at most one item).
+		 */
+		DatabaseFieldValue: components['schemas']['ExpandedDatabaseItem'][]
+		ExpandedDatabaseItem: {
+			id: components['schemas']['Ulid']
+			/** @description Name in the requested locale (preference order). */
+			name: string
+			/** @description Description in the requested locale; empty when unset. */
+			description: string
+			/** @description ULID of the parent item; null for a root item. */
+			parent_id: string | null
+		}
+		/** @description Stable item id assigned by the server on every write; use it as the item key. */
+		RepeaterItemId: string
+		/** @description The items of a top-level repeater field, in stored order. */
+		RepeaterValue: components['schemas']['RepeaterItem'][]
+		/**
+		 * @description One item of a top-level repeater: `_id` plus the repeater's declared sub-fields. A sub-field holds a
+		 *     `RepeaterItemValue`, exactly as a top-level field of its type.
+		 */
+		RepeaterItem: {
+			_id: components['schemas']['RepeaterItemId']
+		} & {
+			[key: string]: components['schemas']['RepeaterItemValue']
+		}
+		/**
+		 * @description The value of a sub-field of a top-level repeater item: any `LeafFieldValue` or a `NestedRepeaterValue` (a
+		 *     repeater inside a repeater). Block fields are not allowed inside repeaters.
+		 */
+		RepeaterItemValue:
+			components['schemas']['LeafFieldValue'] | components['schemas']['NestedRepeaterValue']
+		/** @description The items of a repeater nested in a repeater item (the deepest level allowed), in stored order. */
+		NestedRepeaterValue: components['schemas']['NestedRepeaterItem'][]
+		/** @description One item of a nested repeater; its sub-fields hold `LeafFieldValue`s (no further repeaters). */
+		NestedRepeaterItem: {
+			_id: components['schemas']['RepeaterItemId']
+		} & {
+			[key: string]: components['schemas']['LeafFieldValue']
 		}
 		/** @description The served translation of an entry, enough to build its URL. */
 		EntrySummary: {
@@ -876,12 +961,17 @@ export interface components {
 			created_at: components['schemas']['Timestamp']
 			updated_at: components['schemas']['Timestamp']
 		}
+		/**
+		 * @description A block instance. `values` follow the block's fields like `EntryData`: only declared fields at every depth,
+		 *     database values expanded in the requested locale, unsafe URLs blanked. Values of a block that no longer
+		 *     exists are returned as stored, with unsafe URLs blanked.
+		 */
 		HomepageSection: {
 			/** @description Section id chosen by the editor. */
 			id?: string
 			/** @description Block slug; null when the block no longer exists. */
 			block: string | null
-			values: components['schemas']['FreeObject']
+			values: components['schemas']['BlockValues']
 		}
 		/** @description SEO of the served locale; null when never set. */
 		HomepageMeta: {
@@ -943,16 +1033,15 @@ export interface components {
 			name: string
 			/** @description Empty when unset. */
 			description: string
-			/** @description One key per public field; `null` when unfilled or untranslated under the content rule. Values take the same forms as `EntryData`. */
-			values: {
-				[key: string]: components['schemas']['JsonValue']
-			}
+			/** @description One key per public field; `null` when unfilled or untranslated under the content rule. */
+			values: components['schemas']['FieldValues']
 			media: components['schemas']['MediaMap']
 			updated_at: components['schemas']['Timestamp']
 		}
 		/**
-		 * @description `fields` is the block blueprint as stored (field groups, or `{main, sidebar}`); `locations` says where the
-		 *     block may be used, as stored, and is absent when unset.
+		 * @description `fields` is the block blueprint as stored (field groups, or `{main, sidebar}`) without admin presentation
+		 *     settings: field widths (`data.config.width`) are left out at every depth. `locations` says where the block may
+		 *     be used, as stored, and is absent when unset.
 		 */
 		Block: {
 			id: components['schemas']['Ulid']
@@ -1235,7 +1324,7 @@ export interface components {
 		CustomBlockAttrs: {
 			/** @description Block slug. */
 			block: string
-			values: components['schemas']['FreeObject']
+			values: components['schemas']['BlockValues']
 		}
 		SiteEnvelope: {
 			data: components['schemas']['Site']
@@ -2576,7 +2665,7 @@ export interface components {
 		 */
 		BlockSlug: string
 		/**
-		 * @description Database slug in any locale of the preference order.
+		 * @description The database slug.
 		 * @example services
 		 */
 		DatabaseSlug: string
@@ -3450,7 +3539,7 @@ export interface operations {
 				 */
 				site_id: components['parameters']['SiteId']
 				/**
-				 * @description Database slug in any locale of the preference order.
+				 * @description The database slug.
 				 * @example services
 				 */
 				database: components['parameters']['DatabaseSlug']
