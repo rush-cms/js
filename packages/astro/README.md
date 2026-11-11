@@ -317,12 +317,15 @@ import Callout from '../components/callout.astro'
   (or `image.breakpoints`) up to the media's own width, never larger. Without a media URL it renders nothing.
     - `sizes` (string) sets the slot width the browser picks from, for example
       `sizes="(min-width: 1024px) 400px, 100vw"` for a card; `widths` (number[]) replaces the generated widths;
-      `layout` (`constrained`, `full-width`, `fixed` or `none`) picks Astro's layout (`none` drops `srcset`);
-      `priority` loads an above-the-fold image eagerly with a high fetch priority; `quality` and `format` reach the
-      image service.
+      `layout` (`constrained`, `full-width`, `fixed` or `none`) picks Astro's layout (type `ImageLayout` from `@rushcms/astro`; `none` drops `srcset` and the
+      `data-astro-image` attributes, as in 0.3); explicit `widths` above the media width are replaced by the media
+      width, so no variant is upscaled; `priority` renders `loading="eager" decoding="sync" fetchpriority="high"` on
+      every path (an explicit attribute still wins); `quality` and `format` reach the image service.
     - When the media has no dimensions (the media worker has not processed it yet, or the image is not in `media`),
-      the size is read from the image itself on an allowed host, once per URL per process, so the `<img>` still has
-      width and height and no layout shift. When that fails (a host outside `image.domains`/`image.remotePatterns`,
+      the size is read from the image itself on an allowed host, so the `<img>` still has width and height and no
+      layout shift. The read gives up after 8 seconds, and its result, failure included, is kept per URL for the
+      life of the process (a build, or the dev server until restart: restart it after replacing a media file at
+      the same URL or after a media host outage). When that fails (a host outside `image.domains`/`image.remotePatterns`,
       or the image cannot be fetched) and `aspectRatio` (number, width / height) is set, it renders a plain
       `<img style="aspect-ratio: …">` that reserves the box (size its width with CSS); without `aspectRatio` it
       renders a plain `<img src alt loading="lazy" decoding="async">` with the other props.
@@ -364,6 +367,7 @@ Set `site` in `astro.config`: absolute URLs are built from it and `<Seo>` throws
   `collectionAlternates(...)` or a taxonomy page's `alternates`) gives the hreflang links and
   `og:locale:alternate`, `image` is a `Media` (only `url` is required) and the page has no image without it.
   `og:type` is `website`. On page 2 and later of a list, pass that page's URL as `canonical` and no `alternates`.
+  Its prop type is exported as `SeoPage` from `@rushcms/astro`.
 - `titleSuffix` (every form) is appended to `<title>` only, so `titleSuffix=" | Site name"` gives
   `<title>Entry title | Site name</title>` while `og:title` and `twitter:title` keep the bare title. It is not
   emitted when the page has no title.
@@ -589,7 +593,9 @@ export const GET = (context) => sitemapResponse({ context, collections: ['artigo
   locale, the front page of every locale is listed without `lastmod` (the dispatcher renders a static front page);
 - page 1 of every listed collection in every locale it exists in and whose listing has at least one entry (an
   entry shown as a fallback counts, since the list page shows it), without `lastmod` (later list pages are never
-  listed), except an index whose URL is a homepage URL: the dispatcher renders the homepage there;
+  listed), except an index whose URL is a homepage URL: the dispatcher renders the homepage there. An empty list
+  page is still rendered and `collectionAlternates` still lists it for the other locales' hreflang links; the
+  `create-rush-cms` template marks an empty list page `noindex`;
 - canonical entry URLs only (fallback pages are excluded), with `lastmod` from `updated_at`;
 - page 1 of every [taxonomy](#taxonomies) listing in every locale where the tag has entries, without `lastmod`,
   whatever `collections` names.
