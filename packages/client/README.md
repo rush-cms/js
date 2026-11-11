@@ -223,6 +223,40 @@ category `news` unreachable); such overlaps are not detected.
 The [`@rushcms/astro` README](https://github.com/rush-cms/js/tree/main/packages/astro#routes) shows these helpers in
 routes, entry pages, redirects and sitemaps.
 
+## Nested field values
+
+`entry.data`, `homepage.sections[].values`, the values of a site option group, Block values and the values of a rich-text
+custom block are typed by the API contract instead of being free objects. `FieldValues` is a record of `FieldValue`s;
+`BlockValues`, `RepeaterItem`, `NestedRepeaterItem` and `ExpandedDatabaseItem` are exported for the nested shapes.
+
+- A repeater is an array of items, each with a server-assigned `_id` (use it as the list key) plus the declared
+  sub-fields. A repeater may contain one more repeater (`NestedRepeaterItem`); that is the deepest level.
+- A database field is always an array of `ExpandedDatabaseItem` (`id`, `name`, `description`, `parent_id`) resolved in
+  the requested locale, also when the field allows a single choice.
+- A Block field holds `{ block, values }`, with `values` typed as `BlockValues`. Blocks cannot contain block fields.
+
+```ts
+import type { ExpandedDatabaseItem, FieldValue, RepeaterItem } from '@rushcms/client'
+
+function isRepeater(value: FieldValue | undefined): value is RepeaterItem[] {
+	return (
+		Array.isArray(value) &&
+		value.every((item) => typeof item === 'object' && item !== null && '_id' in item)
+	)
+}
+
+const menu = (await client.entries.get('lunch-menu')).data
+
+if (isRepeater(menu.courses)) {
+	for (const course of menu.courses) {
+		console.log(course._id, course.title)
+	}
+}
+```
+
+Narrow a `FieldValue` before reading it; the union covers strings, numbers, booleans, string lists, rich text,
+database items, repeaters and Block values.
+
 ## Navigation and content helpers
 
 - `navigationLinks(items, urls, locale)` turns the items of a navigation into `NavigationLink[]`: `label`, `href`,
