@@ -1,11 +1,13 @@
 import { experimental_AstroContainer as AstroContainer } from 'astro/container'
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import RushImage from '../src/components/rush-image.astro'
 import {
-	WIDTH_LADDER,
 	boxStyle,
+	cappedWidths,
 	imageFrame,
 	isOptimizable,
+	loadingHints,
+	probeDeadline,
 	probeOnce,
 	responsiveProps,
 	responsiveWidths
@@ -14,6 +16,8 @@ import type {
 	ImageFrame,
 	ImageLayout,
 	ImageSize,
+	ProbeDeadline,
+	ResponsiveProps,
 	ResponsiveRequest
 } from '../src/components/rush-image-model'
 import { startImageServer } from './fixtures/images'
@@ -21,9 +25,41 @@ import type { ImageServer } from './fixtures/images'
 
 type ImageAttributes = Record<string, string>
 
+type Candidate = {
+	value: unknown
+	valid: boolean
+}
+
+type ControlledDeadline = ProbeDeadline & {
+	expire(): void
+	cancelled(): number
+}
+
+type ResponsiveCase = {
+	request: ResponsiveRequest
+	expected: ResponsiveProps
+}
+
 const SERVED: ImageSize = { width: 1200, height: 800 }
-const DIMENSIONS: readonly unknown[] = [undefined, 0, -5, Number.NaN, Infinity, '640', 640]
-const RATIOS: readonly unknown[] = [undefined, 0, -1, Number.NaN, 1.5]
+const SMALL: ImageSize = { width: 300, height: 200 }
+const SERVED_WIDTHS = [320, 480, 640, 800, 1024, 1200]
+const LADDER = [320, 480, 640, 800, 1024, 1280, 1600, 1920]
+const DIMENSIONS: readonly Candidate[] = [
+	{ value: undefined, valid: false },
+	{ value: 0, valid: false },
+	{ value: -5, valid: false },
+	{ value: Number.NaN, valid: false },
+	{ value: Infinity, valid: false },
+	{ value: '640', valid: false },
+	{ value: 640, valid: true }
+]
+const RATIOS: readonly Candidate[] = [
+	{ value: undefined, valid: false },
+	{ value: 0, valid: false },
+	{ value: -1, valid: false },
+	{ value: Number.NaN, valid: false },
+	{ value: 1.5, valid: true }
+]
 const LAYOUTS: readonly (ImageLayout | undefined)[] = [
 	undefined,
 	'constrained',
@@ -35,7 +71,7 @@ const LAYOUTS: readonly (ImageLayout | undefined)[] = [
 let server: ImageServer
 
 beforeAll(async () => {
-	server = await startImageServer({ '/served': SERVED, '/cached': SERVED, '/inferred': SERVED })
+	server = await startImageServer({ '/served': SERVED, '/small': SMALL, '/inferred': SERVED })
 })
 
 afterAll(async () => {
@@ -64,8 +100,24 @@ function srcsetWidths(attributes: ImageAttributes): number[] {
 		.map((candidate) => Number(/ (\d+)w$/.exec(candidate)?.[1]))
 }
 
-function isDimension(value: unknown): value is number {
-	return typeof value === 'number' && Number.isFinite(value) && value > 0
+function controlledDeadline(): ControlledDeadline {
+	let expire: () => void = () => undefined
+	let cancels = 0
+	const expired = new Promise<void>((resolve) => {
+		expire = resolve
+	})
+	return {
+		expired,
+		cancel: () => {
+			cancels += 1
+		},
+		expire: () => expire(),
+		cancelled: () => cancels
+	}
+}
+
+function isAscending(widths: number[]): boolean {
+	return widths.every((step, index) => index === 0 || step > (widths[index - 1] ?? 0))
 }
 
 describe('RushImage', () => {
@@ -107,13 +159,37 @@ describe('RushImage', () => {
 		).toBe(
 			'<img loading="eager" decoding="async" class="hero" src="https://x.test/a" alt="Pending">'
 		)
-		expect(await render({ media: pending, priority: true })).toContain('loading="eager"')
+	})
+
+	it('loads a prioritized image eagerly with a high fetch priority on every path', async () => {
+		const plain = attributesOf(
+			await render({ media: { url: 'https://x.test/a' }, priority: true })
+		)
+		const boxed = attributesOf(
+			await render({ media: { url: 'https://x.test/a' }, priority: true, aspectRatio: 2 })
+		)
+		const sized = attributesOf(
+			await render({ media: { url: server.url('/served'), ...SERVED }, priority: true })
+		)
+		for (const attributes of [plain, boxed, sized]) {
+			expect([attributes.loading, attributes.decoding, attributes.fetchpriority]).toEqual([
+				'eager',
+				'sync',
+				'high'
+			])
+		}
+		expect(boxed.style).toBe('aspect-ratio: 2')
+		expect(sized.srcset).toBeDefined()
+		const overridden = attributesOf(
+			await render({ media: { url: 'https://x.test/a' }, priority: true, decoding: 'async' })
+		)
+		expect(overridden.decoding).toBe('async')
 	})
 
 	it('emits srcset and sizes for an allowed media, capped at its own width', async () => {
 		const sized = { url: server.url('/served'), ...SERVED }
 		const attributes = attributesOf(await render({ media: sized }))
-		expect(srcsetWidths(attributes)).toEqual(responsiveWidths(SERVED.width))
+		expect(srcsetWidths(attributes)).toEqual(SERVED_WIDTHS)
 		expect(attributes.sizes).toBe('(min-width: 1200px) 1200px, 100vw')
 		expect(attributes.src).toContain('/_image?href=')
 		expect([attributes.width, attributes.height]).toEqual(['1200', '800'])
@@ -137,13 +213,22 @@ describe('RushImage', () => {
 		expect(none.sizes).toBeUndefined()
 	})
 
+	it('never asks for widths above the intrinsic width, explicit ones included', async () => {
+		const small = { url: server.url('/small'), ...SMALL }
+		const capped = attributesOf(await render({ media: small, widths: [300, 600, 1200] }))
+		expect(srcsetWidths(capped)).toEqual([300])
+		const topped = attributesOf(await render({ media: small, widths: [100, 600] }))
+		expect(srcsetWidths(topped)).toEqual([100, 300])
+		expect(srcsetWidths(attributesOf(await render({ media: small })))).toEqual([300])
+	})
+
 	it('resolves the dimensions of an allowed media that has none, once per url', async () => {
 		const inferred = { url: server.url('/inferred'), alt: 'Inferred' }
 		const first = attributesOf(await render({ media: inferred }))
 		const second = attributesOf(await render({ media: inferred }))
 		for (const attributes of [first, second]) {
 			expect([attributes.width, attributes.height]).toEqual(['1200', '800'])
-			expect(srcsetWidths(attributes)).toEqual(responsiveWidths(SERVED.width))
+			expect(srcsetWidths(attributes)).toEqual(SERVED_WIDTHS)
 		}
 		expect(server.hits('/inferred')).toBe(1)
 	})
@@ -199,20 +284,21 @@ describe('imageFrame', () => {
 			for (const height of DIMENSIONS) {
 				for (const found of [SERVED, undefined]) {
 					for (const aspectRatio of RATIOS) {
-						const media = { url: 'https://cdn.example.com/m', width, height }
+						const url = 'https://cdn.example.com/m'
+						const media = { url, width: width.value, height: height.value }
 						const frame = await imageFrame(
 							media as Parameters<typeof imageFrame>[0],
-							aspectRatio,
+							aspectRatio.value,
 							() => Promise.resolve(found)
 						)
 						const expected: ImageFrame =
-							isDimension(width) && isDimension(height)
-								? { kind: 'sized', url: media.url, size: { width, height } }
+							width.valid && height.valid
+								? { kind: 'sized', url, size: { width: 640, height: 640 } }
 								: found !== undefined
-									? { kind: 'sized', url: media.url, size: found }
-									: isDimension(aspectRatio)
-										? { kind: 'boxed', url: media.url, aspectRatio }
-										: { kind: 'plain', url: media.url }
+									? { kind: 'sized', url, size: found }
+									: aspectRatio.valid
+										? { kind: 'boxed', url, aspectRatio: 1.5 }
+										: { kind: 'plain', url }
 						expect(frame).toEqual(expected)
 						checked += 1
 					}
@@ -232,81 +318,220 @@ describe('imageFrame', () => {
 })
 
 describe('probeOnce', () => {
-	it('probes a url once, retries after a failure and drops sizes that are not positive', async () => {
+	it('probes a url once and remembers a failure for the rest of the process', async () => {
 		const calls: string[] = []
-		const sizes: (ImageSize | Error)[] = [
-			new Error('offline'),
-			{ width: 0, height: 10 },
-			{ width: 30, height: 20 }
-		]
 		const probe = (url: string) => {
 			calls.push(url)
-			const next = sizes.shift() ?? new Error('exhausted')
-			return next instanceof Error ? Promise.reject(next) : Promise.resolve(next)
+			return Promise.reject(new Error('offline'))
 		}
-		const url = server.url('/probe-once')
+		const url = 'https://cdn.example.com/probe-failure'
 		expect(await probeOnce(url, probe)).toBeUndefined()
 		expect(await probeOnce(url, probe)).toBeUndefined()
-		expect(await probeOnce(url, probe)).toEqual({ width: 30, height: 20 })
-		expect(await probeOnce(url, probe)).toEqual({ width: 30, height: 20 })
-		expect(calls).toEqual([url, url, url])
+		expect(calls).toEqual([url])
+	})
+
+	it('remembers a size and drops one that is not positive', async () => {
+		const calls: string[] = []
+		const sized = (url: string) => {
+			calls.push(url)
+			return Promise.resolve({ width: 30, height: 20 })
+		}
+		const flat = () => Promise.resolve({ width: 0, height: 10 })
+		const url = 'https://cdn.example.com/probe-size'
+		expect(await probeOnce(url, sized)).toEqual({ width: 30, height: 20 })
+		expect(await probeOnce(url, sized)).toEqual({ width: 30, height: 20 })
+		expect(calls).toEqual([url])
+		expect(await probeOnce('https://cdn.example.com/probe-flat', flat)).toBeUndefined()
 	})
 
 	it('treats a probe that throws synchronously as a failure', async () => {
 		const probe = () => {
 			throw new Error('sync')
 		}
-		expect(await probeOnce(server.url('/probe-sync'), probe)).toBeUndefined()
+		expect(await probeOnce('https://cdn.example.com/probe-sync', probe)).toBeUndefined()
+	})
+
+	it('gives up on a probe that never settles once its deadline expires, and remembers it', async () => {
+		const deadline = controlledDeadline()
+		const calls: string[] = []
+		const hang = (url: string) => {
+			calls.push(url)
+			return new Promise<ImageSize>(() => undefined)
+		}
+		const url = 'https://cdn.example.com/probe-hang'
+		const pending = probeOnce(url, hang, () => deadline)
+		deadline.expire()
+		expect(await pending).toBeUndefined()
+		expect(await probeOnce(url, hang, () => deadline)).toBeUndefined()
+		expect(calls).toEqual([url])
+		expect(deadline.cancelled()).toBe(1)
+	})
+
+	it('cancels the deadline when the probe answers first', async () => {
+		const deadline = controlledDeadline()
+		const size = await probeOnce(
+			'https://cdn.example.com/probe-fast',
+			() => Promise.resolve({ width: 4, height: 3 }),
+			() => deadline
+		)
+		expect(size).toEqual({ width: 4, height: 3 })
+		expect(deadline.cancelled()).toBe(1)
+	})
+})
+
+describe('probeDeadline', () => {
+	it('expires at its timeout, 8 s by default, and never once cancelled', async () => {
+		vi.useFakeTimers()
+		try {
+			let expired = false
+			void probeDeadline().expired.then(() => {
+				expired = true
+			})
+			await vi.advanceTimersByTimeAsync(7999)
+			expect(expired).toBe(false)
+			await vi.advanceTimersByTimeAsync(1)
+			expect(expired).toBe(true)
+			let fired = false
+			const cancelled = probeDeadline(100)
+			void cancelled.expired.then(() => {
+				fired = true
+			})
+			cancelled.cancel()
+			await vi.advanceTimersByTimeAsync(1000)
+			expect(fired).toBe(false)
+			expect(vi.getTimerCount()).toBe(0)
+		} finally {
+			vi.useRealTimers()
+		}
+	})
+})
+
+describe('loadingHints', () => {
+	it('is eager, sync and high only with priority', () => {
+		expect(loadingHints(true)).toEqual({
+			loading: 'eager',
+			decoding: 'sync',
+			fetchpriority: 'high'
+		})
+		expect(loadingHints(false)).toEqual({ loading: 'lazy', decoding: 'async' })
+		expect(loadingHints(undefined)).toEqual({ loading: 'lazy', decoding: 'async' })
 	})
 })
 
 describe('responsiveWidths', () => {
-	it('is the ascending ladder below the width plus the width itself, for every width', () => {
-		for (let width = 1; width <= 2600; width += 1) {
-			const widths = responsiveWidths(width)
-			expect(widths).toEqual([...WIDTH_LADDER.filter((step) => step < width), width])
-			expect(widths.at(-1)).toBe(width)
-			expect(
-				widths.every((step, index) => index === 0 || step > (widths[index - 1] ?? 0))
-			).toBe(true)
-		}
-	})
-
-	it('uses the configured breakpoints when given', () => {
+	it('matches known ladders', () => {
+		expect(responsiveWidths(1200)).toEqual(SERVED_WIDTHS)
+		expect(responsiveWidths(100)).toEqual([100])
+		expect(responsiveWidths(320)).toEqual([320])
+		expect(responsiveWidths(2600)).toEqual([...LADDER, 2600])
 		expect(responsiveWidths(900, [1000, 300, 600])).toEqual([300, 600, 900])
 		expect(responsiveWidths(600, [600, 300])).toEqual([300, 600])
+		expect(responsiveWidths(700, [])).toEqual([320, 480, 640, 700])
+	})
+
+	it('holds every rung below the width and ends at the width, for every width and ladder', () => {
+		const ladders: (number[] | undefined)[] = [undefined, [], [1000, 300, 600, 300]]
+		for (const ladder of ladders) {
+			const rungs = ladder === undefined || ladder.length === 0 ? LADDER : ladder
+			for (let width = 1; width <= 2600; width += 1) {
+				const widths = responsiveWidths(width, ladder)
+				expect(isAscending(widths)).toBe(true)
+				expect(widths.at(-1)).toBe(width)
+				expect(
+					rungs.filter((rung) => rung < width).every((rung) => widths.includes(rung))
+				).toBe(true)
+				expect(widths.every((step) => step === width || rungs.includes(step))).toBe(true)
+			}
+		}
+	})
+})
+
+describe('cappedWidths', () => {
+	it('matches known requests', () => {
+		expect(cappedWidths([400, 800], 1200)).toEqual([400, 800])
+		expect(cappedWidths([300, 600, 1200], 300)).toEqual([300])
+		expect(cappedWidths([100, 600], 300)).toEqual([100, 300])
+		expect(cappedWidths([800, 400, 400], 1200)).toEqual([400, 800])
+	})
+
+	it('keeps every width up to the intrinsic one and adds it only when one was dropped, for every subset', () => {
+		const candidates = [100, 300, 600, 1200]
+		for (let mask = 0; mask < 2 ** candidates.length; mask += 1) {
+			const widths = candidates.filter((_, index) => (mask >> index) & 1)
+			for (const width of [100, 300, 500, 1200, 2000]) {
+				const capped = cappedWidths(widths, width)
+				const dropped = widths.some((step) => step > width)
+				expect(isAscending(capped)).toBe(true)
+				expect(capped.every((step) => step <= width)).toBe(true)
+				expect(
+					widths.filter((step) => step <= width).every((step) => capped.includes(step))
+				).toBe(true)
+				expect(capped.includes(width)).toBe(dropped || widths.includes(width))
+			}
+		}
 	})
 })
 
 describe('responsiveProps', () => {
-	it('picks layout and widths for every combination of request', () => {
-		const size: ImageSize = { width: 900, height: 600 }
+	const size: ImageSize = { width: 900, height: 600 }
+
+	it('matches known requests', () => {
+		const cases: ResponsiveCase[] = [
+			{
+				request: { optimizable: false, layout: 'constrained', widths: [100] },
+				expected: { layout: 'none' }
+			},
+			{
+				request: { optimizable: true },
+				expected: { layout: 'constrained', widths: [320, 480, 640, 800, 900] }
+			},
+			{
+				request: {
+					optimizable: true,
+					configLayout: 'full-width',
+					breakpoints: [300, 3000]
+				},
+				expected: { layout: 'full-width', widths: [300, 900] }
+			},
+			{
+				request: { optimizable: true, layout: 'fixed', configLayout: 'none' },
+				expected: { layout: 'fixed', widths: [320, 480, 640, 800, 900] }
+			},
+			{ request: { optimizable: true, configLayout: 'none' }, expected: { layout: 'none' } },
+			{
+				request: { optimizable: true, layout: 'none', widths: [100, 2000] },
+				expected: { layout: 'none', widths: [100, 900] }
+			}
+		]
+		for (const { request, expected } of cases) {
+			expect(responsiveProps(size, request)).toEqual(expected)
+		}
+	})
+
+	it('never goes past the intrinsic width and is never responsive off the allowed hosts', () => {
 		for (const optimizable of [true, false]) {
 			for (const layout of LAYOUTS) {
 				for (const configLayout of LAYOUTS) {
-					for (const widths of [undefined, [100, 200]]) {
-						for (const breakpoints of [undefined, [300, 600, 3000]]) {
-							const request: ResponsiveRequest = {
+					for (const widths of [undefined, [100, 200], [100, 2000]]) {
+						for (const breakpoints of [undefined, [], [300, 600, 3000]]) {
+							const props = responsiveProps(size, {
 								optimizable,
 								layout,
 								configLayout,
 								widths,
 								breakpoints
-							}
-							const resolved = layout ?? configLayout ?? 'constrained'
-							const props = responsiveProps(size, request)
+							})
 							if (!optimizable) {
 								expect(props).toEqual({ layout: 'none' })
-							} else if (widths !== undefined) {
-								expect(props).toEqual({ layout: resolved, widths })
-							} else if (resolved === 'none') {
-								expect(props).toEqual({ layout: 'none' })
-							} else {
-								expect(props).toEqual({
-									layout: resolved,
-									widths: responsiveWidths(size.width, breakpoints)
-								})
+								continue
 							}
+							expect(props.layout).toBe(layout ?? configLayout ?? 'constrained')
+							expect((props.widths ?? []).every((step) => step <= size.width)).toBe(
+								true
+							)
+							expect(props.widths === undefined).toBe(
+								widths === undefined && props.layout === 'none'
+							)
 						}
 					}
 				}

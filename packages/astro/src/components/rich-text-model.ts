@@ -1,6 +1,7 @@
 import type { components } from '@rushcms/client'
 import { isRecord } from '@rushcms/client/internal'
 import type { AstroComponentFactory } from 'astro/runtime/server/index.js'
+import { sizeOf } from './media-size'
 
 type Schemas = components['schemas']
 
@@ -52,10 +53,6 @@ export type HeadingTag = `h${(typeof HEADING_LEVELS)[number]}`
 
 function text(value: unknown): string {
 	return typeof value === 'string' ? value : ''
-}
-
-export function positive(value: unknown): number | undefined {
-	return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : undefined
 }
 
 export function nodeAttrs(node: RichTextContent): Record<string, unknown> {
@@ -135,12 +132,10 @@ export function resolveImage(
 	if (url === '') {
 		return undefined
 	}
-	const width = positive(entry?.width)
-	const height = positive(entry?.height)
 	return {
 		url,
 		alt: text(reference.alt) || text(entry?.alt),
-		...(width === undefined || height === undefined ? {} : { width, height })
+		...sizeOf(entry?.width, entry?.height)
 	}
 }
 

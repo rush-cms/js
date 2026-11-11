@@ -8,6 +8,7 @@ import {
 	boxStyle,
 	imageFrame,
 	isOptimizable,
+	loadingHints,
 	probeOnce,
 	responsiveProps
 } from './rush-image-model'
@@ -26,11 +27,7 @@ type Props = Omit<HTMLAttributes<'img'>, 'src' | 'width' | 'height' | 'alt'> & {
 const { media, alt, aspectRatio, layout, widths, ...rest } = Astro.props
 const { quality, format, priority, ...attributes } = rest
 const text = alt ?? media?.alt ?? ''
-const plain = {
-	loading: priority ? ('eager' as const) : ('lazy' as const),
-	decoding: 'async' as const,
-	...attributes
-}
+const plain = { ...loadingHints(priority), ...attributes }
 const frame = await imageFrame(media, aspectRatio, (url) =>
 	probeOnce(url, (src) => inferRemoteSize(src, imageConfig))
 )

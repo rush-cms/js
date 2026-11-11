@@ -1,17 +1,28 @@
 import { isRemoteAllowed } from 'astro/assets/utils'
 import type { RemotePattern } from 'astro/assets/utils'
 import type { HTMLAttributes } from 'astro/types'
-import { positive } from './rich-text-model'
+import { positive, sizeOf } from './media-size'
+import type { ImageSize } from './media-size'
 import type { RichTextMedia } from './rich-text-model'
+
+export type { ImageSize } from './media-size'
 
 export type ImageLayout = 'constrained' | 'fixed' | 'full-width' | 'none'
 
-export type ImageSize = {
-	width: number
-	height: number
+export type SizeProbe = (url: string) => Promise<ImageSize>
+
+export type ProbeDeadline = {
+	expired: Promise<void>
+	cancel(): void
 }
 
-export type SizeProbe = (url: string) => Promise<ImageSize>
+export type DeadlineFactory = () => ProbeDeadline
+
+export type LoadingHints = {
+	loading: 'eager' | 'lazy'
+	decoding: 'sync' | 'async'
+	fetchpriority?: 'high'
+}
 
 export type SizeLookup = (url: string) => Promise<ImageSize | undefined>
 
@@ -47,35 +58,57 @@ export type RemoteImageConfig = {
 
 const PATTERN_KEYS: readonly (keyof RemotePattern)[] = ['protocol', 'hostname', 'port', 'pathname']
 
-export const WIDTH_LADDER: readonly number[] = [320, 480, 640, 800, 1024, 1280, 1600, 1920]
+const WIDTH_LADDER: readonly number[] = [320, 480, 640, 800, 1024, 1280, 1600, 1920]
+
+export const PROBE_TIMEOUT_MS = 8000
 
 const probes = new Map<string, Promise<ImageSize | undefined>>()
 
-export function sizeOf(width: unknown, height: unknown): ImageSize | undefined {
-	const w = positive(width)
-	const h = positive(height)
-	return w === undefined || h === undefined ? undefined : { width: w, height: h }
+export function probeDeadline(milliseconds: number = PROBE_TIMEOUT_MS): ProbeDeadline {
+	let handle: ReturnType<typeof setTimeout> | undefined
+	const expired = new Promise<void>((resolve) => {
+		handle = setTimeout(resolve, milliseconds)
+	})
+	return { expired, cancel: () => clearTimeout(handle) }
 }
 
-export function probeOnce(url: string, probe: SizeProbe): Promise<ImageSize | undefined> {
-	const known = probes.get(url)
-	if (known !== undefined) {
-		return known
-	}
-	const pending = Promise.resolve()
+async function boundedProbe(
+	url: string,
+	probe: SizeProbe,
+	deadline: DeadlineFactory
+): Promise<ImageSize | undefined> {
+	const timer = deadline()
+	const probed = Promise.resolve()
 		.then(() => probe(url))
 		.then(
 			(size) => sizeOf(size.width, size.height),
 			() => undefined
 		)
-		.then((size) => {
-			if (size === undefined) {
-				probes.delete(url)
-			}
-			return size
-		})
+	try {
+		return await Promise.race([probed, timer.expired.then(() => undefined)])
+	} finally {
+		timer.cancel()
+	}
+}
+
+export function probeOnce(
+	url: string,
+	probe: SizeProbe,
+	deadline: DeadlineFactory = probeDeadline
+): Promise<ImageSize | undefined> {
+	const known = probes.get(url)
+	if (known !== undefined) {
+		return known
+	}
+	const pending = boundedProbe(url, probe, deadline)
 	probes.set(url, pending)
 	return pending
+}
+
+export function loadingHints(priority: boolean | undefined): LoadingHints {
+	return priority === true
+		? { loading: 'eager', decoding: 'sync', fetchpriority: 'high' }
+		: { loading: 'lazy', decoding: 'async' }
 }
 
 export async function imageFrame(
@@ -113,11 +146,18 @@ export function isOptimizable(url: string, config: RemoteImageConfig): boolean {
 	})
 }
 
-export function responsiveWidths(
-	width: number,
-	ladder: readonly number[] = WIDTH_LADDER
-): number[] {
-	return [...new Set([...ladder.filter((step) => step < width), width])].sort((a, b) => a - b)
+function ascending(widths: number[]): number[] {
+	return [...new Set(widths)].sort((a, b) => a - b)
+}
+
+export function responsiveWidths(width: number, ladder?: readonly number[]): number[] {
+	const steps = ladder !== undefined && ladder.length > 0 ? ladder : WIDTH_LADDER
+	return ascending([...steps.filter((step) => step < width), width])
+}
+
+export function cappedWidths(widths: readonly number[], width: number): number[] {
+	const kept = widths.filter((step) => step <= width)
+	return ascending(kept.length === widths.length ? kept : [...kept, width])
 }
 
 export type ResponsiveRequest = {
@@ -139,7 +179,7 @@ export function responsiveProps(size: ImageSize, request: ResponsiveRequest): Re
 	}
 	const layout = request.layout ?? request.configLayout ?? 'constrained'
 	if (request.widths !== undefined) {
-		return { layout, widths: request.widths }
+		return { layout, widths: cappedWidths(request.widths, size.width) }
 	}
 	return layout === 'none'
 		? { layout }
