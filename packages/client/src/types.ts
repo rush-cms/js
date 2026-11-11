@@ -22,6 +22,13 @@ export type PaginationMeta = Schemas['PaginationMeta']
 export type Perspective = Schemas['Perspective']
 export type LocaleCode = Schemas['LocaleCode']
 export type RichText = Schemas['RichText']
+export type FieldValue = Schemas['FieldValue']
+export type FieldValues = Schemas['FieldValues']
+export type BlockValue = Schemas['BlockValue']
+export type BlockValues = Schemas['BlockValues']
+export type RepeaterItem = Schemas['RepeaterItem']
+export type NestedRepeaterItem = Schemas['NestedRepeaterItem']
+export type ExpandedDatabaseItem = Schemas['ExpandedDatabaseItem']
 
 export type RushFetch = (input: string, init: RequestInit) => Promise<Response>
 
