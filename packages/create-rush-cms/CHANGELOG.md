@@ -1,5 +1,11 @@
 # create-rush-cms
 
+## 0.3.2
+
+### Patch Changes
+
+- [`fbdfd43`](https://github.com/rush-cms/js/commit/fbdfd43999d77583a5de4a79feaeb6a21d344069) Thanks [@rmarsigli](https://github.com/rmarsigli)! - `trustedProxies` is required only when the integration serves on-demand routes (forms enabled or a preview deployment) and is optional and ignored on a static site; the option only becomes optional, so existing configs keep working. `create-rush-cms --ssg` no longer writes it.
+
 ## 0.3.1
 
 ### Patch Changes
