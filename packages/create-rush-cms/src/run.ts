@@ -6,6 +6,8 @@ import { USAGE, installFailure, nextSteps } from './next-steps'
 import type { NextStepsInput } from './next-steps'
 import { updateManifest } from './manifest'
 import { packageNameOf } from './package-name'
+import { SSG_VARIANT } from './ssg'
+import { applyVariant } from './variant'
 import { detectPackageManager } from './package-manager'
 import type { CliEnv, CliIo } from './types'
 
@@ -14,6 +16,7 @@ export const DEFAULT_TEMPLATE_DIR = resolve(import.meta.dirname, '..', 'template
 type Options = {
 	dir: string
 	install: boolean
+	ssg: boolean
 }
 
 type HelpRequest = {
@@ -49,7 +52,8 @@ function parse(argv: string[]): Parsed {
 			allowPositionals: true,
 			options: {
 				help: { type: 'boolean', short: 'h' },
-				'no-install': { type: 'boolean' }
+				'no-install': { type: 'boolean' },
+				ssg: { type: 'boolean' }
 			}
 		})
 		const [dir, ...extra] = positionals
@@ -62,7 +66,10 @@ function parse(argv: string[]): Parsed {
 		if (extra.length > 0) {
 			return { kind: 'invalid', message: `Unexpected argument: ${extra.join(' ')}` }
 		}
-		return { kind: 'ready', options: { dir, install: values['no-install'] !== true } }
+		return {
+			kind: 'ready',
+			options: { dir, install: values['no-install'] !== true, ssg: values.ssg === true }
+		}
 	} catch (error) {
 		return { kind: 'invalid', message: messageOf(error) }
 	}
@@ -78,8 +85,11 @@ function setPackageName(target: string): void {
 	})
 }
 
-function scaffold(target: string, templateDir: string): void {
+function scaffold(target: string, templateDir: string, ssg: boolean): void {
 	copyTemplate(templateDir, target)
+	if (ssg) {
+		applyVariant(target, SSG_VARIANT)
+	}
 	setPackageName(target)
 	copyFileSync(join(target, '.env.example'), join(target, '.env'))
 }
@@ -100,20 +110,20 @@ export async function run(
 		emit(USAGE, io.err)
 		return 1
 	}
-	const { dir, install } = parsed.options
+	const { dir, install, ssg } = parsed.options
 	const target = resolve(env.cwd, dir)
 	if (isNonEmpty(target)) {
 		io.err(`${dir} already exists and is not empty. Nothing was written.`)
 		return 1
 	}
 	try {
-		scaffold(target, templateDir)
+		scaffold(target, templateDir, ssg)
 	} catch (error) {
 		io.err(`Could not create the project: ${messageOf(error)}`)
 		return 1
 	}
 	const packageManager = detectPackageManager(env.userAgent)
-	const input: NextStepsInput = { dir, packageManager, installed: install }
+	const input: NextStepsInput = { dir, packageManager, installed: install, ssg }
 	io.out(`Created ${packageNameOf(target)} in ${dir}`)
 	if (install && (await io.spawn(packageManager, target)) !== 0) {
 		emit(installFailure(input), io.err)

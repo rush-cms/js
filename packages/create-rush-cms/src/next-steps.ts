@@ -5,6 +5,7 @@ export type NextStepsInput = {
 	dir: string
 	packageManager: PackageManager
 	installed: boolean
+	ssg: boolean
 }
 
 function quoted(dir: string): string {
@@ -12,11 +13,12 @@ function quoted(dir: string): string {
 }
 
 export const USAGE = [
-	'Usage: create-rush-cms <dir> [--no-install]',
+	'Usage: create-rush-cms <dir> [--ssg] [--no-install]',
 	'',
 	'Creates a Rush CMS website in <dir>.',
 	'',
 	'Options:',
+	'  --ssg         Create a purely static site: no server, forms route or preview',
 	'  --no-install  Skip installing dependencies',
 	'  -h, --help    Show this help'
 ]
@@ -28,6 +30,11 @@ export function installFailure(input: NextStepsInput): string[] {
 	]
 }
 
+const SERVER_MODE = 'Mode: server site (Node adapter). Use --ssg for a purely static site.'
+
+const STATIC_MODE =
+	'Mode: static site (--ssg). No server, forms route or preview; see "404 pages" in README.md.'
+
 export function nextSteps(input: NextStepsInput): string[] {
 	const steps = [
 		`cd ${quoted(input.dir)}`,
@@ -36,5 +43,11 @@ export function nextSteps(input: NextStepsInput): string[] {
 		`${devCommand(input.packageManager)}, then paste the localePaths line the first-run error prints into astro.config.ts`,
 		'Search the project for TODO markers and fill them in'
 	]
-	return ['', 'Next steps:', ...steps.map((step, index) => `  ${index + 1}. ${step}`)]
+	return [
+		'',
+		input.ssg ? STATIC_MODE : SERVER_MODE,
+		'',
+		'Next steps:',
+		...steps.map((step, index) => `  ${index + 1}. ${step}`)
+	]
 }
