@@ -23,7 +23,7 @@ async function sizeIn(bytes: Uint8Array, url: string): Promise<ImageSize | undef
 }
 
 async function readSize(reader: Reader, url: string): Promise<ImageSize> {
-	let bytes = new Uint8Array()
+	let bytes: Uint8Array = new Uint8Array()
 	for (;;) {
 		const chunk = await reader.read()
 		if (chunk.done) {

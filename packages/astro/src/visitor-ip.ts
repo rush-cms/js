@@ -24,7 +24,7 @@ export function trustedProxyCount(options: RushAstroOptions, preview: boolean): 
 		return 0
 	}
 	const count = options.trustedProxies
-	if (!Number.isSafeInteger(count) || count < 0) {
+	if (typeof count !== 'number' || !Number.isSafeInteger(count) || count < 0) {
 		throw new Error(
 			`@rushcms/astro: trustedProxies is required and must be a non-negative integer, got ${String(count)}. Use 0 when visitors reach the Astro Node server directly, or n when every request reaches it through n reverse proxies that each append to X-Forwarded-For.`
 		)
