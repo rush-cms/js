@@ -49,9 +49,9 @@ export function rush(options: RushAstroOptions): AstroIntegration {
 				injectRoute
 			}) => {
 				createUrls(options)
-				trustedProxyCount(options)
 				const env = await loadRushEnv(config, command)
 				preview = env.RUSH_PREVIEW === 'true'
+				trustedProxyCount(options, preview)
 				site = once(() =>
 					loadSiteConfig({
 						api: readApiSettings(env),

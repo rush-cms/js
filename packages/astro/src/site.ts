@@ -53,7 +53,7 @@ export async function loadSiteConfig(request: RushSiteRequest): Promise<RushSite
 		seo: options.seo ?? {},
 		memo: request.memo,
 		preview: request.preview,
-		trustedProxies: trustedProxyCount(options)
+		trustedProxies: trustedProxyCount(options, request.preview)
 	}
 	createUrls(config)
 	return config

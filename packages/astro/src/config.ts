@@ -20,7 +20,7 @@ export type RushAstroOptions = {
 	pageSegments?: RushPageSegments
 	taxonomies?: RushTaxonomies
 	seo?: Record<string, SeoFieldMap>
-	trustedProxies: number
+	trustedProxies?: number
 	forms?: boolean
 }
 

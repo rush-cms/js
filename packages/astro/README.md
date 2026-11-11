@@ -36,12 +36,13 @@ export default defineConfig({
 | `pageSegments`   | CMS locale code → segment of collection list pages after the first (default `page`).                 |
 | `taxonomies`     | `category` / `tag` → CMS locale code → segment of its listing pages (see [Taxonomies](#taxonomies)). |
 | `seo`            | Per collection, the data fields used for title, description and image.                               |
-| `trustedProxies` | Required. Reverse proxies in front of the server that append to `X-Forwarded-For`.                   |
+| `trustedProxies` | Required unless `forms: false` and no preview. Reverse proxies that append to `X-Forwarded-For`.     |
 | `forms`          | `false` stops injecting the on-demand `/_rush/forms/[key]` route (default `true`; see below).        |
 
 With `forms: false` the integration injects no route outside a preview deployment, so a purely static site needs no
-adapter (`create-rush-cms --ssg` sets it). A preview deployment needs a server: it injects the preview routes and
-renders every page on demand, so keep the default setup for it.
+adapter and no `trustedProxies` (`create-rush-cms --ssg` sets `forms: false` and omits it). A preview deployment needs
+a server and `trustedProxies`: it injects the preview routes and renders every page on demand, so keep the default
+setup for it.
 
 ## Routes
 
@@ -218,8 +219,9 @@ the `Host` header for hosts listed in `security.allowedDomains`; without it, the
 
 The API rate-limits form posts per visitor IP (5 per minute per form) and per site, and stores the IP with the
 submission. The forms route never forwards an address the visitor chose. Which address is the visitor's depends on how
-requests reach the server, so `trustedProxies` has no default; without a non-negative integer, `rush()` fails when
-Astro loads the config:
+requests reach the server, so `trustedProxies` has no default; when the integration serves on-demand routes (forms
+enabled or a preview deployment), `rush()` fails without a non-negative integer when Astro loads the config. A static
+site with `forms: false` and no preview receives no request at runtime, so there the option is optional and ignored:
 
 ```text
 @rushcms/astro: trustedProxies is required and must be a non-negative integer, got undefined. Use 0 when visitors

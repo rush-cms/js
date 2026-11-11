@@ -62,8 +62,8 @@ const ASTRO_CONFIG: FilePatch = {
 		{ find: /\tsecurity: \{[\s\S]*?\n\t\},\n/, replace: '' },
 		{ find: 'rush({\n', replace: 'rush({\n\t\t\tforms: false,\n' },
 		{
-			find: /\t\t\t\/\/ TODO: set how many reverse proxies[^\n]*\n\t\t\ttrustedProxies: 1\n/,
-			replace: '\t\t\ttrustedProxies: 0\n'
+			find: /,\n\t\t\t\/\/ TODO: set how many reverse proxies[^\n]*\n\t\t\ttrustedProxies: 1\n/,
+			replace: '\n'
 		}
 	]
 }

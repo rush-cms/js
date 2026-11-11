@@ -69,9 +69,15 @@ function options(
 	return { localePaths, trustedProxies: 0, ...extra }
 }
 
-function untypedOptions(localePaths: RushLocalePaths, trustedProxies: unknown): RushAstroOptions {
+function untypedOptions(
+	localePaths: RushLocalePaths,
+	trustedProxies: unknown,
+	extra: Partial<RushAstroOptions> = {}
+): RushAstroOptions {
 	const fields: object =
-		trustedProxies === undefined ? { localePaths } : { localePaths, trustedProxies }
+		trustedProxies === undefined
+			? { localePaths, ...extra }
+			: { localePaths, trustedProxies, ...extra }
 	return fields as RushAstroOptions
 }
 
@@ -207,6 +213,27 @@ describe('trustedProxies', () => {
 			expect(stub.requests).toEqual([])
 		}
 	)
+
+	it('is optional and ignored on a static site without preview', async () => {
+		const integration = rush(untypedOptions(ALL_LOCALES, undefined, { forms: false }))
+		const setup = await runSetup(integration, useProject(apiEnv()))
+		expect(setup.routes).toEqual([])
+		expect((await builtConfig(integration)).trustedProxies).toBe(0)
+	})
+
+	it('is still required with forms enabled explicitly', async () => {
+		const integration = rush(untypedOptions(ALL_LOCALES, undefined, { forms: true }))
+		await expect(runSetup(integration, useProject(apiEnv()))).rejects.toThrow(
+			'trustedProxies is required'
+		)
+	})
+
+	it('is required in a preview deployment even with forms off', async () => {
+		const integration = rush(untypedOptions(ALL_LOCALES, undefined, { forms: false }))
+		await expect(
+			runSetup(integration, useProject(apiEnv({ RUSH_PREVIEW: 'true' })))
+		).rejects.toThrow('trustedProxies is required')
+	})
 
 	it('carries the hop count into the site config', async () => {
 		const integration = rush(options(ALL_LOCALES, { trustedProxies: 2 }))

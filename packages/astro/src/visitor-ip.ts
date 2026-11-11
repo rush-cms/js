@@ -15,7 +15,14 @@ export const FORWARDED_WITHOUT_PROXIES_WARNING =
 export const UNRESOLVED_VISITOR_IP_WARNING =
 	'@rushcms/astro: a form post reached the API without a visitor IP: with trustedProxies above 0, the X-Forwarded-For entry that many places from the right was missing or not a bare IP address (no port). Check that trustedProxies equals the number of reverse proxies in front of the server and that each of them appends a bare IP to X-Forwarded-For. This warning is shown once per process.'
 
-export function trustedProxyCount(options: RushAstroOptions): number {
+export function servesOnDemand(options: RushAstroOptions, preview: boolean): boolean {
+	return options.forms !== false || preview
+}
+
+export function trustedProxyCount(options: RushAstroOptions, preview: boolean): number {
+	if (!servesOnDemand(options, preview)) {
+		return 0
+	}
 	const count = options.trustedProxies
 	if (!Number.isSafeInteger(count) || count < 0) {
 		throw new Error(
