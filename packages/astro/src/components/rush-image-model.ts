@@ -9,7 +9,7 @@ export type { ImageSize } from './media-size'
 
 export type ImageLayout = 'constrained' | 'fixed' | 'full-width' | 'none'
 
-export type SizeProbe = (url: string) => Promise<ImageSize>
+export type SizeProbe = (url: string, signal: AbortSignal) => Promise<ImageSize>
 
 export type ProbeDeadline = {
 	expired: Promise<void>
@@ -78,14 +78,19 @@ async function boundedProbe(
 	deadline: DeadlineFactory
 ): Promise<ImageSize | undefined> {
 	const timer = deadline()
+	const controller = new AbortController()
 	const probed = Promise.resolve()
-		.then(() => probe(url))
+		.then(() => probe(url, controller.signal))
 		.then(
 			(size) => sizeOf(size.width, size.height),
 			() => undefined
 		)
+	const expired = timer.expired.then(() => {
+		controller.abort()
+		return undefined
+	})
 	try {
-		return await Promise.race([probed, timer.expired.then(() => undefined)])
+		return await Promise.race([probed, expired])
 	} finally {
 		timer.cancel()
 	}
@@ -139,11 +144,20 @@ function remotePattern(pattern: ConfiguredPattern): RemotePattern {
 	return result
 }
 
-export function isOptimizable(url: string, config: RemoteImageConfig): boolean {
-	return isRemoteAllowed(url, {
+export type RemoteAllowlist = {
+	domains: string[]
+	remotePatterns: RemotePattern[]
+}
+
+export function remoteAllowlist(config: RemoteImageConfig): RemoteAllowlist {
+	return {
 		domains: config.domains ?? [],
 		remotePatterns: (config.remotePatterns ?? []).map(remotePattern)
-	})
+	}
+}
+
+export function isOptimizable(url: string, config: RemoteImageConfig): boolean {
+	return isRemoteAllowed(url, remoteAllowlist(config))
 }
 
 function ascending(widths: number[]): number[] {

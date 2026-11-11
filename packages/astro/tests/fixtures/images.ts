@@ -18,7 +18,7 @@ export type ImageServer = {
 
 const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]
 
-function pngHeader({ width, height }: ImageSize): Buffer {
+export function pngHeader({ width, height }: ImageSize): Buffer {
 	const chunk = Buffer.alloc(25)
 	chunk.writeUInt32BE(13, 0)
 	chunk.write('IHDR', 4, 'ascii')

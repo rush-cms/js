@@ -1,9 +1,10 @@
 ---
-import { Image, imageConfig, inferRemoteSize } from 'astro:assets'
+import { Image, imageConfig } from 'astro:assets'
 import type { ImageOutputFormat, ImageQuality } from 'astro'
 import type { HTMLAttributes } from 'astro/types'
 import type { RichTextMedia } from './rich-text-model'
 import type { ImageLayout } from './rush-image-model'
+import { probeRemoteSize } from './remote-size'
 import {
 	boxStyle,
 	imageFrame,
@@ -29,7 +30,7 @@ const { quality, format, priority, ...attributes } = rest
 const text = alt ?? media?.alt ?? ''
 const plain = { ...loadingHints(priority), ...attributes }
 const frame = await imageFrame(media, aspectRatio, (url) =>
-	probeOnce(url, (src) => inferRemoteSize(src, imageConfig))
+	probeOnce(url, (src, signal) => probeRemoteSize(src, imageConfig, signal))
 )
 const responsive =
 	frame?.kind === 'sized'
