@@ -21,13 +21,14 @@
 		"test": "bun run --filter '*' test",
 		"build": "bun run --filter './packages/*' build",
 		"template:check": "RUSH_API_URL=http://127.0.0.1:9 RUSH_SITE_ID=template RUSH_API_TOKEN=template bun run --cwd templates/astro check && tsc -p templates/astro/tsconfig.json && oxlint --type-aware templates",
+		"template:check:ssg": "bun scripts/check-ssg-template.ts",
 		"pack:check": "bun scripts/check-pack.ts",
 		"changesets:check": "bun scripts/check-changesets.ts",
 		"types:drift": "bun run api:types && git diff --exit-code -- packages/client/src/generated/api.ts",
 		"changeset": "changeset",
 		"release": "bun run build && changeset publish",
 		"version-packages": "changeset version && bun install --lockfile-only",
-		"ci": "bun run format:check && bun run lint && bun run typecheck && bun run test && bun run build && bun run template:check && bun run pack:check && bun run changesets:check &&bun run types:drift"
+		"ci": "bun run format:check && bun run lint && bun run typecheck && bun run test && bun run build && bun run template:check && bun run template:check:ssg && bun run pack:check && bun run changesets:check &&bun run types:drift"
 	},
 	"devDependencies": {
 		"@changesets/changelog-github": "1.0.1",

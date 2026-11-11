@@ -11,3 +11,4 @@ e2e/walk-kit/bun.lock
 e2e/template/.packs
 e2e/template/bun.lock
 e2e/template/.env.*
+templates/astro/.ssg-check
