@@ -48,7 +48,7 @@ const documents = Object.values(entry.data).filter(isRichText)
 		{
 			entry.featured_image?.url && (
 				<figure class="mt-10">
-					<RushImage media={entry.featured_image} class="w-full rounded-xl" loading="eager" />
+					<RushImage media={entry.featured_image} class="w-full rounded-xl" priority />
 				</figure>
 			)
 		}

@@ -1,7 +1,7 @@
 ---
 import { getRush, getUrls } from '@rushcms/astro'
-import Hreflang from '@rushcms/astro/components/hreflang.astro'
 import RushImage from '@rushcms/astro/components/rush-image.astro'
+import Seo from '@rushcms/astro/components/seo.astro'
 import type { Alternate, Entry, LocaleCode } from '@rushcms/client'
 import Base from '../layouts/base.astro'
 import { formatDate } from '../lib/locale'
@@ -23,14 +23,21 @@ const urls = getUrls(Astro)
 const site = await getRush(Astro).site.get()
 const previous = page > 1 ? pageUrl(page - 1) : undefined
 const next = page < lastPage ? pageUrl(page + 1) : undefined
-const current = pageUrl(page)
-const canonical = Astro.site && current !== undefined ? new URL(current, Astro.site) : undefined
+const canonical = pageUrl(page) ?? Astro.url.pathname
 const heading = page > 1 ? `${title} (${page}/${lastPage})` : title
 ---
 
-<Base locale={locale} title={`${heading} | ${site.name}`} translations={translations}>
-	{canonical && <link slot="head" rel="canonical" href={canonical.href} />}
-	{page === 1 && <Hreflang slot="head" alternates={translations} />}
+<Base locale={locale} translations={translations}>
+	<Seo
+		slot="head"
+		page={{
+			locale,
+			canonical,
+			title: heading,
+			alternates: page === 1 ? translations : []
+		}}
+		titleSuffix={` | ${site.name}`}
+	/>
 	<div class="mx-auto max-w-6xl px-6 py-16">
 		<header class="max-w-3xl">
 			<h1 class="text-4xl font-semibold tracking-tight">{title}</h1>
@@ -51,6 +58,8 @@ const heading = page > 1 ? `${title} (${page}/${lastPage})` : title
 								{entry.featured_image?.url && (
 									<RushImage
 										media={entry.featured_image}
+										aspectRatio={16 / 9}
+										sizes="(min-width: 1024px) 23rem, (min-width: 640px) 50vw, 100vw"
 										class="mb-4 aspect-video w-full rounded-lg object-cover"
 									/>
 								)}
