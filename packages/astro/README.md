@@ -312,9 +312,21 @@ import Callout from '../components/callout.astro'
 - An image is joined to `media` by `attrs.mediaId` (falling back to the node's `src` without a media entry) and
   rendered through `RushImage`.
 - `RushImage` (`@rushcms/astro/components/rush-image.astro`) renders `astro:assets` `<Image>` with width, height and
-  alt from a `media` entry. While the media has no dimensions (the media worker has not processed it yet, or the
-  image is not in `media`) it renders a plain `<img src alt loading="lazy" decoding="async">` with the other props,
-  which skips Astro's remote-image check and optimization. Without a media URL it renders nothing.
+  alt from a `media` entry, responsive by default: on a host the integration allows (the media host) it emits
+  `srcset` and `sizes` with the `constrained` layout (or `image.layout` from `astro.config`), with widths from 320 px
+  (or `image.breakpoints`) up to the media's own width, never larger. Without a media URL it renders nothing.
+    - `sizes` (string) sets the slot width the browser picks from, for example
+      `sizes="(min-width: 1024px) 400px, 100vw"` for a card; `widths` (number[]) replaces the generated widths;
+      `layout` (`constrained`, `full-width`, `fixed` or `none`) picks Astro's layout (`none` drops `srcset`);
+      `priority` loads an above-the-fold image eagerly with a high fetch priority; `quality` and `format` reach the
+      image service.
+    - When the media has no dimensions (the media worker has not processed it yet, or the image is not in `media`),
+      the size is read from the image itself on an allowed host, once per URL per process, so the `<img>` still has
+      width and height and no layout shift. When that fails (a host outside `image.domains`/`image.remotePatterns`,
+      or the image cannot be fetched) and `aspectRatio` (number, width / height) is set, it renders a plain
+      `<img style="aspect-ratio: …">` that reserves the box (size its width with CSS); without `aspectRatio` it
+      renders a plain `<img src alt loading="lazy" decoding="async">` with the other props.
+    - An image on a host outside the allowed ones is not optimized and gets no `srcset`.
 
 ## SEO
 
@@ -331,8 +343,10 @@ import Seo from '@rushcms/astro/components/seo.astro'
 Set `site` in `astro.config`: absolute URLs are built from it and `<Seo>` throws without it.
 
 - `<Seo entry>` emits `<title>`, the meta description, Open Graph (`og:title`, `og:description`, `og:image` with
-  width and height when the media has them, `og:url`, `og:type`, `og:locale` and `og:locale:alternate` in BCP 47),
-  `rel="canonical"` and `<link rel="alternate" hreflang>` for every translation, plus `x-default` pointing at the
+  width, height and alt when the media has them, `og:url`, `og:type`, `og:locale` and `og:locale:alternate` in the
+  Open Graph form `pt_BR`, a bare language such as `en` staying `en`), the Twitter card (`twitter:card`, which is
+  `summary_large_image` with an image and `summary` without, `twitter:title`, `twitter:description`,
+  `twitter:image`, `twitter:image:alt`), `rel="canonical"` and `<link rel="alternate" hreflang>` for every translation, plus `x-default` pointing at the
   locale served at the root of the site (the one with the `''` prefix), else the site's default locale, when that
   translation exists.
 - Title, description and image come from the `seo` option for the entry's collection (keyed by the collection id or
@@ -344,6 +358,15 @@ Set `site` in `astro.config`: absolute URLs are built from it and `<Seo>` throws
   hreflang links for the homepage's `translations` and points canonical at the homepage's own locale.
   `homepageTitle(homepage)` returns the title it would emit, or `undefined` (no homepage, or a missing or blank
   `meta.title`), so a page can fall back to a title of its own only then.
+- `<Seo page={{ locale, canonical, title, description, alternates, image }}>` is the same head for any other page,
+  such as a collection list or a taxonomy page. `locale` and `canonical` (a site path or an absolute URL) are
+  required; `title` and `description` are emitted when not blank, `alternates` (an `Alternate[]` such as
+  `collectionAlternates(...)` or a taxonomy page's `alternates`) gives the hreflang links and
+  `og:locale:alternate`, `image` is a `Media` (only `url` is required) and the page has no image without it.
+  `og:type` is `website`. On page 2 and later of a list, pass that page's URL as `canonical` and no `alternates`.
+- `titleSuffix` (every form) is appended to `<title>` only, so `titleSuffix=" | Site name"` gives
+  `<title>Entry title | Site name</title>` while `og:title` and `twitter:title` keep the bare title. It is not
+  emitted when the page has no title.
 - `<Hreflang alternates={list}>` (`@rushcms/astro/components/hreflang.astro`) emits only the
   `<link rel="alternate" hreflang>` tags for an `Alternate[]`, such as `collectionAlternates(...)` or a taxonomy page's
   `alternates`: absolute URLs, plus `x-default` pointing at the root-prefix locale, else the site's default locale, when the list has it. `<Seo>`
@@ -564,7 +587,8 @@ export const GET = (context) => sitemapResponse({ context, collections: ['artigo
   locale served by another locale's homepage, or answering `404` while another locale has one, is skipped, matching
   `<Seo homepage>`, whose canonical points at the homepage's own locale. When the site has no CMS homepage in any
   locale, the front page of every locale is listed without `lastmod` (the dispatcher renders a static front page);
-- page 1 of every listed collection in every locale it exists in, without `lastmod` (later list pages are never
+- page 1 of every listed collection in every locale it exists in and whose listing has at least one entry (an
+  entry shown as a fallback counts, since the list page shows it), without `lastmod` (later list pages are never
   listed), except an index whose URL is a homepage URL: the dispatcher renders the homepage there;
 - canonical entry URLs only (fallback pages are excluded), with `lastmod` from `updated_at`;
 - page 1 of every [taxonomy](#taxonomies) listing in every locale where the tag has entries, without `lastmod`,

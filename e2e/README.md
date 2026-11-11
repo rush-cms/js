@@ -46,7 +46,7 @@ proxy, admin API, contact form, preview session, results); it is a plain directo
   same helpers with `createUrls({ ...siteConfig, collections })`.
 - The seeded `body` rich text renders through `<RichText>` with a `callout` block component, the featured image
   through `<RushImage>`. The API runs the media worker in process, so dimensions are set once `make dev/up` has
-  started; before that `RushImage` renders a plain `<img>` without Astro's optimization.
+  started; before that `RushImage` reads the size from the image itself.
 
 ## API side, from zero
 
