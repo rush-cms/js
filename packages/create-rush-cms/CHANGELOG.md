@@ -1,5 +1,11 @@
 # create-rush-cms
 
+## 0.3.5
+
+### Patch Changes
+
+- [`053ce0d`](https://github.com/rush-cms/js/commit/053ce0de894d3c4b61dbeda68b651441907ba84f) Thanks [@rmarsigli](https://github.com/rmarsigli)! - Bundles the updated client and astro packages with the non-null homepage `meta` contract.
+
 ## 0.3.4
 
 ### Patch Changes

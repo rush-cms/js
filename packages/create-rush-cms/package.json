@@ -1,6 +1,6 @@
 {
 	"name": "create-rush-cms",
-	"version": "0.3.4",
+	"version": "0.3.5",
 	"description": "Create an Astro website powered by Rush CMS.",
 	"type": "module",
 	"bin": {

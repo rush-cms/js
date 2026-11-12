@@ -1,5 +1,13 @@
 # @rushcms/astro
 
+## 0.7.1
+
+### Patch Changes
+
+- [`053ce0d`](https://github.com/rush-cms/js/commit/053ce0de894d3c4b61dbeda68b651441907ba84f) Thanks [@rmarsigli](https://github.com/rmarsigli)! - The homepage SEO helpers read `meta` as the always-present object the contract now declares; output is unchanged.
+- Updated dependencies [[`053ce0d`](https://github.com/rush-cms/js/commit/053ce0de894d3c4b61dbeda68b651441907ba84f)]:
+  - @rushcms/client@5.0.3
+
 ## 0.7.0
 
 ### Minor Changes
