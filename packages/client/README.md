@@ -5,9 +5,8 @@ form submission, typed errors and URL helpers for multilingual sites. Framework-
 dependencies. For Astro sites, [`@rushcms/astro`](https://github.com/rush-cms/js/tree/main/packages/astro) builds on
 it.
 
-Requires Node 24 or later and a Rush CMS v2 API serving the public API contract 1.0.0 (`/api/v1/{site_id}/…`, pinned
-as [`openapi/public.json`](https://github.com/rush-cms/js/blob/main/openapi/public.json)). Versions 2.x talk to the
-Rush CMS v1 (Laravel) API and share nothing with 3.x or later.
+Requires Node 24 or later and a Rush CMS API serving the public API contract 1.0.0 (`/api/v1/{site_id}/…`, pinned
+as [`openapi/public.json`](https://github.com/rush-cms/js/blob/main/openapi/public.json)).
 
 ```bash
 npm install @rushcms/client
@@ -247,7 +246,7 @@ function isRepeater(value: FieldValue | undefined): value is RepeaterItem[] {
 	)
 }
 
-const menu = (await client.entries.get('lunch-menu')).data
+const menu = (await rush.entries.get('menus', 'lunch-menu')).data
 
 if (isRepeater(menu.courses)) {
 	for (const course of menu.courses) {
@@ -266,7 +265,7 @@ database items, repeaters and Block values.
   item's `rel` attribute), `className`, the other attributes as strings and `children`. An item whose target has no
   route keeps no `href` and stays only when it has children.
 - `optional(promise)` resolves `undefined` when the request fails with `not_found` and rethrows anything else, for
-  content a site may not have yet (a navigation, the homepage, a form).
+  content a site may not have yet (a navigation, a form). Other 404s, such as `not_translated` for a homepage or `moved` for an entry, are thrown with their params.
 - `isRichText(value)` tells whether a value is a TipTap document (`RichText`), for rendering entry data generically.
 
 `@rushcms/client/internal` is an undocumented subpath for the other Rush packages and may change in any release.

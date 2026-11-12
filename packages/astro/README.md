@@ -201,8 +201,8 @@ preview session) and returns `navigationLinks(items, getUrls(Astro), locale)` fr
 children.
 
 Like every helper, it throws a `RushError` with code `not_found` for an unknown key. `optional(promise)` from
-`@rushcms/client` resolves `undefined` on a `404` and rethrows anything else, for content a site may not have yet (a
-navigation, the homepage, a form).
+`@rushcms/client` resolves `undefined` on `not_found` and rethrows anything else, for content a site may not have yet (a
+navigation, a form).
 
 ## Forms
 

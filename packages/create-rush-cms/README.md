@@ -2,7 +2,7 @@
 
 Creates a website powered by [Rush CMS](https://github.com/rush-cms/rush-cms): a production-ready
 [Astro](https://astro.build) site wired to [`@rushcms/astro`](https://github.com/rush-cms/js/tree/main/packages/astro)
-and [`@rushcms/client`](https://github.com/rush-cms/js/tree/main/packages/client). It works with any Rush CMS v2 site
+and [`@rushcms/client`](https://github.com/rush-cms/js/tree/main/packages/client). It works with any Rush CMS site
 on day one, whatever its collections, locales and blocks. The generated code is yours: `create-rush-cms` never touches
 it again.
 
