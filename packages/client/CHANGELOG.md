@@ -1,5 +1,11 @@
 # @rushcms/client
 
+## 5.0.2
+
+### Patch Changes
+
+- [`3ef4aba`](https://github.com/rush-cms/js/commit/3ef4abaf04d1973f1917a87560e6ea9440f7cc72) Thanks [@rmarsigli](https://github.com/rmarsigli)! - `optional` resolves `undefined` only for the `not_found` error code, as documented. `moved` and `not_translated` 404s are rethrown instead of being swallowed, so callers can read their redirect and alternate params.
+
 ## 5.0.1
 
 ### Patch Changes

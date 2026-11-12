@@ -1,6 +1,6 @@
 {
 	"name": "@rushcms/astro",
-	"version": "0.6.1",
+	"version": "0.7.0",
 	"description": "Astro integration for Rush CMS.",
 	"type": "module",
 	"license": "MIT",
@@ -72,7 +72,7 @@
 		"test": "vitest run"
 	},
 	"dependencies": {
-		"@rushcms/client": "^5.0.1"
+		"@rushcms/client": "^5.0.2"
 	},
 	"peerDependencies": {
 		"astro": ">=7.4.0",
