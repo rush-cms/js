@@ -1,5 +1,11 @@
 # create-rush-cms
 
+## 0.3.3
+
+### Patch Changes
+
+- [`5f65f02`](https://github.com/rush-cms/js/commit/5f65f021a2016f875bf7c297a78e95302fd7dc0e) Thanks [@rmarsigli](https://github.com/rmarsigli)! - The scaffold reads `SITE_URL` (default `http://localhost:4321`) to set `site` and `security.allowedDomains` in `astro.config.ts`; the two TODO comments are gone and `.env.example` lists `SITE_URL`.
+
 ## 0.3.2
 
 ### Patch Changes

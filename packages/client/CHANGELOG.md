@@ -1,5 +1,11 @@
 # @rushcms/client
 
+## 5.0.1
+
+### Patch Changes
+
+- [`287358d`](https://github.com/rush-cms/js/commit/287358d6b96742de4a801aaa5d84fac9972a353e) Thanks [@rmarsigli](https://github.com/rmarsigli)! - Fail with an `invalid_response` error that names the configured and the final origin when a response was redirected to another origin (an `http://` API URL redirected to `https://`), instead of a bare 401 after the `Authorization` header is dropped.
+
 ## 5.0.0
 
 ### Major Changes
