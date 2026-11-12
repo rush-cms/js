@@ -18,7 +18,7 @@ import type { TemplateEnv } from './env.ts'
 import { builtWithoutWarnings, previewDraft, previewOnDemand } from './preview-checks.ts'
 import type { PreviewPage } from './preview-checks.ts'
 import {
-	allowWalkerDomains,
+	allowProxyDomain,
 	build,
 	localePathsError,
 	pasteLocalePaths,
@@ -130,6 +130,8 @@ function switcher(paths: string[], current: number): SwitcherLink[] {
 	}))
 }
 
+const TAG_NAMES: Record<string, string> = { pt_BR: 'Destaque', en: 'Featured', es: 'Destacado' }
+
 const HELLO_PATHS = ['/artigos/ola-mundo', '/en/blog/hello-world', '/es/articulos/hola-mundo']
 
 const HELLO_ALTERNATES = [
@@ -145,12 +147,11 @@ function hello(path: string, lang: string, title: string, locale: string): Entry
 		lang,
 		title,
 		alternates: HELLO_ALTERNATES,
-		richText: {
-			heading: title,
-			links: [`https://example.com/${locale}`],
-			items: 2,
-			images: 1,
-			callout: null
+		excerpt: `${title} (${locale})`,
+		terms: [{ name: TAG_NAMES[locale] ?? '', href: null }],
+		unrendered: {
+			texts: [`First point (${locale})`, `Second point (${locale})`],
+			links: [`https://example.com/${locale}`]
 		}
 	}
 }
@@ -303,8 +304,8 @@ const SITE_B: SitePlan = {
 	notFound: ['/contact', '/en', '/en/posts', '/EN/', '/pt_BR/'],
 	moved: [],
 	sitemap: {
-		includes: [`${SITE_URL}/`, `${SITE_URL}/posts`],
-		excludes: ['/en', '/page/', 'first-draft']
+		includes: [`${SITE_URL}/`],
+		excludes: ['/posts', '/en', '/page/', 'first-draft']
 	},
 	contact: false,
 	onDemand: { path: '/', title: FRONT_HEADING },
@@ -432,8 +433,8 @@ async function firstRun(project: Project, plan: SitePlan): Promise<string> {
 	const line = suggestedLine(output)
 	assert.equal(line, plan.localePaths)
 	pasteLocalePaths(project, line)
-	allowWalkerDomains(project)
-	return `${project.manager} run dev stops with "${plan.localeError}" and suggests ${line}; pasted over localePaths: {} in astro.config.ts (allowedDomains set to localhost and the walker proxy host)`
+	allowProxyDomain(project)
+	return `${project.manager} run dev stops with "${plan.localeError}" and suggests ${line}; pasted over localePaths: {} in astro.config.ts (SITE_URL in .env derives allowedDomains for localhost; the walker proxy host is added)`
 }
 
 async function serveAndCheck(

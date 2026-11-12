@@ -4,8 +4,7 @@ import { join, relative } from 'node:path'
 import type { Page, Walker } from '../../walk-kit/browser.ts'
 import { openOk } from '../../walk-kit/browser.ts'
 import { alternateLinks, attribute, textOf } from '../../walk-kit/dom.ts'
-import { loadedImages, richText } from '../../walk-kit/rich-text.ts'
-import type { RenderedRichText } from '../../walk-kit/rich-text.ts'
+import { loadedImages } from '../../walk-kit/rich-text.ts'
 import { SITE_URL } from './env.ts'
 import { httpStatus } from './http.ts'
 import { PREVIEW_OUT_DIR, fileCount, filesContaining, filesUnder } from './project.ts'
@@ -55,12 +54,24 @@ export type ListPage = {
 	next: string | null
 }
 
+export type EntryTerm = {
+	name: string
+	href: string | null
+}
+
+export type UnrenderedValues = {
+	texts: string[]
+	links: string[]
+}
+
 export type EntryPage = {
 	path: string
 	lang: string
 	title: string
 	alternates: string[]
-	richText: RenderedRichText
+	excerpt: string
+	terms: EntryTerm[]
+	unrendered: UnrenderedValues
 }
 
 export type LanguageSwitch = {
@@ -86,6 +97,12 @@ const NOT_FOUND_HEADING = 'Page not found'
 const SITEMAP_LOC = /<loc>([^<]+)<\/loc>/g
 const NOT_FOUND = 404
 const FEATURED = 'article > figure img'
+const ENTRY_HEADER = 'article > header'
+const ENTRY_TERMS = 'article > ul > li'
+const ENTRY_NOTE = 'article > p[lang="en"]'
+const ENTRY_NOTE_TEXT =
+	'This view does not render the fields of the collection, because the template cannot know them. Edit src/views/entry.astro, or map the collection to its own view in src/views/index.ts, to show its fields.'
+const RICH_TEXT_MARKUP = '.prose, [data-callout]'
 const BUILT_PAGES = 'dist/client'
 const FRONT_FILE = 'index.html'
 const FRONT_PHRASES = ['you build in Rush CMS from <code', 'collection.astro</code> and <code']
@@ -230,6 +247,31 @@ export function collectionPages(
 	})
 }
 
+async function entryAttributes(page: Page, entry: EntryPage): Promise<void> {
+	assert.ok(await attribute(page, `${ENTRY_HEADER} time`, 'datetime'), 'published date')
+	assert.equal(await textOf(page, `${ENTRY_HEADER} > p:last-of-type`), entry.excerpt)
+	const terms = await page.$$eval(ENTRY_TERMS, (items) =>
+		items.map((item) => ({
+			name: item.textContent?.trim() ?? '',
+			href: item.querySelector('a')?.getAttribute('href') ?? null
+		}))
+	)
+	assert.deepEqual(terms, entry.terms)
+	const note = (await textOf(page, ENTRY_NOTE))?.replace(/\s+/g, ' ')
+	assert.equal(note, ENTRY_NOTE_TEXT)
+	assert.equal((await page.$$(RICH_TEXT_MARKUP)).length, 0, 'no rich text markup')
+	const text = await bodyText(page)
+	for (const value of entry.unrendered.texts) {
+		assert.ok(!text.includes(value), `entry view renders no field value "${value}"`)
+	}
+	const links = await page.$$eval('article a', (anchors) =>
+		anchors.map((anchor) => anchor.getAttribute('href'))
+	)
+	for (const href of entry.unrendered.links) {
+		assert.ok(!links.includes(href), `entry view renders no field link ${href}`)
+	}
+}
+
 export function entryPages(walker: Walker, entries: EntryPage[], prefix: string): Promise<string> {
 	return walker.withPage(async (page) => {
 		const seen: string[] = []
@@ -242,13 +284,13 @@ export function entryPages(walker: Walker, entries: EntryPage[], prefix: string)
 				await attribute(page, 'link[rel="canonical"]', 'href'),
 				`${SITE_URL}${entry.path}`
 			)
-			assert.deepEqual(await richText(page, '.prose'), entry.richText)
+			await entryAttributes(page, entry)
 			assert.deepEqual(await loadedImages(page, FEATURED), [true])
 			const featured = await attribute(page, FEATURED, 'src')
 			assert.ok(featured?.startsWith('/_astro/'), `optimized featured image ${featured}`)
 			const shot = await walker.shot(page, shotName(`${prefix}entry`, entry.path))
 			seen.push(
-				`${entry.path} "${entry.title}" lang=${entry.lang}, ${entry.alternates.length} hreflang links, rich text h2/link/${entry.richText.items} items/${entry.richText.images} image, featured ${featured} [${shot}]`
+				`${entry.path} "${entry.title}" lang=${entry.lang}, ${entry.alternates.length} hreflang links, date, excerpt, ${entry.terms.length} term links, featured ${featured}, generic note, no blueprint field values [${shot}]`
 			)
 		}
 		return seen.join('; ')

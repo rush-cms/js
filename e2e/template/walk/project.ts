@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { PROXY_HOST } from '../../walk-kit/env.ts'
+import { SITE_URL } from './env.ts'
 import { startProcess } from './processes.ts'
 import type { Running } from './processes.ts'
 import type { ProjectSpec } from './projects.ts'
@@ -24,8 +25,8 @@ export type BuildResult = {
 const CONFIG = 'astro.config.ts'
 const EMPTY_LOCALE_PATHS = 'localePaths: {},'
 const SUGGESTED_LINE = /^\s*(localePaths: \{[^\n]*\})\s*$/m
-const TEMPLATE_DOMAINS = "allowedDomains: [{ protocol: 'https', hostname: 'www.example.com' }]"
-const WALKER_DOMAINS = `allowedDomains: [{ protocol: 'http', hostname: 'localhost' }, { protocol: 'http', hostname: '${PROXY_HOST}' }]`
+const DERIVED_DOMAINS = 'allowedDomains: ['
+const PROXY_DOMAIN = `{ protocol: 'http', hostname: '${PROXY_HOST}' },`
 export const PREVIEW_OUT_DIR = 'dist-preview'
 const INHERITED = [
 	'AGENT',
@@ -53,7 +54,8 @@ export function writeDelivery(project: Project, delivery: Delivery): void {
 	const values: Record<string, string> = {
 		RUSH_API_URL: delivery.apiUrl,
 		RUSH_SITE_ID: delivery.siteId,
-		RUSH_API_TOKEN: delivery.token
+		RUSH_API_TOKEN: delivery.token,
+		SITE_URL
 	}
 	for (const [name, value] of Object.entries(values)) {
 		replaceOnce(file, `${name}=\n`, `${name}=${value}\n`)
@@ -87,8 +89,8 @@ export function pasteLocalePaths(project: Project, line: string): void {
 	replaceOnce(join(project.path, CONFIG), EMPTY_LOCALE_PATHS, `${line},`)
 }
 
-export function allowWalkerDomains(project: Project): void {
-	replaceOnce(join(project.path, CONFIG), TEMPLATE_DOMAINS, WALKER_DOMAINS)
+export function allowProxyDomain(project: Project): void {
+	replaceOnce(join(project.path, CONFIG), DERIVED_DOMAINS, `${DERIVED_DOMAINS}${PROXY_DOMAIN}`)
 }
 
 export async function build(project: Project, preview: boolean): Promise<BuildResult> {
