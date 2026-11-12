@@ -497,7 +497,7 @@ export interface paths {
 		}
 		/**
 		 * Option databases
-		 * @description Unpaginated, without items. Ordered by creation time, oldest first. Names and slugs follow the structure rule.
+		 * @description Unpaginated, without items. Ordered by creation time, oldest first. Names and slugs carry no locale.
 		 */
 		get: operations['listDatabases']
 		put?: never
@@ -863,7 +863,7 @@ export interface components {
 			components['schemas']['LeafFieldValue'] | components['schemas']['RepeaterValue']
 		/**
 		 * @description A value that may appear at every depth. Text, textarea, select, color and markdown fields hold a string; image
-		 *     and file fields a media URL (joined with `media`); checkbox, list, gallery and category fields a
+		 *     and file fields a media URL (entries and site option groups also carry a `media` map keyed by media id; homepage values hold only the URL); checkbox, list, gallery and category fields a
 		 *     `StringListValue`; rich-text fields a `RichText` document; database fields a `DatabaseFieldValue`. `null` when
 		 *     unfilled, and for a block field whose block no longer exists.
 		 */
@@ -973,12 +973,12 @@ export interface components {
 			block: string | null
 			values: components['schemas']['BlockValues']
 		}
-		/** @description SEO of the served locale; null when never set. */
+		/** @description SEO of the served locale; an empty object when never set. */
 		HomepageMeta: {
 			title?: string
 			description?: string
 			og_image?: string
-		} | null
+		}
 		Collection: {
 			id: components['schemas']['Ulid']
 			slug: string

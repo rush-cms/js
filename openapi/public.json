@@ -875,7 +875,7 @@
 					"Databases"
 				],
 				"summary": "Option databases",
-				"description": "Unpaginated, without items. Ordered by creation time, oldest first. Names and slugs follow the structure rule.",
+				"description": "Unpaginated, without items. Ordered by creation time, oldest first. Names and slugs carry no locale.",
 				"parameters": [
 					{
 						"$ref": "#/components/parameters/Locale"
@@ -3352,7 +3352,7 @@
 				]
 			},
 			"LeafFieldValue": {
-				"description": "A value that may appear at every depth. Text, textarea, select, color and markdown fields hold a string; image\nand file fields a media URL (joined with `media`); checkbox, list, gallery and category fields a\n`StringListValue`; rich-text fields a `RichText` document; database fields a `DatabaseFieldValue`. `null` when\nunfilled, and for a block field whose block no longer exists.\n",
+				"description": "A value that may appear at every depth. Text, textarea, select, color and markdown fields hold a string; image\nand file fields a media URL (entries and site option groups also carry a `media` map keyed by media id; homepage values hold only the URL); checkbox, list, gallery and category fields a\n`StringListValue`; rich-text fields a `RichText` document; database fields a `DatabaseFieldValue`. `null` when\nunfilled, and for a block field whose block no longer exists.\n",
 				"anyOf": [
 					{
 						"type": "string",
@@ -3635,9 +3635,8 @@
 			},
 			"HomepageMeta": {
 				"type": "object",
-				"nullable": true,
 				"additionalProperties": false,
-				"description": "SEO of the served locale; null when never set.",
+				"description": "SEO of the served locale; an empty object when never set.",
 				"properties": {
 					"title": {
 						"type": "string"
