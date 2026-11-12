@@ -3,7 +3,7 @@ import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { join, posix, resolve } from 'node:path'
 import { DEPENDENCY_FIELDS, WORKSPACE_PREFIX, isExcludedFromBundle } from './bundle-template'
 import { literalTargets, targetsOf } from './export-targets'
-import type { PackageManifest } from './export-targets'
+import type { ExportTarget, PackageManifest } from './export-targets'
 import { BUNDLING_PACKAGE, workspaceVersions } from './workspace-versions'
 
 type PackReport = {
@@ -49,20 +49,44 @@ function wildcardOf(key: string, subpath: string): string | undefined {
 		: undefined
 }
 
+function mappedProblems(
+	table: Record<string, ExportTarget> | undefined,
+	subpath: string,
+	files: Set<string>
+): string[] | undefined {
+	for (const [key, target] of Object.entries(table ?? {})) {
+		const wildcard = wildcardOf(key, subpath)
+		if (wildcard !== undefined) {
+			const missing = targetsOf(target, wildcard).filter((path) => !files.has(path))
+			return missing.map((path) => `"${key}" target ${path} is not in the tarball`)
+		}
+	}
+	return undefined
+}
+
 function selfReferenceProblems(
 	manifest: PackageManifest,
 	specifier: string,
 	files: Set<string>
 ): string[] {
 	const subpath = `.${specifier.slice(manifest.name.length)}`
-	for (const [key, target] of Object.entries(manifest.exports ?? {})) {
-		const wildcard = wildcardOf(key, subpath)
-		if (wildcard !== undefined) {
-			const missing = targetsOf(target, wildcard).filter((path) => !files.has(path))
-			return missing.map((path) => `export "${key}" target ${path} is not in the tarball`)
-		}
-	}
-	return [`"${specifier}" matches no export of ${manifest.name}`]
+	return (
+		mappedProblems(manifest.exports, subpath, files) ?? [
+			`"${specifier}" matches no export of ${manifest.name}`
+		]
+	)
+}
+
+function privateImportProblems(
+	manifest: PackageManifest,
+	specifier: string,
+	files: Set<string>
+): string[] {
+	return (
+		mappedProblems(manifest.imports, specifier, files) ?? [
+			`"${specifier}" matches no import of ${manifest.name}`
+		]
+	)
 }
 
 function relativeProblem(file: string, specifier: string, files: Set<string>): string[] {
@@ -85,6 +109,9 @@ function problemsOf(
 	return specifiers.flatMap((specifier) => {
 		if (specifier.startsWith('.')) {
 			return relativeProblem(file, specifier, files)
+		}
+		if (specifier.startsWith('#')) {
+			return privateImportProblems(manifest, specifier, files)
 		}
 		const isSelf = specifier === manifest.name || specifier.startsWith(`${manifest.name}/`)
 		return isSelf ? selfReferenceProblems(manifest, specifier, files) : []

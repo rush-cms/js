@@ -15,6 +15,16 @@
 	"engines": {
 		"node": ">=24"
 	},
+	"imports": {
+		"#components-runtime": {
+			"types": "./dist/components-runtime.d.ts",
+			"default": "./dist/components-runtime.js"
+		},
+		"#form-enhance": {
+			"types": "./dist/form-enhance.d.ts",
+			"default": "./dist/form-enhance.js"
+		}
+	},
 	"exports": {
 		".": {
 			"types": "./dist/index.d.ts",
@@ -27,14 +37,6 @@
 		"./site-paths": {
 			"types": "./dist/site-paths.d.ts",
 			"default": "./dist/site-paths.js"
-		},
-		"./components-runtime": {
-			"types": "./dist/components-runtime.d.ts",
-			"default": "./dist/components-runtime.js"
-		},
-		"./form-enhance": {
-			"types": "./dist/form-enhance.d.ts",
-			"default": "./dist/form-enhance.js"
 		},
 		"./routes/forms": {
 			"types": "./dist/routes/forms.d.ts",

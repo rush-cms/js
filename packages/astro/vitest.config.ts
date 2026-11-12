@@ -16,12 +16,10 @@ export default getViteConfig(
 				'@rushcms/client': fileURLToPath(
 					new URL('../client/src/index.ts', import.meta.url)
 				),
-				'@rushcms/astro/components-runtime': fileURLToPath(
+				'#components-runtime': fileURLToPath(
 					new URL('./src/components-runtime.ts', import.meta.url)
 				),
-				'@rushcms/astro/form-enhance': fileURLToPath(
-					new URL('./src/form-enhance.ts', import.meta.url)
-				)
+				'#form-enhance': fileURLToPath(new URL('./src/form-enhance.ts', import.meta.url))
 			}
 		},
 		test: {

@@ -5,8 +5,8 @@ import {
 	formAction,
 	formStatusOf,
 	messageFor
-} from '@rushcms/astro/components-runtime'
-import type { FormMessages } from '@rushcms/astro/components-runtime'
+} from '#components-runtime'
+import type { FormMessages } from '#components-runtime'
 import FormField from './form-field.astro'
 
 type Props = {
@@ -42,7 +42,7 @@ const status = formStatusOf(Astro.url.searchParams, form.key)
 {form.captcha && <script is:inline src={TURNSTILE_SCRIPT} async defer />}
 
 <script>
-	import { enhanceForms } from '@rushcms/astro/form-enhance'
+	import { enhanceForms } from '#form-enhance'
 
 	enhanceForms(document)
 </script>

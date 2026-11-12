@@ -6,6 +6,7 @@ export type PackageManifest = {
 	name: string
 	private?: boolean
 	exports?: Record<string, ExportTarget>
+	imports?: Record<string, ExportTarget>
 }
 
 export function targetsOf(target: ExportTarget, wildcard: string): string[] {
@@ -19,7 +20,7 @@ export function targetsOf(target: ExportTarget, wildcard: string): string[] {
 }
 
 export function literalTargets(manifest: PackageManifest): string[] {
-	return Object.entries(manifest.exports ?? {})
+	return Object.entries({ ...manifest.exports, ...manifest.imports })
 		.filter(([key]) => !key.includes('*'))
 		.flatMap(([, target]) => targetsOf(target, ''))
 }
