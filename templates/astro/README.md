@@ -67,7 +67,9 @@ The dispatcher hands each page to a view:
   or render the homepage built in Rush CMS from `page.homepage`.
 - `src/views/collection.astro`: a collection list page with pagination.
 - `src/views/taxonomy.astro`: the entries of a category or tag, with pagination (see [Taxonomies](#taxonomies)).
-- `src/views/entry.astro`: an entry with its title, featured image, excerpt and every rich-text field.
+- `src/views/entry.astro`: an entry with its title, date, author, excerpt, featured image, categories and tags. It renders no field of the
+  collection, because the template cannot know them: it shows a note until you edit it or map the collection to its own
+  view below.
 - `src/views/not-found.astro`: the 404 page.
 
 To give a collection its own design, create a view and map the collection id or slug in `src/views/index.ts`:

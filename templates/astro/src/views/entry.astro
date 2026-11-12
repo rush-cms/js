@@ -1,9 +1,8 @@
 ---
 import { getUrls } from '@rushcms/astro'
-import RichText from '@rushcms/astro/components/rich-text.astro'
 import RushImage from '@rushcms/astro/components/rush-image.astro'
 import Seo from '@rushcms/astro/components/seo.astro'
-import { alternates, isRichText, toBcp47 } from '@rushcms/client'
+import { alternates, toBcp47 } from '@rushcms/client'
 import Base from '../layouts/base.astro'
 import { formatDate, languageName } from '../lib/locale'
 import type { EntryViewProps } from './index'
@@ -13,7 +12,7 @@ type Props = EntryViewProps
 const { entry, locale } = Astro.props
 const urls = getUrls(Astro)
 const list = urls.collectionRef(entry.collection.id, locale)
-const documents = Object.values(entry.data).filter(isRichText)
+const terms = [...entry.categories, ...entry.tags]
 ---
 
 <Base locale={locale} translations={alternates(entry, urls)}>
@@ -46,20 +45,35 @@ const documents = Object.values(entry.data).filter(isRichText)
 			{entry.excerpt && <p class="mt-8 text-xl text-pretty text-muted">{entry.excerpt}</p>}
 		</header>
 		{
+			terms.length > 0 && (
+				<ul class="mt-6 flex flex-wrap gap-2 text-sm">
+					{terms.map((term) => {
+						const href = urls.taxonomy(term, locale)
+						return (
+							<li>
+								{href ? (
+									<a href={href} class="rounded-full border border-line px-3 py-1 text-muted hover:text-accent">
+										{term.name}
+									</a>
+								) : (
+									<span class="rounded-full border border-line px-3 py-1 text-muted">{term.name}</span>
+								)}
+							</li>
+						)
+					})}
+				</ul>
+			)
+		}
+		{
 			entry.featured_image?.url && (
 				<figure class="mt-10">
 					<RushImage media={entry.featured_image} class="w-full rounded-xl" priority />
 				</figure>
 			)
 		}
-		{
-			documents.length > 0 && (
-				<div class="prose prose-lg mt-10 max-w-none">
-					{documents.map((content) => (
-						<RichText content={content} media={entry.media} />
-					))}
-				</div>
-			)
-		}
+		<p lang="en" class="mt-10 rounded-lg border border-line bg-surface px-4 py-3 text-sm">
+			This view does not render the fields of the collection, because the template cannot know them. Edit
+			src/views/entry.astro, or map the collection to its own view in src/views/index.ts, to show its fields.
+		</p>
 	</article>
 </Base>

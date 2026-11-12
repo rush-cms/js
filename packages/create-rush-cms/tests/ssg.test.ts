@@ -63,6 +63,14 @@ describe('default scaffold', () => {
 		expect(textOf(root, 'src/pages/404.astro')).toContain('export const prerender = false')
 		expect(textOf(root, 'src/pages/404.astro')).toContain('routePage')
 	})
+
+	it('keeps the generic entry view free of field rendering and points to the file to edit', async () => {
+		const view = textOf(await scaffold(['site']), 'src/views/entry.astro')
+		expect(view).not.toMatch(/RichText|isRichText|entry\.data/)
+		expect(view).toContain('src/views/entry.astro')
+		expect(view).toContain('entry.tags')
+		expect(view).toContain('entry.categories')
+	})
 })
 
 describe('--ssg scaffold', () => {
