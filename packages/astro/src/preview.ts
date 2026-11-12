@@ -22,7 +22,9 @@ export type CookieContext = {
 
 export type PreviewContext = Pick<APIContext, 'url' | 'locals' | 'request'>
 
-export type RushMiddlewareContext = PreviewContext & CookieContext & Pick<APIContext, 'params'>
+export type RushMiddlewareContext = PreviewContext &
+	CookieContext &
+	Pick<APIContext, 'params' | 'isPrerendered'>
 
 export type RushMiddleware = (
 	context: RushMiddlewareContext,
@@ -112,7 +114,7 @@ export function createRushMiddleware(runtime: RushRuntime): RushMiddleware {
 	const handle = runtimeMiddleware(runtime)
 	return (context, next) =>
 		handle(context, () =>
-			hasUnknownLocale(runtime.urls, context.params)
+			!context.isPrerendered && hasUnknownLocale(runtime.urls, context.params)
 				? Promise.resolve(new Response(null, { status: 404 }))
 				: next()
 		)

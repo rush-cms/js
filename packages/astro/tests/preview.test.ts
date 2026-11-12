@@ -309,6 +309,7 @@ describe('middleware', () => {
 		page?: Response
 		reads?: number
 		params?: RouteParams
+		prerendered?: boolean
 	}
 
 	async function pass(
@@ -324,6 +325,7 @@ describe('middleware', () => {
 			url,
 			request: hostRequest(url, {}),
 			params: options.params ?? {},
+			isPrerendered: options.prerendered ?? false,
 			locals: {},
 			cookies: { get }
 		}
@@ -410,6 +412,19 @@ describe('middleware', () => {
 				expect(response.status).toBe(404)
 				expect(lines).toEqual([])
 				expect(response.headers.get('x-robots-tag')).toBe(preview ? 'noindex' : null)
+			}
+		}
+	)
+
+	it.each([true, false])(
+		'renders a prerendered page whose locale param is a free route param (preview %s)',
+		async (preview) => {
+			for (const locale of ['en', 'pt_BR', 'xx']) {
+				const { response } = await pass(previewConfig({ preview }), undefined, {
+					params: { locale },
+					prerendered: true
+				})
+				expect(response.status).toBe(200)
 			}
 		}
 	)

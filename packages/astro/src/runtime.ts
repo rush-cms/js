@@ -90,7 +90,9 @@ export function resolveLocale(
 	defaultLocale: LocaleCode,
 	request: LocaleRequest
 ): LocaleCode {
-	const locale = findLocale(urls, defaultLocale, request)
+	const locale =
+		findLocale(urls, defaultLocale, request) ??
+		findLocale(urls, defaultLocale, { ...request, segment: undefined })
 	if (locale === undefined) {
 		throw new Error(
 			`@rushcms/astro: locale "${request.segment ?? request.current}" matches no localePaths entry`
