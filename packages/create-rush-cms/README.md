@@ -47,11 +47,13 @@ that is not empty exits with code 1 and nothing is written.
 ## Next steps
 
 1. `cd my-site`, and install if you used `--no-install`.
-2. Fill `.env` with the API URL, the site id and a delivery token of your Rush CMS site.
+2. Fill `.env` with the API URL, the site id and a delivery token of your Rush CMS site. Set `SITE_URL` to your
+   production URL when you build: `site` and `security.allowedDomains` come from it, and it falls back to
+   `http://localhost:4321` in development.
 3. Run `npm run dev` (or `bun run dev`, `pnpm run dev`). The first start stops with an error that lists the site's
    locales and a `localePaths` line; paste it into `astro.config.ts` and run it again.
 4. Search the project for `TODO` markers: each one is a place to customize (routes, navigation, the production
-   domain, `trustedProxies`).
+   domain in `SITE_URL`, `trustedProxies`).
 
 The [template README](https://github.com/rush-cms/js/blob/main/templates/astro/README.md) covers the routes, views,
 preview deployment and deployment topologies.

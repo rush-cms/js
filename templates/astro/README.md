@@ -12,13 +12,14 @@ Requires Node 24 or later.
 
 1. Fill `.env`:
 
-    | Variable         | Value                                                       |
-    | ---------------- | ----------------------------------------------------------- |
-    | `RUSH_API_URL`   | The Rush CMS API base URL                                   |
-    | `RUSH_SITE_ID`   | The site ULID                                               |
-    | `RUSH_API_TOKEN` | A delivery token of the site (secret: never commit it)      |
-    | `RUSH_MEDIA_URL` | The media host, when it differs from the API (optional)     |
-    | `RUSH_PREVIEW`   | `true` only for a [preview deployment](#preview-deployment) |
+    | Variable         | Value                                                                                                   |
+    | ---------------- | ------------------------------------------------------------------------------------------------------- |
+    | `RUSH_API_URL`   | The Rush CMS API base URL                                                                               |
+    | `RUSH_SITE_ID`   | The site ULID                                                                                           |
+    | `RUSH_API_TOKEN` | A delivery token of the site (secret: never commit it)                                                  |
+    | `RUSH_MEDIA_URL` | The media host, when it differs from the API (optional)                                                 |
+    | `RUSH_PREVIEW`   | `true` only for a [preview deployment](#preview-deployment)                                             |
+    | `SITE_URL`       | Your production URL, read when the config loads (build time); empty in dev uses `http://localhost:4321` |
 
 2. Run `npm run dev`. The first start stops with an error that lists the site's locales and a line to paste:
 
@@ -134,8 +135,8 @@ with a link to leave the preview. See
   variables from the process environment, not from `.env`: set them on your host. `npm run preview` starts it
   locally with `.env` loaded (`node --env-file-if-exists=.env ./dist/server/entry.mjs`). The server answers the 404
   page, redirects, the contact page and form posts (`/_rush/forms/<key>`).
-- Set `site` to your production URL: canonical links, `hreflang` links and the sitemap use it.
-- List your domains in `security.allowedDomains`, or form posts and preview links fail on them.
+- Set `SITE_URL` to your production URL before building: `site` (canonical links, `hreflang` links and the sitemap)
+  and `security.allowedDomains` (form posts and preview links fail on other hosts) both come from it.
 - Set `trustedProxies` to the number of reverse proxies in front of the server, so form posts are rate-limited per
   visitor. The [topology table](https://github.com/rush-cms/js/tree/main/packages/astro#behind-reverse-proxies) gives
   the value for Coolify, nginx and Cloudflare.

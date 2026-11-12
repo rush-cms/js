@@ -2,15 +2,25 @@ import node from '@astrojs/node'
 import rush from '@rushcms/astro'
 import tailwindcss from '@tailwindcss/vite'
 import { defineConfig } from 'astro/config'
+import { loadEnv } from 'vite'
+
+const DEV_SITE_URL = 'http://localhost:4321'
+
+const siteEnv = loadEnv(process.env.NODE_ENV ?? 'development', process.cwd(), 'SITE_URL')
+
+const siteUrl = new URL(siteEnv.SITE_URL || DEV_SITE_URL)
 
 export default defineConfig({
-	// TODO: set your production URL; canonical links, hreflang links and the sitemap are built from it.
-	site: 'http://localhost:4321',
+	site: siteUrl.href,
 	output: 'static',
 	adapter: node({ mode: 'standalone' }),
 	security: {
-		// TODO: list every domain that serves this site, or form posts and preview links fail there.
-		allowedDomains: [{ protocol: 'https', hostname: 'www.example.com' }]
+		allowedDomains: [
+			{
+				protocol: siteUrl.protocol === 'https:' ? 'https' : 'http',
+				hostname: siteUrl.hostname
+			}
+		]
 	},
 	vite: {
 		plugins: [tailwindcss()]

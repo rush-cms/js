@@ -22,7 +22,7 @@ needs a server: scaffold without \`--ssg\` for it).
 
 - \`npm run build\` fetches every page from the API and writes \`dist/\`. Upload that folder to any static host. Pages
   change only when you build again, so rebuild after publishing content.
-- Set \`site\` to your production URL: canonical links, \`hreflang\` links and the sitemap use it.
+- Set \`SITE_URL\` to your production URL before building: canonical links, \`hreflang\` links and the sitemap use it.
 - Retired slugs are not redirected: with no server, a URL that no longer exists gets your 404 page.
 
 ## 404 pages
@@ -87,9 +87,9 @@ const HOME: FilePatch = {
 	patches: [
 		{ find: /\t\{\n\t\ttitle: 'Add a contact form',[\s\S]*?\n\t\},\n/, replace: '' },
 		{
-			find: 'Set your domain in site and security.allowedDomains, count the proxies in front of the server, then build.',
+			find: 'Set SITE_URL to your domain, count the proxies in front of the server, then build.',
 			replace:
-				'Set your domain in site, then build and upload the dist folder to any static host.'
+				'Set SITE_URL to your domain, then build and upload the dist folder to any static host.'
 		}
 	]
 }

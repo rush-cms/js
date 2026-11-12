@@ -20,7 +20,7 @@ export type RecordedIo = {
 
 export const FIXTURE_TEMPLATE = join(import.meta.dirname, 'fixtures', 'template')
 
-const TEMPLATE_SOURCE = join(import.meta.dirname, '..', '..', '..', 'templates', 'astro')
+export const TEMPLATE_SOURCE = join(import.meta.dirname, '..', '..', '..', 'templates', 'astro')
 
 const tempDirs: string[] = []
 

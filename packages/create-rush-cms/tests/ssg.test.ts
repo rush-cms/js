@@ -119,6 +119,23 @@ describe('--ssg scaffold', () => {
 		expect(readme).toContain('error_page 404 /pt/404/index.html')
 	})
 
+	it('keeps site from SITE_URL and drops allowedDomains', async () => {
+		const { ssg } = await bothScaffolds()
+		expect(textOf(ssg, 'astro.config.ts')).toContain('site: siteUrl.href')
+		expect(textOf(ssg, '.env.example')).toContain('SITE_URL=')
+		expect(textOf(ssg, 'README.md')).toContain('Set `SITE_URL` to your production URL')
+		expect(textOf(ssg, 'src/views/home.astro')).toContain(
+			'Set SITE_URL to your domain, then build'
+		)
+	})
+
+	it('names SITE_URL in the next steps of both modes', async () => {
+		const cwd = makeTempDir()
+		const recorded = recordIo()
+		await run(['a', '--no-install'], { userAgent: undefined, cwd }, recorded.io, template)
+		expect(recorded.out.join('\n')).toContain('SITE_URL')
+	})
+
 	it('names the generated mode in the next steps', async () => {
 		const cwd = makeTempDir()
 		const server = recordIo()
