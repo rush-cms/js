@@ -37,6 +37,12 @@ export function jsonResponse(
 	})
 }
 
+export function redirectedResponse(finalUrl: string, response: Response): Response {
+	Object.defineProperty(response, 'redirected', { value: true })
+	Object.defineProperty(response, 'url', { value: finalUrl })
+	return response
+}
+
 export function deferred<T>(): Deferred<T> {
 	let resolve: (value: T) => void = () => undefined
 	const promise = new Promise<T>((settle) => {

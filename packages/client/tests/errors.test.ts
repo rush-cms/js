@@ -1,8 +1,15 @@
 import { describe, expect, expectTypeOf, it } from 'vitest'
-import { RushError, isRushError } from '../src/index'
+import { RushError, createClient, isRushError } from '../src/index'
 import type { FieldError, RushErrorCode, components } from '../src/index'
 import { errorCodes, errorExamples, responseExample } from './fixtures/contract'
-import { jsonResponse, rejection, testClient } from './fixtures/fetch'
+import {
+	SITE_ID,
+	TOKEN,
+	jsonResponse,
+	redirectedResponse,
+	rejection,
+	testClient
+} from './fixtures/fetch'
 
 type ContractErrorCode = components['schemas']['ErrorCode']
 
@@ -123,6 +130,63 @@ describe('errors', () => {
 
 		expect(isRushError(error, 'invalid_response')).toBe(true)
 		expect(error).toMatchObject({ status, params: {}, errors: [] })
+	})
+
+	it.each([
+		[
+			'a bare 401',
+			() => jsonResponse({ error: 'unauthorized', code: 'unauthorized' }, 401),
+			401
+		],
+		['a success body', () => jsonResponse({ data: {} }), 200]
+	])(
+		'fails with invalid_response naming both origins when %s follows a redirect to another origin',
+		async (_, respond, status) => {
+			const { client, calls } = testClient(() =>
+				redirectedResponse('https://secure.example.com/api/v1/site', respond())
+			)
+
+			const error = await rejection(client.site.get())
+
+			expect(isRushError(error, 'invalid_response')).toBe(true)
+			expect(error).toMatchObject({ status })
+			expect((error as Error).message).toContain('https://cms.example.com')
+			expect((error as Error).message).toContain('https://secure.example.com')
+			expect((error as Error).message).toContain(
+				'set the API URL to https://secure.example.com'
+			)
+			expect(calls).toHaveLength(1)
+		}
+	)
+
+	it('names the https origin when an http API URL is redirected to it', async () => {
+		const client = createClient({
+			url: 'http://cms.example.com',
+			siteId: SITE_ID,
+			token: TOKEN,
+			fetch: () =>
+				Promise.resolve(
+					redirectedResponse(
+						'https://cms.example.com/api/v1/site',
+						jsonResponse({ error: 'unauthorized', code: 'unauthorized' }, 401)
+					)
+				)
+		})
+
+		const error = await rejection(client.site.get())
+
+		expect((error as Error).message).toContain(
+			'redirected to https://cms.example.com, which drops the Authorization header; set the API URL to https://cms.example.com'
+		)
+		expect((error as Error).message).toContain('http://cms.example.com')
+	})
+
+	it('keeps a redirect that stays on the configured origin', async () => {
+		const { client } = testClient(() =>
+			redirectedResponse('https://cms.example.com/moved', jsonResponse({ data: {} }))
+		)
+
+		await expect(client.site.get()).resolves.toBeDefined()
 	})
 
 	it('maps a paginated call without meta to invalid_response with the real status', async () => {

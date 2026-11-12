@@ -88,7 +88,9 @@ Types for every contract shape are exported under friendly names (`Entry`, `Site
 
 Every failure is a `RushError` with `status`, `code`, `params` and `errors` (per-field `{ field, code, … }` for
 validation). `code` is the API's stable error code, or `network_error` (the request or the body read failed;
-`status` `0` when no response arrived) or `invalid_response` (a body that is not the expected envelope).
+`status` `0` when no response arrived) or `invalid_response` (a body that is not the expected envelope, or a response redirected to another origin: an
+`http://` API URL that the server redirects to `https://` loses the `Authorization` header on the way, so the error
+names both origins and tells you to set the API URL to the final one).
 `isRushError(err, code)` narrows `params` for `moved`, `not_found`, `not_translated`, `locale_not_served` and
 `rate_limited`:
 

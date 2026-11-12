@@ -38,6 +38,25 @@ function searchOf(query: QueryParams): string {
 	return encoded === '' ? '' : `?${encoded}`
 }
 
+function originOf(url: string): string | undefined {
+	return URL.canParse(url) ? new URL(url).origin : undefined
+}
+
+function assertSameOrigin(url: string, response: Response): void {
+	const configured = originOf(url)
+	const final = originOf(response.url)
+	if (!response.redirected || configured === undefined || final === undefined) {
+		return
+	}
+	if (configured !== final) {
+		throw clientError(
+			response.status,
+			'invalid_response',
+			`the API at ${configured} redirected to ${final}, which drops the Authorization header; set the API URL to ${final}`
+		)
+	}
+}
+
 async function readText(response: Response): Promise<string> {
 	try {
 		return await response.text()
@@ -105,11 +124,14 @@ export function createTransport(config: RushClientConfig): Transport {
 	}
 
 	async function exchange(url: string, init: RequestInit): Promise<Response> {
+		let response: Response
 		try {
-			return await send(url, init)
+			response = await send(url, init)
 		} catch (cause) {
 			throw clientError(0, 'network_error', `request to ${url} failed`, cause)
 		}
+		assertSameOrigin(url, response)
+		return response
 	}
 
 	async function revalidate(url: string, key: string, shape: EnvelopeShape): Promise<unknown> {
