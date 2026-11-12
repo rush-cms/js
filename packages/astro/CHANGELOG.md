@@ -1,5 +1,19 @@
 # @rushcms/astro
 
+## 0.7.0
+
+### Minor Changes
+
+- [`9bc74ad`](https://github.com/rush-cms/js/commit/9bc74ad31579395db99e89b5333687061bc12732) Thanks [@rmarsigli](https://github.com/rmarsigli)! - `@rushcms/astro/components-runtime` and `@rushcms/astro/form-enhance` are no longer exported: they were internal helpers of the shipped components and are now private `#components-runtime` and `#form-enhance` imports. Code that imported them directly must stop; nothing documented used them.
+
+### Patch Changes
+
+- [`3ef4aba`](https://github.com/rush-cms/js/commit/3ef4abaf04d1973f1917a87560e6ea9440f7cc72) Thanks [@rmarsigli](https://github.com/rmarsigli)! - A locale whose homepage is `not_translated` still renders and lists no homepage, now that `optional` rethrows that error.
+
+- [`df11628`](https://github.com/rush-cms/js/commit/df11628c20c5044e43dd588fb0b010a1faa93c85) Thanks [@rmarsigli](https://github.com/rmarsigli)! - A mapped SEO image field that is empty or missing now falls back to the entry's featured image, like the title and description fields.
+- Updated dependencies [[`3ef4aba`](https://github.com/rush-cms/js/commit/3ef4abaf04d1973f1917a87560e6ea9440f7cc72)]:
+  - @rushcms/client@5.0.2
+
 ## 0.6.1
 
 ### Patch Changes

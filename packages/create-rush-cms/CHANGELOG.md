@@ -1,5 +1,11 @@
 # create-rush-cms
 
+## 0.3.4
+
+### Patch Changes
+
+- [`d1eda93`](https://github.com/rush-cms/js/commit/d1eda93dc732be92cca405e0849495f15adc1850) Thanks [@rmarsigli](https://github.com/rmarsigli)! - `--ssg` removes the empty `src/pages/[...locale]` directory that dropping the contact page leaves behind. The generic entry view no longer renders rich-text fields, which the template cannot know: it shows a note to edit `src/views/entry.astro`. The scaffold also pins the `@rushcms/client` and `@rushcms/astro` releases that fix `optional` and the untranslated homepage.
+
 ## 0.3.3
 
 ### Patch Changes
