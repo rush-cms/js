@@ -1,5 +1,11 @@
 # @rushcms/client
 
+## 5.0.3
+
+### Patch Changes
+
+- [`053ce0d`](https://github.com/rush-cms/js/commit/053ce0de894d3c4b61dbeda68b651441907ba84f) Thanks [@rmarsigli](https://github.com/rmarsigli)! - `Homepage.meta` is typed as an object, never null: it is an empty object when no SEO was ever set. The handler already behaved this way; only the contract said otherwise.
+
 ## 5.0.2
 
 ### Patch Changes
