@@ -1,5 +1,13 @@
 # @rushcms/astro
 
+## 0.6.1
+
+### Patch Changes
+
+- [`08c7855`](https://github.com/rush-cms/js/commit/08c7855d314002269bc519b0d6074f3b059d7431) Thanks [@rmarsigli](https://github.com/rmarsigli)! - The error for a route whose `locale` param matches no `localePaths` prefix now names the route, the value and the configured prefixes, says that `locale` is the param name reserved for the locale prefix and suggests renaming it. A prerendered route fails the build with it instead of getting a silent 404.
+- Updated dependencies [[`287358d`](https://github.com/rush-cms/js/commit/287358d6b96742de4a801aaa5d84fac9972a353e)]:
+  - @rushcms/client@5.0.1
+
 ## 0.6.0
 
 ### Minor Changes

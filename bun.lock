@@ -19,9 +19,9 @@
     },
     "packages/astro": {
       "name": "@rushcms/astro",
-      "version": "0.6.0",
+      "version": "0.6.1",
       "dependencies": {
-        "@rushcms/client": "^5.0.0",
+        "@rushcms/client": "^5.0.1",
       },
       "devDependencies": {
         "@astrojs/check": "^0.9.12",
@@ -37,11 +37,11 @@
     },
     "packages/client": {
       "name": "@rushcms/client",
-      "version": "5.0.0",
+      "version": "5.0.1",
     },
     "packages/create-rush-cms": {
       "name": "create-rush-cms",
-      "version": "0.3.2",
+      "version": "0.3.3",
       "bin": {
         "create-rush-cms": "dist/cli.js",
       },
