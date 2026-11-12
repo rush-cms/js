@@ -22,7 +22,7 @@ needs a server: scaffold without \`--ssg\` for it).
 
 - \`npm run build\` fetches every page from the API and writes \`dist/\`. Upload that folder to any static host. Pages
   change only when you build again, so rebuild after publishing content.
-- Set \`SITE_URL\` to your production URL before building: canonical links, \`hreflang\` links and the sitemap use it.
+- Set \`SITE_URL\` to your production URL before building: the build fails without it, and canonical links, \`hreflang\` links and the sitemap use it.
 - Retired slugs are not redirected: with no server, a URL that no longer exists gets your 404 page.
 
 ## 404 pages

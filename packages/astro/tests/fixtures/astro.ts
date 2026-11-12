@@ -23,6 +23,19 @@ export type SetupResult = {
 	plugin: RushConfigPlugin
 }
 
+export type ServerConfig = {
+	port: number
+}
+
+export type SetupConfig = {
+	site?: string | undefined
+	server?: ServerConfig
+}
+
+export const TEST_SITE = 'https://www.example.com'
+
+export const TEST_PORT = 4321
+
 export type ProjectDir = {
 	root: URL
 	remove(): void
@@ -60,13 +73,14 @@ function hook<H extends keyof AstroIntegration['hooks']>(
 export async function runSetup(
 	integration: AstroIntegration,
 	root: URL,
-	command: RushCommand = 'build'
+	command: RushCommand = 'build',
+	config: SetupConfig = {}
 ): Promise<SetupResult> {
 	const updates: ConfigUpdate[] = []
 	const routes: InjectedRoute[] = []
 	const middlewares: AstroIntegrationMiddleware[] = []
 	const params = {
-		config: { root, vite: {} },
+		config: { root, vite: {}, site: TEST_SITE, server: { port: TEST_PORT }, ...config },
 		command,
 		updateConfig: (update: ConfigUpdate) => {
 			updates.push(update)

@@ -39,7 +39,7 @@ export function nextSteps(input: NextStepsInput): string[] {
 	const steps = [
 		`cd ${quoted(input.dir)}`,
 		...(input.installed ? [] : [installCommand(input.packageManager)]),
-		'Fill .env with your Rush CMS API URL, site id and delivery token, and SITE_URL once you know your production URL',
+		'Fill .env with your Rush CMS API URL, site id and delivery token, and SITE_URL (your production URL, required to build)',
 		`${devCommand(input.packageManager)}, then paste the localePaths line the first-run error prints into astro.config.ts`,
 		'Search the project for TODO markers and fill them in'
 	]

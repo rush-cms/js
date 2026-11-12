@@ -4,23 +4,23 @@ import tailwindcss from '@tailwindcss/vite'
 import { defineConfig } from 'astro/config'
 import { loadEnv } from 'vite'
 
-const DEV_SITE_URL = 'http://localhost:4321'
-
 const siteEnv = loadEnv(process.env.NODE_ENV ?? 'development', process.cwd(), 'SITE_URL')
 
-const siteUrl = new URL(siteEnv.SITE_URL || DEV_SITE_URL)
+const siteUrl = siteEnv.SITE_URL ? new URL(siteEnv.SITE_URL) : undefined
 
 export default defineConfig({
-	site: siteUrl.href,
+	...(siteUrl && { site: siteUrl.href }),
 	output: 'static',
 	adapter: node({ mode: 'standalone' }),
 	security: {
-		allowedDomains: [
-			{
-				protocol: siteUrl.protocol === 'https:' ? 'https' : 'http',
-				hostname: siteUrl.hostname
-			}
-		]
+		...(siteUrl && {
+			allowedDomains: [
+				{
+					protocol: siteUrl.protocol === 'https:' ? 'https' : 'http',
+					hostname: siteUrl.hostname
+				}
+			]
+		})
 	},
 	vite: {
 		plugins: [tailwindcss()]

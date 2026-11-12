@@ -48,8 +48,8 @@ that is not empty exits with code 1 and nothing is written.
 
 1. `cd my-site`, and install if you used `--no-install`.
 2. Fill `.env` with the API URL, the site id and a delivery token of your Rush CMS site. Set `SITE_URL` to your
-   production URL when you build: `site` and `security.allowedDomains` come from it, and it falls back to
-   `http://localhost:4321` in development.
+   production URL before you build: `site` and `security.allowedDomains` come from it, and a build without it
+   fails. `npm run dev` needs no `SITE_URL`: it uses the dev server address.
 3. Run `npm run dev` (or `bun run dev`, `pnpm run dev`). The first start stops with an error that lists the site's
    locales and a `localePaths` line; paste it into `astro.config.ts` and run it again.
 4. Search the project for `TODO` markers: each one is a place to customize (routes, navigation, the production

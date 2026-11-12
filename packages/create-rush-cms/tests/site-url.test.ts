@@ -7,9 +7,13 @@ type AllowedDomain = {
 	hostname: string
 }
 
+type TemplateSecurity = {
+	allowedDomains?: AllowedDomain[]
+}
+
 type TemplateConfig = {
-	site: string
-	security: { allowedDomains: AllowedDomain[] }
+	site?: string
+	security: TemplateSecurity
 }
 
 type ConfigModule = {
@@ -19,15 +23,13 @@ type ConfigModule = {
 type SiteUrlCase = {
 	name: string
 	siteUrl: string
-	site: string
-	allowedDomains: AllowedDomain[]
+	site: string | undefined
+	allowedDomains: AllowedDomain[] | undefined
 }
 
 vi.mock('@rushcms/astro', () => ({ default: () => ({ name: 'rush' }) }))
 
 vi.mock('@astrojs/node', () => ({ default: () => ({ name: 'node' }) }))
-
-const DEV_SITE = 'http://localhost:4321/'
 
 const CASES: SiteUrlCase[] = [
 	{
@@ -45,8 +47,8 @@ const CASES: SiteUrlCase[] = [
 	{
 		name: 'an empty value',
 		siteUrl: '',
-		site: DEV_SITE,
-		allowedDomains: [{ protocol: 'http', hostname: 'localhost' }]
+		site: undefined,
+		allowedDomains: undefined
 	}
 ]
 
@@ -68,12 +70,10 @@ describe('template astro.config SITE_URL', () => {
 		expect(config.security.allowedDomains).toEqual(testCase.allowedDomains)
 	})
 
-	it('falls back to the development URL when SITE_URL is unset', async () => {
+	it('sets neither site nor allowedDomains when SITE_URL is unset', async () => {
 		vi.stubEnv('SITE_URL', undefined)
 		const config = await loadConfig()
-		expect(config.site).toBe(DEV_SITE)
-		expect(config.security.allowedDomains).toEqual([
-			{ protocol: 'http', hostname: 'localhost' }
-		])
+		expect(config.site).toBeUndefined()
+		expect(config.security.allowedDomains).toBeUndefined()
 	})
 })

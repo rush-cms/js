@@ -12,9 +12,11 @@ import {
 	projectWithEnv,
 	runRouteSetup,
 	runSetup,
-	runStartHook
+	runStartHook,
+	TEST_SITE
 } from './fixtures/astro'
-import type { ProjectDir } from './fixtures/astro'
+import type { ProjectDir, SetupConfig } from './fixtures/astro'
+import type { RushCommand } from '../src/env'
 import type { RushSiteConfig } from '../src/config'
 import { installedPackage } from '../../../scripts/installed-package'
 import { ARTICLES } from './fixtures/runtime'
@@ -192,6 +194,50 @@ describe('astro:config:setup', () => {
 		await expect(runSetup(integration, useProject(apiEnv()))).rejects.toThrow(
 			'more than one empty prefix'
 		)
+	})
+})
+
+describe('site', () => {
+	const NO_SITE = { site: undefined }
+
+	async function siteUpdates(
+		command: RushCommand,
+		config: SetupConfig
+	): Promise<(string | undefined)[]> {
+		const { updates } = await runSetup(
+			rush(options(ALL_LOCALES)),
+			useProject(apiEnv()),
+			command,
+			config
+		)
+		return updates.map((update) => update.site)
+	}
+
+	it('fails a build without site, naming site and why', async () => {
+		await expect(
+			runSetup(rush(options(ALL_LOCALES)), useProject(apiEnv()), 'build', NO_SITE)
+		).rejects.toThrow(
+			'@rushcms/astro: set "site" in astro.config before building; canonical, hreflang, Open Graph and sitemap URLs are built from it'
+		)
+	})
+
+	it('builds with site and leaves it alone', async () => {
+		expect(await siteUpdates('build', { site: TEST_SITE })).toEqual([undefined])
+	})
+
+	it.each<RushCommand>(['preview', 'sync'])('does not fail %s without site', async (command) => {
+		expect(await siteUpdates(command, NO_SITE)).toEqual([undefined])
+	})
+
+	it('defaults dev without site to the dev server origin', async () => {
+		expect(await siteUpdates('dev', { ...NO_SITE, server: { port: 4999 } })).toEqual([
+			undefined,
+			'http://localhost:4999'
+		])
+	})
+
+	it('keeps the configured site in dev', async () => {
+		expect(await siteUpdates('dev', { site: TEST_SITE })).toEqual([undefined])
 	})
 })
 
