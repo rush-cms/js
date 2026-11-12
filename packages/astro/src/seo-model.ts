@@ -104,9 +104,9 @@ function describedImage(media: Media | undefined, fallbackUrl?: string): SeoImag
 	return image
 }
 
-function entryImage(entry: Entry, field: string | undefined): SeoImage | undefined {
+function mappedImage(entry: Entry, field: string | undefined): SeoImage | undefined {
 	if (field === undefined) {
-		return describedImage(entry.featured_image)
+		return undefined
 	}
 	const value: unknown = entry.data[field]
 	if (isRecord(value)) {
@@ -168,7 +168,11 @@ export function entrySeo(entry: Entry, settings: SeoSettings): SeoTags {
 		mappedText(entry, fields.title) ?? filled(entry.title),
 		mappedText(entry, fields.description) ?? filled(entry.excerpt)
 	)
-	return withImage(tags, entryImage(entry, fields.image), site)
+	return withImage(
+		tags,
+		mappedImage(entry, fields.image) ?? describedImage(entry.featured_image),
+		site
+	)
 }
 
 export function homepageTitle(homepage: Homepage | undefined): string | undefined {

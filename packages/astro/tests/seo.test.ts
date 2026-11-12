@@ -113,6 +113,17 @@ describe('Seo for an entry', () => {
 		expect(metaContent(html, 'property', 'og:image:width')).toEqual([])
 	})
 
+	it('falls back to the featured image when the mapped image field is empty or absent', async () => {
+		for (const cover of ['', '   ', undefined]) {
+			const entry = entryWith({ cover })
+			const html = await renderComponent(Seo, {
+				props: { entry },
+				locals: localesFor({ blog: { image: 'cover' } })
+			})
+			expect(metaContent(html, 'property', 'og:image')).toEqual([entry.featured_image?.url])
+		}
+	})
+
 	it('omits tags it has no value for', async () => {
 		const entry = entryExample()
 		delete entry.excerpt
