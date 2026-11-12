@@ -39,9 +39,10 @@ proxy, admin API, contact form, preview session, results); it is a plain directo
 - Content that may not exist (navigation, homepage, collections) is read through `optional` from `@rushcms/client`;
   the main navigation comes from `getNavigation(Astro, 'main')` and renders each `NavigationLink` with its `href`,
   `target`, `rel`, `className` and `attributes`. Type guards come from `@rushcms/client/internal`.
-- `trustedProxies` is required, so `astro.config.ts` sets it per build: `1` for the site and captcha builds, because
-  the walker reaches the forms route of the site through its proxy, and `0` for the preview build, which is only
-  reached directly. `src/site-config.ts` holds only the URL options (`UrlConfig`) shared with the pages.
+- `trustedProxies` is required whenever the integration serves on-demand routes (forms enabled, or a preview
+  deployment), which every build of this fixture does, so `astro.config.ts` sets it per build: `1` for the site and
+  captcha builds, because the walker reaches the forms route of the site through its proxy, and `0` for the preview
+  build, which is only reached directly. `src/site-config.ts` holds only the URL options (`UrlConfig`) shared with the pages.
 - Links use `getUrls(Astro)` (`urls.servedPath` for list items, fallback pages included); `getStaticPaths` builds the
   same helpers with `createUrls({ ...siteConfig, collections })`.
 - The seeded `body` rich text renders through `<RichText>` with a `callout` block component, the featured image
@@ -53,8 +54,11 @@ proxy, admin API, contact form, preview session, results); it is a plain directo
 In a `rush-cms` checkout (a worktree keeps its own `backend/.env`):
 
 1. Point `backend/.env` at a database used only by this fixture (for example `rush_cms_e2e`), with `PORT=8091`,
-   `MEDIA_DRIVER=local` and `ADMIN_CORS_ORIGINS=http://localhost:5174`. Create that database for the role in
-   `DATABASE_URL` in the devstack Postgres.
+   `MEDIA_DRIVER=local`, `MEDIA_BASE_URL=http://localhost:8091/media` and
+   `ADMIN_CORS_ORIGINS=http://localhost:5174`. Create that database for the role in `DATABASE_URL` in the devstack
+   Postgres. `MEDIA_BASE_URL` must be set before seeding: the seed stores the media URLs in the database, so a
+   `.env` copied from a real deployment (its media domain) makes the media URL checks fail until you re-seed
+   (`make db/fresh-seed`) and rebuild the outputs.
 2. `make migrate/up`, then `make db/seed SEED_FLAGS="--preset=sdk-e2e"`. The seed prints the site ids, delivery
    tokens and admin login used below. To start over:
    `make db/fresh-seed FRESH_FLAGS=--yes SEED_FLAGS="--preset=sdk-e2e"`.
@@ -185,7 +189,7 @@ ADMIN_EMAIL=<admin email>
 ADMIN_PASSWORD=<admin password>
 CHROME_PATH=/usr/bin/google-chrome
 E2E_SHOTS_DIR=<directory for screenshots and results>
-E2E_WORK_DIR=<empty directory for the generated sites>
+E2E_WORK_DIR=<empty directory for the generated sites; empty it before each generate>
 ```
 
 ```bash
@@ -204,14 +208,15 @@ bun run walk a b
 - `walk a` uses `npm-site` with the `sdk-e2e` site; `walk b` uses `bun-site` with a fresh site created through the
   admin API (one locale, no homepage, navigation or form, one collection with no entries), deleted afterwards. For
   each, the walker fills `.env`, runs `dev` until the first-run error, checks its text, pastes the suggested
-  `localePaths` line (site `a`: `pt_BR` at `''`), sets `allowedDomains` to `localhost` and the proxy host, then
-  builds twice (`build`, and `RUSH_PREVIEW=true` into `dist-preview`, which must print no
+  `localePaths` line (site `a`: `pt_BR` at `''`), and adds the walker proxy host to `allowedDomains` (the template
+  derives `site` and `allowedDomains` from `SITE_URL`, which the walker sets to `http://localhost:4321` in `.env`),
+  then builds twice (`build`, and `RUSH_PREVIEW=true` into `dist-preview`, which must print no
   `getStaticPaths() ignored` line), serves the site with the project's `preview` script on `4321` and the preview
   build on `4322`, and walks: front page per locale, collection lists and pagination, entries per locale (hreflang,
-  canonical, rich text, featured image), header/footer navigation and language switcher (every internal link answers
-  `200`), contact form with and without JavaScript through the proxy (`trustedProxies: 1` as shipped), `404` for
+  canonical, date, excerpt, term names, featured image, the generic note, and no collection field values),
+  header/footer navigation and language switcher (every internal link answers `200`), contact form with and without JavaScript through the proxy (`trustedProxies: 1` as shipped), `404` for
   upper-case and code-form locale segments, retired slugs (`301` on the site, `302` on the preview deployment),
-  `sitemap.xml` (every `<loc>` answers `200`) and `robots.txt`, the preview deployment on demand, a draft entry
+  `sitemap.xml` (every `<loc>` answers `200`; a collection with no entries is not listed) and `robots.txt`, the preview deployment on demand, a draft entry
   created through the admin API and opened through its preview link (cookie, banner, draft, exit), and the delivery
   token absent from both client bundles. Last, `dev` serves `/`, `/en` and `/contact` (site `a`: the form) or `/`
   and `/contact` (site `b`: the dev-only notice, while the build answers `404` there).
