@@ -326,6 +326,7 @@ describe('middleware', () => {
 			request: hostRequest(url, {}),
 			params: options.params ?? {},
 			isPrerendered: options.prerendered ?? false,
+			routePattern: '/[locale]/search.json',
 			locals: {},
 			cookies: { get }
 		}
@@ -417,15 +418,18 @@ describe('middleware', () => {
 	)
 
 	it.each([true, false])(
-		'renders a prerendered page whose locale param is a free route param (preview %s)',
+		'throws a message naming route, value, prefixes and a rename hint for an unknown locale param on a prerendered route (preview %s)',
 		async (preview) => {
-			for (const locale of ['en', 'pt_BR', 'xx']) {
-				const { response } = await pass(previewConfig({ preview }), undefined, {
-					params: { locale },
-					prerendered: true
-				})
-				expect(response.status).toBe(200)
-			}
+			const rejection = pass(previewConfig({ preview }), undefined, {
+				params: { locale: 'xx' },
+				prerendered: true,
+				reads: 0
+			})
+			await expect(rejection).rejects.toThrow('route "/[locale]/search.json"')
+			await expect(rejection).rejects.toThrow('locale param "xx"')
+			await expect(rejection).rejects.toThrow("('', 'en', 'es')")
+			await expect(rejection).rejects.toThrow('reserves for the locale prefix')
+			await expect(rejection).rejects.toThrow('rename the param (for example [code])')
 		}
 	)
 

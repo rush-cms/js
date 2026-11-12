@@ -4,7 +4,7 @@ import type { LocaleCode, RouteParams, RushClient, RushUrls } from '@rushcms/cli
 import type { APIContext } from 'astro'
 import { seeOther } from './http'
 import type { PreviewSession } from './preview-session'
-import { attachRuntime, runtimeOf } from './runtime'
+import { attachRuntime, runtimeOf, unknownLocaleParamError } from './runtime'
 import type { RushRuntime } from './runtime'
 import { sameOriginUrl } from './same-origin'
 
@@ -24,7 +24,7 @@ export type PreviewContext = Pick<APIContext, 'url' | 'locals' | 'request'>
 
 export type RushMiddlewareContext = PreviewContext &
 	CookieContext &
-	Pick<APIContext, 'params' | 'isPrerendered'>
+	Pick<APIContext, 'params' | 'isPrerendered' | 'routePattern'>
 
 export type RushMiddleware = (
 	context: RushMiddlewareContext,
@@ -106,18 +106,32 @@ function runtimeMiddleware(runtime: RushRuntime): RushMiddleware {
 	}
 }
 
-function hasUnknownLocale(urls: RushUrls, params: RouteParams): boolean {
-	return params.locale !== undefined && urls.localeOf(params.locale) === undefined
+function unknownLocale(urls: RushUrls, params: RouteParams): string | undefined {
+	const value = params.locale
+	return value !== undefined && urls.localeOf(value) === undefined ? value : undefined
+}
+
+function rejectUnknownLocale(
+	runtime: RushRuntime,
+	context: RushMiddlewareContext
+): Response | undefined {
+	const value = unknownLocale(runtime.urls, context.params)
+	if (value === undefined) {
+		return undefined
+	}
+	if (context.isPrerendered) {
+		throw unknownLocaleParamError(runtime.urls, context.routePattern, value)
+	}
+	return new Response(null, { status: 404 })
 }
 
 export function createRushMiddleware(runtime: RushRuntime): RushMiddleware {
 	const handle = runtimeMiddleware(runtime)
 	return (context, next) =>
-		handle(context, () =>
-			!context.isPrerendered && hasUnknownLocale(runtime.urls, context.params)
-				? Promise.resolve(new Response(null, { status: 404 }))
-				: next()
-		)
+		handle(context, () => {
+			const rejected = rejectUnknownLocale(runtime, context)
+			return rejected === undefined ? next() : Promise.resolve(rejected)
+		})
 }
 
 function isLoopback(host: string): boolean {

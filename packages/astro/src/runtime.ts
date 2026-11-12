@@ -85,15 +85,23 @@ export function findLocale(
 	return pathLocale(urls, request.path) ?? urls.localeOf(undefined) ?? defaultLocale
 }
 
+export function unknownLocaleParamError(urls: RushUrls, route: string, value: string): Error {
+	const prefixes = urls.locales.map((locale) => `'${urls.localeParam(locale) ?? ''}'`).join(', ')
+	return new Error(
+		`@rushcms/astro: route "${route}" has a locale param "${value}" that matches no localePaths prefix (${prefixes}). "locale" is the route param name @rushcms/astro reserves for the locale prefix; if it means something else on this route, rename the param (for example [code]).`
+	)
+}
+
 export function resolveLocale(
 	urls: RushUrls,
 	defaultLocale: LocaleCode,
 	request: LocaleRequest
 ): LocaleCode {
-	const locale =
-		findLocale(urls, defaultLocale, request) ??
-		findLocale(urls, defaultLocale, { ...request, segment: undefined })
+	const locale = findLocale(urls, defaultLocale, request)
 	if (locale === undefined) {
+		if (request.segment !== undefined) {
+			throw unknownLocaleParamError(urls, request.path ?? 'unknown', request.segment)
+		}
 		throw new Error(
 			`@rushcms/astro: locale "${request.segment ?? request.current}" matches no localePaths entry`
 		)

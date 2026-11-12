@@ -2,4 +2,4 @@
 '@rushcms/astro': patch
 ---
 
-A route param named `locale` that is not a `localePaths` prefix no longer throws in `getRush`, and the middleware no longer answers 404 for it on prerendered routes: the locale falls back to `Astro.currentLocale`, the request path or the default locale.
+The error for a route whose `locale` param matches no `localePaths` prefix now names the route, the value and the configured prefixes, says that `locale` is the param name reserved for the locale prefix and suggests renaming it. A prerendered route fails the build with it instead of getting a silent 404.

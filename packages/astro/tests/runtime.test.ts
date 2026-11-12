@@ -90,18 +90,6 @@ describe('resolveLocale', () => {
 			expected: 'pt_BR'
 		},
 		{
-			name: 'route param that is not a prefix, with the unprefixed request path',
-			localePaths: { pt_BR: 'pt', en: '' },
-			request: { segment: 'en', current: undefined, path: '/en/search.json' },
-			expected: 'en'
-		},
-		{
-			name: 'route param that is not a prefix, with Astro i18n',
-			localePaths: { pt_BR: 'pt', en: '' },
-			request: { segment: 'en', current: 'pt-BR', path: '/en/search.json' },
-			expected: 'pt_BR'
-		},
-		{
 			name: 'route param over Astro i18n',
 			localePaths: { pt_BR: 'pt', en: 'en' },
 			request: { segment: 'pt', current: 'en', path: '/es' },
@@ -184,12 +172,26 @@ describe('resolveLocale', () => {
 		...['pt', 'fr', 'constructor'].map((code) => ({ request: current(code), shown: code }))
 	]
 
+	const rejectedParams = ['pt_BR', 'pt-BR', 'EN', 'fr']
+
 	it.each(rejected)('throws for "$shown", which matches no entry', ({ request, shown }) => {
 		const config = siteConfig({ localePaths: { pt_BR: '', en: 'en' } })
 		expect(() => resolveLocale(createUrls(config), config.defaultLocale, request)).toThrow(
 			`locale "${shown}" matches no localePaths entry`
 		)
 	})
+
+	it.each(rejectedParams)(
+		'throws for the route param "%s", naming the route, the prefixes and a rename hint',
+		(param) => {
+			const config = siteConfig({ localePaths: { pt_BR: '', en: 'en' } })
+			const request = { ...segment(param), path: '/x/search.json' }
+			const message = `@rushcms/astro: route "/x/search.json" has a locale param "${param}" that matches no localePaths prefix ('', 'en'). "locale" is the route param name @rushcms/astro reserves for the locale prefix; if it means something else on this route, rename the param (for example [code]).`
+			expect(() => resolveLocale(createUrls(config), config.defaultLocale, request)).toThrow(
+				message
+			)
+		}
+	)
 })
 
 describe('getRush', () => {
@@ -216,14 +218,9 @@ describe('getRush', () => {
 			routeContext({ locals, currentLocale: 'en', params: { locale: 'es' } })
 		).collections.list()
 		expect(stub.requests.map((request) => request.query.get('locale'))).toEqual(['es', 'es'])
-		await getRush(
-			routeContext({ locals, currentLocale: undefined, params: { locale: 'xx' } })
-		).collections.list()
-		expect(stub.requests.map((request) => request.query.get('locale'))).toEqual([
-			'es',
-			'es',
-			'pt_BR'
-		])
+		expect(() =>
+			getRush(routeContext({ locals, currentLocale: undefined, params: { locale: 'xx' } }))
+		).toThrow('locale param "xx" that matches no localePaths prefix')
 	})
 
 	it('reads the locale from the request path on a route without a locale param', async () => {
@@ -288,9 +285,8 @@ describe('getLocale', () => {
 		expect(getLocale(routeContext({ locals, path: '/es', params: { locale: 'en' } }))).toBe(
 			'en'
 		)
-		expect(getLocale(routeContext({ locals, params: { locale: 'xx' } }))).toBe('pt_BR')
-		expect(() => getLocale(routeContext({ locals, currentLocale: 'xx' }))).toThrow(
-			'matches no localePaths entry'
+		expect(() => getLocale(routeContext({ locals, params: { locale: 'xx' } }))).toThrow(
+			'locale param "xx" that matches no localePaths prefix'
 		)
 	})
 })

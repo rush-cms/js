@@ -149,17 +149,19 @@ const entry = await rush.entries.get('artigos', Astro.params.slug)
 
 `getRush(Astro)` returns a client bound to the route's locale: the `locale` route param, matched against the
 `localePaths` prefixes only (`pt_BR` or `pt-BR` in the URL never match), else `Astro.currentLocale` (with Astro
-`i18n`), matched by prefix or CMS code (`pt-BR`, `pt_BR`, any case). A `locale` param that is not a prefix (the default
-locale's code on a site whose default has the `''` prefix, say) is ignored, and the locale comes from the next source;
-an `Astro.currentLocale` that matches nothing throws. Without
+`i18n`), matched by prefix or CMS code (`pt-BR`, `pt_BR`, any case). A value that matches nothing throws. Without
 either (the `[...path]` dispatcher, `404.astro`, `/sitemap.xml`), the locale comes from the request path: the locale of
 `urls.match(Astro.url.pathname)`, else the locale whose non-empty prefix equals the first path segment (`/en/contact`
 → `en`), else the locale with the `''` prefix, else the site's default locale. `getLocale(Astro)` returns that locale
 (for `<html lang>` or a home link on a `404` page); `getNavigation` and every helper that takes `Astro` resolve the
 locale the same way.
-For an on-demand route, the integration middleware answers `404` before any page renders when its `locale` param is
-not a `localePaths` prefix (`/pt_BR/…`, `/PT/…`); prerendered routes are never blocked, so a static page may name a
-param `locale` and fill it from its own `getStaticPaths`.
+The integration middleware answers `404` before any page renders when an on-demand route has a `locale` param that is
+not a `localePaths` prefix (`/pt_BR/…`, `/PT/…`).
+
+**Reserved route parameter.** `locale` is the route param name `@rushcms/astro` reads as the locale prefix. A
+prerendered route whose `locale` value matches no prefix fails the build with an error naming the route, the value and
+the configured prefixes; if the param means something else (a language code of your own, say), rename it, for
+example `[code]`.
 Static builds share one memoized client per locale; on-demand requests and `astro dev` never memoize.
 
 The helpers that take `Astro` read `locals`, `params`, `currentLocale`, `isPrerendered` and `url` (`RushContext`); a
