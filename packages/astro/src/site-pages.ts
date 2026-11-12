@@ -1,4 +1,4 @@
-import { optional } from '@rushcms/client'
+import { isRushError, optional } from '@rushcms/client'
 import type {
 	Alternate,
 	Collection,
@@ -101,11 +101,18 @@ const FIRST_PAGE = 1
 
 const NO_PROPS: EntryRouteContext['props'] = {}
 
-export function findHomepage(
+export async function findHomepage(
 	client: RushClient,
 	locale: LocaleCode
 ): Promise<Homepage | undefined> {
-	return optional(client.homepage.get({ locale }))
+	try {
+		return await optional(client.homepage.get({ locale }))
+	} catch (error) {
+		if (isRushError(error, 'not_translated')) {
+			return undefined
+		}
+		throw error
+	}
 }
 
 async function homepagePage(client: RushClient, locale: LocaleCode): Promise<HomepagePage> {

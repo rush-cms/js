@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { RushError, optional } from '../src/index'
+import { optional } from '../src/index'
 import { errorExamples } from './fixtures/contract'
 import { jsonResponse, rejection, testClient } from './fixtures/fetch'
 
@@ -14,27 +14,16 @@ describe('optional', () => {
 	})
 
 	it.each(errorExamples())(
-		'$response resolves undefined only for HTTP 404',
+		'$response resolves undefined only for not_found',
 		async ({ status, body }) => {
 			const outcome = optional(failing(body, status))
-			if (status === 404) {
+			if (body.code === 'not_found') {
 				await expect(outcome).resolves.toBeUndefined()
 			} else {
 				expect(await rejection(outcome)).toMatchObject({ status, code: body.code })
 			}
 		}
 	)
-
-	it('rethrows a 404-coded RushError that is not HTTP 404', async () => {
-		const error = new RushError({
-			status: 500,
-			code: 'not_found',
-			message: 'boom',
-			params: { resource: 'entry' },
-			errors: []
-		})
-		expect(await rejection(optional(Promise.reject(error)))).toBe(error)
-	})
 
 	it('rethrows errors that are not RushError', async () => {
 		const error = new TypeError('fetch failed')

@@ -597,6 +597,21 @@ describe('resolvePage', () => {
 		})
 	})
 
+	it('renders no homepage when the locale has none translated', async () => {
+		stub.handle(() =>
+			apiError(404, {
+				error: 'homepage not translated into en',
+				code: 'not_translated',
+				params: { available: ['pt_BR'] }
+			})
+		)
+		expect(await resolvePage(pageContext('/en'))).toEqual({
+			kind: 'homepage',
+			locale: 'en',
+			homepage: undefined
+		})
+	})
+
 	it('fetches a list page with the collection items_per_page', async () => {
 		const resolved = await resolveAt('/en/blog/page/2')
 		expect(resolved).toMatchObject({ kind: 'collection', locale: 'en', page: 2 })
