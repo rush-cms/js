@@ -221,9 +221,9 @@ describe('Seo for the homepage', () => {
 			locals: localesFor(),
 			url: 'https://site.example/pt'
 		})
-		expect(html).toContain(`<title>${homepage.meta?.title}</title>`)
-		expect(metaContent(html, 'name', 'description')).toEqual([homepage.meta?.description])
-		expect(metaContent(html, 'property', 'og:image')).toEqual([homepage.meta?.og_image])
+		expect(html).toContain(`<title>${homepage.meta.title}</title>`)
+		expect(metaContent(html, 'name', 'description')).toEqual([homepage.meta.description])
+		expect(metaContent(html, 'property', 'og:image')).toEqual([homepage.meta.og_image])
 		expect(metaContent(html, 'property', 'og:type')).toEqual(['website'])
 		expect(metaContent(html, 'property', 'og:locale')).toEqual(['pt_BR'])
 		expect(linkHrefs(html, 'canonical')).toEqual(['https://site.example/pt'])
@@ -254,8 +254,8 @@ describe('Seo for the homepage', () => {
 		expect(html).not.toContain('x-default')
 	})
 
-	it('renders only canonical and locale when meta was never set', async () => {
-		const homepage = { ...homepageExample(), meta: null }
+	it('renders only canonical and locale when meta is empty', async () => {
+		const homepage = { ...homepageExample(), meta: {} }
 		const html = await renderComponent(Seo, { props: { homepage }, locals: localesFor() })
 		expect(html).not.toContain('<title>')
 		expect(metaContent(html, 'name', 'description')).toEqual([])

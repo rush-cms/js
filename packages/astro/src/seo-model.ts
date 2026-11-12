@@ -176,7 +176,7 @@ export function entrySeo(entry: Entry, settings: SeoSettings): SeoTags {
 }
 
 export function homepageTitle(homepage: Homepage | undefined): string | undefined {
-	return filled(homepage?.meta?.title)
+	return filled(homepage?.meta.title)
 }
 
 export function homepageSeo(homepage: Homepage, settings: SeoSettings): SeoTags {
@@ -191,8 +191,8 @@ export function homepageSeo(homepage: Homepage, settings: SeoSettings): SeoTags 
 		},
 		site
 	)
-	withText(tags, homepageTitle(homepage), filled(meta?.description))
-	const image = filled(meta?.og_image)
+	withText(tags, homepageTitle(homepage), filled(meta.description))
+	const image = filled(meta.og_image)
 	return withImage(tags, image === undefined ? undefined : { url: image }, site)
 }
 
