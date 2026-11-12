@@ -1,6 +1,6 @@
 {
 	"name": "@rushcms/astro",
-	"version": "0.7.1",
+	"version": "0.8.0",
 	"description": "Astro integration for Rush CMS.",
 	"type": "module",
 	"license": "MIT",

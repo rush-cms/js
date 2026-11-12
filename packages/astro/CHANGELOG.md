@@ -1,5 +1,11 @@
 # @rushcms/astro
 
+## 0.8.0
+
+### Minor Changes
+
+- [`e34bb56`](https://github.com/rush-cms/js/commit/e34bb56c17fb629f8ae510e7abd787d6643cac22) Thanks [@rmarsigli](https://github.com/rmarsigli)! - A build without `site` in `astro.config` now fails with an error that names `site`: canonical, `hreflang`, Open Graph and sitemap URLs are built from it, and a build used to ship them on a wrong host. Set `site` before `astro build` (the template reads it from `SITE_URL`). `astro dev` without `site` uses the dev server address, and `astro preview` and `astro check` are unaffected.
+
 ## 0.7.1
 
 ### Patch Changes
