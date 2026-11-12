@@ -1,5 +1,5 @@
-import { readFileSync, rmSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { readFileSync, readdirSync, rmSync, rmdirSync, writeFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
 import { updateManifest } from './manifest'
 import type { Manifest } from './manifest'
 
@@ -45,9 +45,18 @@ function patchFile(root: string, { file, patches }: FilePatch): void {
 	writeFileSync(path, text)
 }
 
+function dropFile(root: string, file: string): void {
+	rmSync(join(root, file))
+	let directory = dirname(join(root, file))
+	while (directory !== root && readdirSync(directory).length === 0) {
+		rmdirSync(directory)
+		directory = dirname(directory)
+	}
+}
+
 export function applyVariant(root: string, variant: Variant): void {
 	for (const file of variant.drop) {
-		rmSync(join(root, file))
+		dropFile(root, file)
 	}
 	for (const patch of variant.files) {
 		patchFile(root, patch)

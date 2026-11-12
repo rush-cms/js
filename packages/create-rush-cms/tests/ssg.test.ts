@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { run } from '../src/run'
 import { SSG_VARIANT } from '../src/ssg'
 import { patchText } from '../src/variant'
+import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { bundledTemplate, filesOf, makeTempDir, recordIo, removeTempDirs, textOf } from './support'
 
@@ -69,6 +70,12 @@ describe('--ssg scaffold', () => {
 		const scaffolds = await bothScaffolds()
 		const kept = filesOf(scaffolds.server).filter((file) => file !== CONTACT_PAGE)
 		expect(filesOf(scaffolds.ssg)).toEqual(kept)
+	})
+
+	it('leaves no empty directory where the contact page was', async () => {
+		const { ssg } = await bothScaffolds()
+		expect(existsSync(join(ssg, 'src/pages/[...locale]'))).toBe(false)
+		expect(existsSync(join(ssg, 'src/pages'))).toBe(true)
 	})
 
 	it('removes the adapter dependency and the preview script, keeping the rest of the manifest', async () => {
